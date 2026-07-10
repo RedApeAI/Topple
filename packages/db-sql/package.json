@@ -1,0 +1,11 @@
+{
+  "name": "@repo/db-sql",
+  "version": "0.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "python3 -m compileall db_sql",
+    "build": "python3 -m compileall db_sql",
+    "lint": "python3 -m compileall db_sql",
+    "check-types": "python3 -m compileall db_sql"
+  }
+}

@@ -1,0 +1,6 @@
+[project]
+name = "plucia-db-mongo"
+version = "0.0.0"
+description = "MongoDB helpers for Plucia Python services."
+requires-python = ">=3.11"
+dependencies = []

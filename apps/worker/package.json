@@ -1,0 +1,11 @@
+{
+  "name": "worker",
+  "version": "0.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "python3 dev.py --host 0.0.0.0 --port 8000",
+    "build": "python3 -m compileall .",
+    "lint": "python3 -m compileall .",
+    "check-types": "python3 -m compileall ."
+  }
+}

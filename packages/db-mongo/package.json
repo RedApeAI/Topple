@@ -1,0 +1,11 @@
+{
+  "name": "@repo/db-mongo",
+  "version": "0.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "python3 -m compileall db_mongo",
+    "build": "python3 -m compileall db_mongo",
+    "lint": "python3 -m compileall db_mongo",
+    "check-types": "python3 -m compileall db_mongo"
+  }
+}

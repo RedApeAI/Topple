@@ -1,0 +1,11 @@
+{
+  "name": "@repo/redis",
+  "version": "0.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "python3 -m compileall redis_client",
+    "build": "python3 -m compileall redis_client",
+    "lint": "python3 -m compileall redis_client",
+    "check-types": "python3 -m compileall redis_client"
+  }
+}

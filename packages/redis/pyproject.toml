@@ -1,0 +1,6 @@
+[project]
+name = "plucia-redis"
+version = "0.0.0"
+description = "Redis helpers for Plucia Python services."
+requires-python = ">=3.11"
+dependencies = []
