@@ -1,29 +1,20 @@
 import { serve } from "@hono/node-server";
-import { Hono } from "hono";
 
-const app = new Hono();
-
-app.get("/", (c) => {
-  return c.json({
-    ok: true,
-    service: "api",
-  });
-});
-
-app.get("/health", (c) => {
-  return c.json({
-    ok: true,
-  });
-});
-
-const port = Number.parseInt(process.env.PORT ?? "4000", 10);
+import { app } from "./app.js";
+import { env } from "./lib/env.js";
 
 serve(
   {
     fetch: app.fetch,
-    port,
+    port: env.PORT,
   },
   (info) => {
-    console.log(`API listening on http://localhost:${info.port}`);
+    console.info(
+      JSON.stringify({
+        level: "info",
+        event: "server.started",
+        port: info.port,
+      }),
+    );
   },
 );

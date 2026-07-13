@@ -2,7 +2,7 @@
 /node_modules/
 /.turbo/
 
-# Compiled output and test reports
+# Build and test output
 /dist/
 /coverage/
 *.tsbuildinfo
@@ -12,6 +12,3 @@
 .env.*
 !.env.example
 !.env.*.example
-
-# Runtime logs
-*.log

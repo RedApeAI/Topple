@@ -1,40 +1,68 @@
-# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
-
-# Dependencies
-node_modules
+# Dependencies and package-manager state
+node_modules/
 .pnp
-.pnp.js
+.pnp.*
+.pnpm-store/
+.npm/
+.yarn/cache/
+.yarn/install-state.gz
+.yarn/unplugged/
 
-# Local env files
+# Local environment and secret files (templates stay tracked)
 .env
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
+.env.*
+!.env.example
+!.env.*.example
+*.pem
+*.key
 
-# Testing
-coverage
-
-# Turbo
-.turbo
-
-# Vercel
-.vercel
-
-# Build Outputs
+# JavaScript and TypeScript build output
 .next/
 out/
-build
-dist
+dist/
+build/
+coverage/
+.nyc_output/
+.turbo/
+.vercel/
+*.tsbuildinfo
+next-env.d.ts
+
+# Python environments, caches, and build output
 __pycache__/
 *.py[cod]
+*$py.class
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.pyright/
+.hypothesis/
+.tox/
+.nox/
+htmlcov/
+.coverage
+.coverage.*
+*.egg-info/
+.eggs/
+pip-wheel-metadata/
+wheels/
 
-
-# Debug
+# Logs and runtime files
+*.log
+*.pid
+*.pid.lock
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+pnpm-debug.log*
 
-# Misc
+# Editors and operating systems
 .DS_Store
-*.pem
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
+*~

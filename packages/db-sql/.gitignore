@@ -13,5 +13,4 @@
 !.env.example
 !.env.*.example
 
-# Runtime logs
-*.log
+# Drizzle migrations and metadata are intentionally tracked.
