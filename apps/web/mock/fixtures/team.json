@@ -1,0 +1,26 @@
+[
+  {
+    "id": "user-1",
+    "name": "David Johnson",
+    "email": "davidj@gmail.com",
+    "role": "Owner"
+  },
+  {
+    "id": "user-2",
+    "name": "Sarah Lee",
+    "email": "sarah@plucia.com",
+    "role": "Sales Lead"
+  },
+  {
+    "id": "user-3",
+    "name": "Marcus Chen",
+    "email": "marcus@plucia.com",
+    "role": "Ops"
+  },
+  {
+    "id": "user-4",
+    "name": "Priya Nair",
+    "email": "priya@plucia.com",
+    "role": "Support"
+  }
+]

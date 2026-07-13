@@ -1,0 +1,19 @@
+[
+  { "key": "one-inbox", "label": "One Inbox", "icon": "message-circle-more" },
+  { "key": "whatsapp", "label": "WhatsApp", "icon": "whatsapp", "unread": 5 },
+  { "key": "linkedin", "label": "Linkedin", "icon": "linkedin", "unread": 18 },
+  { "key": "mail", "label": "Mail", "icon": "mail", "unread": 10 },
+  {
+    "key": "ai-cold-calling",
+    "label": "AI Cold Calling",
+    "icon": "call-spark",
+    "unread": 12
+  },
+  {
+    "key": "instagram",
+    "label": "Instagram",
+    "icon": "instagram",
+    "unread": 18
+  },
+  { "key": "crm", "label": "CRM", "icon": "crm", "unread": 27 }
+]

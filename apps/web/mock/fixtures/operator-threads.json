@@ -1,0 +1,86 @@
+[
+  {
+    "id": "thr-1",
+    "title": "Setup my WhatsApp business account with Plucia",
+    "timestamp": "Jun 10, 12:35 PM",
+    "status": "Waiting for meta approval"
+  },
+  {
+    "id": "thr-2",
+    "title": "Create marketing materials for social media",
+    "timestamp": "Jun 11, 9:00 AM",
+    "status": "In progress"
+  },
+  {
+    "id": "thr-3",
+    "title": "Launch initial ad campaign on Instagram",
+    "timestamp": "Jun 12, 1:15 PM",
+    "status": "Scheduled"
+  },
+  {
+    "id": "thr-4",
+    "title": "Gather customer feedback on services",
+    "timestamp": "Jun 13, 3:45 PM",
+    "status": "Pending"
+  },
+  {
+    "id": "thr-5",
+    "title": "Host a webinar to introduce services",
+    "timestamp": "Jun 14, 4:30 PM",
+    "status": "Planned"
+  },
+  {
+    "id": "thr-6",
+    "title": "Optimize website for mobile users",
+    "timestamp": "Jun 15, 10:00 AM",
+    "status": "Waiting for design approval"
+  },
+  {
+    "id": "thr-7",
+    "title": "Develop a referral program for existing customers",
+    "timestamp": "Jun 16, 11:20 AM",
+    "status": "Researching"
+  },
+  {
+    "id": "thr-8",
+    "title": "Set up email automation for newsletters",
+    "timestamp": "Jun 17, 2:00 PM",
+    "status": "In development"
+  },
+  {
+    "id": "thr-9",
+    "title": "Analyze competitor strategies",
+    "timestamp": "Jun 18, 5:00 PM",
+    "status": "Ongoing"
+  },
+  {
+    "id": "thr-10",
+    "title": "Plan a customer loyalty program",
+    "timestamp": "Jun 19, 8:30 AM",
+    "status": "Brainstorming"
+  },
+  {
+    "id": "thr-11",
+    "title": "Create a blog content calendar",
+    "timestamp": "Jun 20, 9:45 AM",
+    "status": "Drafting"
+  },
+  {
+    "id": "thr-12",
+    "title": "Launch a customer satisfaction survey",
+    "timestamp": "Jun 21, 3:00 PM",
+    "status": "Pending"
+  },
+  {
+    "id": "thr-13",
+    "title": "Collaborate with influencers for promotions",
+    "timestamp": "Jun 22, 12:15 PM",
+    "status": "Outreach"
+  },
+  {
+    "id": "thr-14",
+    "title": "Implement SEO strategies for better visibility",
+    "timestamp": "Jun 23, 1:30 PM",
+    "status": "In progress"
+  }
+]

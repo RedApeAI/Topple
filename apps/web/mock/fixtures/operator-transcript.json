@@ -1,0 +1,19 @@
+[
+  { "id": "msg-1", "role": "user", "text": "Hi" },
+  {
+    "id": "msg-2",
+    "role": "operator",
+    "text": "Hi David, what can I do for you today?"
+  },
+  {
+    "id": "msg-3",
+    "role": "user",
+    "text": "Handle my WhatsApp leads for me. Just talk to them like I would, answer their questions, and help move them toward a meeting or a sale."
+  },
+  {
+    "id": "msg-4",
+    "role": "operator",
+    "text": "Running Plucia on all whatsapp leads…",
+    "status": "running"
+  }
+]

@@ -1,0 +1,286 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+/* -----------------------------------------------------------------------
+ * Design tokens — semantic colors, radius and fonts.
+ * Source of truth: /design/design.md (extracted from Figma fileKey
+ * KoGKyrJFudZYnm3ecY6K88). Never hardcode a hex value in a component —
+ * always consume one of the CSS variables / Tailwind classes below.
+ * --------------------------------------------------------------------- */
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-inter);
+  --font-heading: var(--font-poppins);
+  --font-mono: var(--font-geist-mono);
+
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-border: var(--border);
+  --color-border-subtle: var(--border-subtle);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  /* Channel identity colors */
+  --color-channel-whatsapp: var(--channel-whatsapp);
+  --color-channel-linkedin: var(--channel-linkedin);
+  --color-channel-mail: var(--channel-mail);
+  --color-channel-call: var(--channel-call);
+  --color-channel-instagram-from: var(--channel-instagram-from);
+  --color-channel-instagram-via: var(--channel-instagram-via);
+  --color-channel-instagram-to: var(--channel-instagram-to);
+
+  /* Brand gradient stops (logo + FAB ring ONLY — never a general accent) */
+  --color-brand-1: var(--brand-1);
+  --color-brand-2: var(--brand-2);
+  --color-brand-3: var(--brand-3);
+  --color-brand-4: var(--brand-4);
+
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-ring: var(--sidebar-ring);
+
+  --radius-sm: calc(var(--radius) * 0.4); /* 4px  */
+  --radius-md: calc(var(--radius) * 0.8); /* 8px  */
+  --radius-lg: var(--radius); /* 10px */
+  --radius-xl: calc(var(--radius) * 1.6); /* 16px */
+  --radius-2xl: calc(var(--radius) * 2.4); /* 24px */
+  --radius-full: 9999px;
+}
+
+:root {
+  --radius: 10px;
+
+  /* Neutrals */
+  --background: #f1f0ee;
+  --foreground: #111111;
+  --card: #ffffff;
+  --card-foreground: #111111;
+  --popover: #ffffff;
+  --popover-foreground: #111111;
+
+  --primary: #111111;
+  --primary-foreground: #ffffff;
+  --secondary: #edebe9;
+  --secondary-foreground: #292929;
+  --muted: #f8f8f7;
+  --muted-foreground: #666666;
+  --accent: #edebe9;
+  --accent-foreground: #111111;
+
+  --destructive: #ff2f2f;
+  --destructive-foreground: #ffffff;
+  --success: #34a853;
+  --success-foreground: #ffffff;
+  --warning: #f5a623;
+  --warning-foreground: #111111;
+
+  --border: #d6d3cd;
+  --border-subtle: rgba(32, 32, 32, 0.05);
+  --input: #d6d3cd;
+  --ring: rgba(17, 17, 17, 0.4);
+
+  /* Channel identity */
+  --channel-whatsapp: #34a853;
+  --channel-linkedin: #0a66c2;
+  --channel-mail: #ffffff;
+  --channel-call: #202020;
+  --channel-instagram-from: #5342d6;
+  --channel-instagram-via: #ef2044;
+  --channel-instagram-to: #fec053;
+
+  /* Brand gradient */
+  --brand-1: #ff2f2f;
+  --brand-2: #ef7b16;
+  --brand-3: #8a43e1;
+  --brand-4: #d511fd;
+
+  --chart-1: #34a853;
+  --chart-2: #0a66c2;
+  --chart-3: #8a43e1;
+  --chart-4: #f5a623;
+  --chart-5: #ff2f2f;
+
+  --sidebar: #ffffff;
+  --sidebar-foreground: #292929;
+  --sidebar-border: #d6d3cd;
+  --sidebar-accent: #f1f0ee;
+  --sidebar-accent-foreground: #111111;
+  --sidebar-primary: #111111;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-ring: rgba(17, 17, 17, 0.4);
+}
+
+.dark {
+  --background: #171715;
+  --foreground: #f2f1ee;
+  --card: #1f1f1d;
+  --card-foreground: #f2f1ee;
+  --popover: #1f1f1d;
+  --popover-foreground: #f2f1ee;
+
+  --primary: #f2f1ee;
+  --primary-foreground: #111111;
+  --secondary: #2a2a27;
+  --secondary-foreground: #e5e4e1;
+  --muted: #201f1d;
+  --muted-foreground: #a3a19c;
+  --accent: #2a2a27;
+  --accent-foreground: #f2f1ee;
+
+  --destructive: #ff5c5c;
+  --destructive-foreground: #171715;
+  --success: #3ec46d;
+  --success-foreground: #0d1f13;
+  --warning: #f8b84e;
+  --warning-foreground: #171715;
+
+  --border: #35342f;
+  --border-subtle: rgba(255, 255, 255, 0.06);
+  --input: #35342f;
+  --ring: rgba(242, 241, 238, 0.4);
+
+  /* Channel identity — same hues, unchanged for brand recognition */
+  --channel-whatsapp: #34a853;
+  --channel-linkedin: #2f8bdb;
+  --channel-mail: #232321;
+  --channel-call: #e5e4e1;
+  --channel-instagram-from: #6a5aeb;
+  --channel-instagram-via: #f04568;
+  --channel-instagram-to: #fec053;
+
+  --brand-1: #ff4d4d;
+  --brand-2: #f28c3a;
+  --brand-3: #9c5cf0;
+  --brand-4: #e13cff;
+
+  --chart-1: #3ec46d;
+  --chart-2: #2f8bdb;
+  --chart-3: #9c5cf0;
+  --chart-4: #f8b84e;
+  --chart-5: #ff5c5c;
+
+  --sidebar: #1c1c1a;
+  --sidebar-foreground: #e5e4e1;
+  --sidebar-border: #35342f;
+  --sidebar-accent: #262624;
+  --sidebar-accent-foreground: #f2f1ee;
+  --sidebar-primary: #f2f1ee;
+  --sidebar-primary-foreground: #111111;
+  --sidebar-ring: rgba(242, 241, 238, 0.4);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+  html {
+    @apply font-sans;
+  }
+}
+
+@layer utilities {
+  /* Scrollable area with no visible scrollbar */
+  .scrollbar-none {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+  .scrollbar-none::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* Dark-gradient actionable surface — Create Task button, FAB body, logo chip */
+  .surface-primary-gradient {
+    background-image: linear-gradient(180deg, #333333 0%, #111111 100%);
+    box-shadow:
+      inset 0 1px 2px rgba(255, 255, 255, 0.2),
+      inset 0 1px 1px rgba(255, 255, 255, 0.25);
+  }
+  .dark .surface-primary-gradient {
+    background-image: linear-gradient(180deg, #3a3a38 0%, #242422 100%);
+  }
+
+  /* The single, signature brand gradient — logo + FAB ring only */
+  .surface-brand-gradient {
+    background-image: linear-gradient(
+      90deg,
+      var(--brand-1) 0%,
+      var(--brand-2) 36.3%,
+      var(--brand-3) 69.8%,
+      var(--brand-4) 100%
+    );
+  }
+
+  .surface-instagram-gradient {
+    background-image: linear-gradient(
+      180deg,
+      var(--channel-instagram-from) 0%,
+      var(--channel-instagram-via) 53.4%,
+      var(--channel-instagram-to) 100%
+    );
+  }
+
+  .shadow-row {
+    box-shadow: 0 1px 0.5px rgba(0, 0, 0, 0.15);
+  }
+  .dark .shadow-row {
+    box-shadow: 0 1px 0.5px rgba(0, 0, 0, 0.4);
+  }
+
+  .shadow-avatar {
+    box-shadow:
+      0 0 0 1.7px rgba(255, 255, 255, 0.8),
+      0 12px 7px rgba(0, 0, 0, 0.05),
+      0 5px 5px rgba(0, 0, 0, 0.09),
+      0 2px 3px rgba(0, 0, 0, 0.1);
+  }
+  .dark .shadow-avatar {
+    box-shadow:
+      0 0 0 1.7px rgba(0, 0, 0, 0.4),
+      0 12px 7px rgba(0, 0, 0, 0.2),
+      0 5px 5px rgba(0, 0, 0, 0.25),
+      0 2px 3px rgba(0, 0, 0, 0.3);
+  }
+
+  .shadow-fab {
+    box-shadow:
+      0 3px 5px rgba(0, 0, 0, 0.05),
+      0 16px 28px rgba(0, 0, 0, 0.15),
+      0 7px 16px rgba(0, 0, 0, 0.05),
+      0 35px 28px rgba(0, 0, 0, 0.05),
+      0 17px 13px rgba(0, 0, 0, 0.05);
+  }
+}
