@@ -1,0 +1,89 @@
+[
+  {
+    "id": "conv-1",
+    "name": "Anas",
+    "channel": "whatsapp",
+    "preview": "Wants you to share a sales contract from Brightstone Realty with all key details included.",
+    "timestamp": "3m ago",
+    "unread": true
+  },
+  {
+    "id": "conv-2",
+    "name": "Nina",
+    "channel": "linkedin",
+    "preview": "Please send over the sales contract from Brightstone Realty including all essential details.",
+    "timestamp": "8m ago",
+    "unread": true
+  },
+  {
+    "id": "conv-3",
+    "name": "vanshi",
+    "channel": "mail",
+    "preview": "Kindly share the complete sales contract from Brightstone Realty with all key information.",
+    "timestamp": "9m ago",
+    "unread": true
+  },
+  {
+    "id": "conv-4",
+    "name": "Vasu",
+    "channel": "mail",
+    "preview": "Could you provide the sales contract from Brightstone Realty with all important details?",
+    "timestamp": "13m ago"
+  },
+  {
+    "id": "conv-5",
+    "name": "Jhon",
+    "channel": "whatsapp",
+    "preview": "Hi Jhon this side, need more info.",
+    "timestamp": "15m ago"
+  },
+  {
+    "id": "conv-6",
+    "name": "Michellle",
+    "channel": "call",
+    "preview": "Requesting the full sales contract from Brightstone Realty with all necessary details.",
+    "timestamp": "18m ago"
+  },
+  {
+    "id": "conv-7",
+    "name": "Harika",
+    "channel": "linkedin",
+    "preview": "Please forward the sales contract from Brightstone Realty containing all critical details.",
+    "timestamp": "20m ago"
+  },
+  {
+    "id": "conv-8",
+    "name": "Akash",
+    "channel": "mail",
+    "preview": "Share the sales contract from Brightstone Realty including every key detail, please.",
+    "timestamp": "4 hr ago"
+  },
+  {
+    "id": "conv-9",
+    "name": "Anari",
+    "channel": "whatsapp",
+    "preview": "Would you send the sales contract from Brightstone Realty with all relevant details?",
+    "timestamp": "Yesterday"
+  },
+  {
+    "id": "conv-10",
+    "name": "Ariya",
+    "channel": "instagram",
+    "preview": "Need the sales contract from Brightstone Realty with all the essential information included.",
+    "timestamp": "Yesterday"
+  },
+  {
+    "id": "conv-11",
+    "name": "David Miller",
+    "channel": "whatsapp",
+    "preview": "Perfect, could you also send the floor plan along with the contract?",
+    "timestamp": "Yesterday"
+  },
+  {
+    "id": "conv-12",
+    "name": "Priya Shah",
+    "channel": "mail",
+    "preview": "Following up on the Brightstone Realty proposal we discussed on the call.",
+    "timestamp": "2 days ago"
+  }
+]
