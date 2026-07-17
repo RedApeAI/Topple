@@ -1,0 +1,176 @@
+"""Contact resolution + bifurcation merge.
+
+A contact is one person per tenant; `identities` is the list of
+(channel, external_id) pairs that map to them. The same person writing on
+WhatsApp and email initially shows up as two contacts — the merge below is the
+manual bifurcation fix.
+
+TODO: automatic identity matching (same name + overlapping lead fields across
+channels) is future work; today merging is an explicit admin action via
+`POST /v1/contacts/merge`.
+"""
+from __future__ import annotations
+
+import logging
+from datetime import datetime, timezone
+
+from bson import ObjectId
+from pymongo.errors import DuplicateKeyError
+
+from ..playbooks.loader import Playbook
+
+logger = logging.getLogger(__name__)
+
+NULLISH = (None, "", [], {})
+
+
+def _now() -> datetime:
+    return datetime.now(timezone.utc)
+
+
+async def resolve_or_create(db, tenant_id: str, channel: str, external_id: str) -> dict:
+    """Find the contact owning this identity, or create a fresh one."""
+    query = {
+        "tenant_id": tenant_id,
+        "identities": {"$elemMatch": {"channel": channel, "external_id": external_id}},
+    }
+    contact = await db.contacts.find_one(query)
+    if contact:
+        return contact
+
+    doc = {
+        "tenant_id": tenant_id,
+        "identities": [{"channel": channel, "external_id": external_id}],
+        "profile": {"name": None, "language": None},
+        "lead": {"qualification_score": 0},
+        "created_at": _now(),
+        "updated_at": _now(),
+    }
+    try:
+        res = await db.contacts.insert_one(doc)
+        doc["_id"] = res.inserted_id
+        return doc
+    except DuplicateKeyError:
+        # lost a race with a concurrent turn — the winner's doc is authoritative
+        return await db.contacts.find_one(query)
+
+
+# --------------------------------------------------------------------------- #
+# Lead profile
+# --------------------------------------------------------------------------- #
+def _coerce(value, spec):
+    """Coerce an extracted entity to its playbook type; None if unusable."""
+    try:
+        if spec.type == "int":
+            if isinstance(value, str):
+                value = value.replace(",", "").strip()
+            return int(float(value))
+        if spec.type == "float":
+            return float(str(value).replace(",", ""))
+        if spec.type == "bool":
+            if isinstance(value, str):
+                return value.strip().lower() in ("true", "yes", "1")
+            return bool(value)
+        if spec.type == "list":
+            if isinstance(value, str):
+                value = [value]
+            return [str(v).strip() for v in value if str(v).strip()] or None
+        if spec.type == "enum":
+            norm = str(value).strip().lower().replace(" ", "_")
+            return norm if spec.values and norm in spec.values else None
+        return str(value).strip() or None
+    except (TypeError, ValueError):
+        return None
+
+
+def qualification_score(lead: dict, playbook: Playbook) -> int:
+    """Sum of playbook weights for fields that are known (0-100 by convention)."""
+    return sum(
+        spec.weight
+        for name, spec in playbook.qualification_schema.items()
+        if lead.get(name) not in NULLISH
+    )
+
+
+def merge_entities(lead: dict, entities: dict, playbook: Playbook) -> tuple[dict, int]:
+    """Merge extracted entities into the lead profile.
+
+    Never overwrites a known value with null (or with anything that fails
+    type coercion); new non-null values do replace old ones — buyers change
+    their minds. Returns (new_lead, qualification_score).
+    """
+    lead = dict(lead)
+    for name, spec in playbook.qualification_schema.items():
+        raw = entities.get(name)
+        if raw in NULLISH:
+            continue
+        coerced = _coerce(raw, spec)
+        if coerced in NULLISH or coerced is None:
+            continue
+        lead[name] = coerced
+    lead["qualification_score"] = qualification_score(lead, playbook)
+    return lead, lead["qualification_score"]
+
+
+async def update_lead(db, contact_id, lead: dict) -> None:
+    await db.contacts.update_one(
+        {"_id": contact_id}, {"$set": {"lead": lead, "updated_at": _now()}}
+    )
+
+
+# --------------------------------------------------------------------------- #
+# Bifurcation merge
+# --------------------------------------------------------------------------- #
+class ContactNotFound(Exception):
+    pass
+
+
+async def merge_identities(db, primary_contact_id, duplicate_contact_id) -> dict:
+    """Fold `duplicate` into `primary`: union identities, fill lead/profile
+    gaps (primary's known values win), repoint conversations/messages/turns,
+    delete the duplicate. Returns the merged primary doc."""
+    primary_id = ObjectId(primary_contact_id)
+    duplicate_id = ObjectId(duplicate_contact_id)
+    if primary_id == duplicate_id:
+        raise ValueError("primary and duplicate are the same contact")
+
+    primary = await db.contacts.find_one({"_id": primary_id})
+    duplicate = await db.contacts.find_one({"_id": duplicate_id})
+    if primary is None or duplicate is None:
+        raise ContactNotFound("primary or duplicate contact not found")
+    if primary["tenant_id"] != duplicate["tenant_id"]:
+        raise ValueError("cannot merge contacts across tenants")
+
+    identities = list(primary.get("identities", []))
+    seen = {(i["channel"], i["external_id"]) for i in identities}
+    for ident in duplicate.get("identities", []):
+        if (ident["channel"], ident["external_id"]) not in seen:
+            identities.append(ident)
+
+    lead = dict(duplicate.get("lead", {}))
+    lead.update({k: v for k, v in primary.get("lead", {}).items() if v not in NULLISH})
+    # score is recomputed against the playbook on the next turn; take the max
+    # of the two as the interim value
+    lead["qualification_score"] = max(
+        primary.get("lead", {}).get("qualification_score", 0),
+        duplicate.get("lead", {}).get("qualification_score", 0),
+    )
+
+    profile = dict(duplicate.get("profile", {}))
+    profile.update({k: v for k, v in primary.get("profile", {}).items() if v not in NULLISH})
+
+    # delete the duplicate FIRST so the unique identity index never sees the
+    # same identity on two docs
+    await db.contacts.delete_one({"_id": duplicate_id})
+    await db.contacts.update_one(
+        {"_id": primary_id},
+        {"$set": {"identities": identities, "lead": lead, "profile": profile, "updated_at": _now()}},
+    )
+    await db.conversations.update_many(
+        {"contact_id": duplicate_id}, {"$set": {"contact_id": primary_id}}
+    )
+    await db.turns.update_many(
+        {"contact_id": duplicate_id}, {"$set": {"contact_id": primary_id}}
+    )
+    logger.info("merged contact %s into %s", duplicate_id, primary_id)
+    return await db.contacts.find_one({"_id": primary_id})

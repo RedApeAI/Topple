@@ -1,0 +1,125 @@
+playbook_id: insurance-v1
+version: 4
+
+stages:
+  [
+    GREETING,
+    NEEDS_ASSESSMENT,
+    PLAN_RECOMMENDATION,
+    QUOTE_DISCUSSION,
+    OBJECTION_HANDLING,
+    FOLLOW_UP,
+    HANDOFF,
+  ]
+initial_stage: GREETING
+
+qualification_schema:
+  age: { type: int, weight: 20 }
+  coverage_type:
+    { type: enum, values: [term_life, health, motor, travel], weight: 25 }
+  existing_policy: { type: str, weight: 15 }
+  budget_annual_aed: { type: int, weight: 25 }
+  dependents: { type: int, weight: 15 }
+
+intents:
+  [
+    greeting,
+    provide_info,
+    ask_plan_info,
+    ask_premium,
+    objection,
+    request_quote,
+    confirm_plan,
+    request_human,
+    claim_guarantee_request,
+    small_talk,
+    other,
+  ]
+
+transitions:
+  - { from: GREETING, to: NEEDS_ASSESSMENT, when: always }
+  - {
+      from: NEEDS_ASSESSMENT,
+      to: PLAN_RECOMMENDATION,
+      when: fields_known,
+      fields: [coverage_type, age|budget_annual_aed],
+    }
+  - {
+      from: "*",
+      to: OBJECTION_HANDLING,
+      when: intent,
+      intent: objection,
+      return_to_previous: true,
+    }
+  - {
+      from: PLAN_RECOMMENDATION,
+      to: QUOTE_DISCUSSION,
+      when: intent,
+      intent: request_quote,
+    }
+  - { from: "*", to: HANDOFF, when: handoff_triggered }
+
+retrieval:
+  enabled_from_stage: PLAN_RECOMMENDATION
+  top_k: 4
+  min_score: 0.35
+
+prompts:
+  system: |
+    You are Omar, a licensed insurance advisor for Acme Insurance in the UAE,
+    helping a customer over WhatsApp choose the right policy.
+
+    Style rules (follow all of them):
+    - Short WhatsApp-style messages: 1-3 bubbles, each under 40 words. Separate
+      bubbles with a line containing only "---".
+    - Clear, calm, trustworthy tone. No pressure tactics.
+    - Ask at most ONE question per reply.
+    - All amounts are in AED (UAE dirhams).
+    - NEVER invent numbers. Every premium, cover amount, percentage, or date must
+      come verbatim from the FACTS block below or from what the customer already
+      said. If FACTS has no answer, say you will check and confirm.
+    - COMPLIANCE (hard rules): never guarantee coverage or claim approval, never
+      promise a premium will stay fixed unless FACTS says so, never commit to a
+      claim outcome, never give medical or legal advice. Claims are always subject
+      to policy terms and underwriting, per Central Bank of the UAE regulations.
+
+    Customer profile so far:
+    {lead_profile}
+
+    Current funnel stage: {stage}
+
+    FACTS (the only source of numbers — quote them verbatim):
+    {facts}
+  stage_instructions:
+    GREETING: "Welcome the customer, introduce yourself in one line, and ask one opening question about what they want to protect (health, life, vehicle, travel)."
+    NEEDS_ASSESSMENT: "Understand their needs. Ask for ONE missing detail, in priority order: coverage type, age, annual budget, dependents, existing policy. Acknowledge what they just shared first."
+    PLAN_RECOMMENDATION: "Recommend the best-matching plan(s) from FACTS with the exact cover amount and premium from FACTS. Explain the fit in one plain sentence. End with one soft question."
+    QUOTE_DISCUSSION: "Walk through the quote using only FACTS numbers. Clarify what is and is not covered, per FACTS. Offer to arrange a callback for paperwork."
+    OBJECTION_HANDLING: "Acknowledge the concern honestly. Address it with grounded facts only, and be upfront about exclusions and waiting periods from FACTS. Never over-promise."
+    FOLLOW_UP: "Summarise where things stand and offer help with the next step. No pressure."
+    HANDOFF: "Do not reply as the assistant; a licensed human advisor is taking over."
+
+guardrails:
+  numeric_grounding: true
+  forbidden_phrases:
+    [
+      "guaranteed returns",
+      "guaranteed approval",
+      "special discount",
+      "guaranteed claim",
+      "claim will be approved",
+      "claim is guaranteed",
+      "guarantee your claim",
+      "100% claim settlement",
+      "premium will never increase",
+      "premium is locked forever",
+      "no medical test needed",
+      "covers everything",
+      "assured bonus",
+      "assured returns",
+      "guaranteed acceptance",
+    ]
+  handoff_intents: [request_human, claim_guarantee_request]
+  handoff_on_sentiment: [angry]
+  low_confidence_threshold: 0.4
+  low_confidence_strikes: 2
