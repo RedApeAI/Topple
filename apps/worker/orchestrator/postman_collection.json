@@ -1,0 +1,527 @@
+{
+  "info": {
+    "name": "plucia blackbox orchestrator",
+    "description": "Two full journeys through POST /v1/turns (real-estate tenant with a LoRA adapter, insurance tenant without), plus dedupe, wrong-scope 403, the copilot drafts loop, and observability reads.\n\nPrereqs: docker compose up -d, python seeds/seed_qdrant.py, Ollama running, uvicorn app.main:app.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "base_url", "value": "http://localhost:8000" },
+    { "key": "re_conversation_id", "value": "" },
+    { "key": "re_contact_id", "value": "" },
+    { "key": "re_last_request_id", "value": "" },
+    { "key": "ins_conversation_id", "value": "" },
+    { "key": "draft_message_id", "value": "" },
+    { "key": "dedupe_request_id", "value": "demo-dedupe-001" }
+  ],
+  "item": [
+    {
+      "name": "0 · Health",
+      "item": [
+        {
+          "name": "GET /health",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/health",
+              "host": ["{{base_url}}"],
+              "path": ["health"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('mongo, qdrant and llm all reachable', () => {",
+                  "  const b = pm.response.json();",
+                  "  pm.expect(b.status).to.eql('ok');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "1 · Real-estate journey (adapter real-estate-v2)",
+      "item": [
+        {
+          "name": "1. Greeting",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": {
+              "raw": "{{base_url}}/v1/turns",
+              "host": ["{{base_url}}"],
+              "path": ["v1", "turns"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"request_id\": \"{{$guid}}\",\n  \"received_at\": \"{{$isoTimestamp}}\",\n  \"tenant_id\": \"plucia\",\n  \"channel\": \"whatsapp\",\n  \"granted_scopes\": [\"channel:whatsapp\"],\n  \"runtime\": {\n    \"playbook_id\": \"real-estate-v1\",\n    \"knowledge_source_id\": \"plucia_re\",\n    \"model_id\": \"qwen3.5-9b-base\",\n    \"adapter_id\": \"real-estate-v2\",\n    \"playbook_version\": 8,\n    \"prompt_version\": \"2026-06-01\"\n  },\n  \"message\": {\n    \"external_contact_id\": \"+971501234567\",\n    \"type\": \"text\",\n    \"text\": \"Hi! I saw your ad about apartments in Dubai Marina\",\n    \"media\": [],\n    \"channel_timestamp\": \"{{$isoTimestamp}}\",\n    \"raw_ref\": null\n  },\n  \"mode\": \"autopilot\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const b = pm.response.json();",
+                  "pm.collectionVariables.set('re_conversation_id', b.conversation_id);",
+                  "pm.collectionVariables.set('re_contact_id', b.contact_id);",
+                  "pm.test('stage GREETING -> QUALIFYING', () => {",
+                  "  pm.expect(b.stage_in).to.eql('GREETING');",
+                  "  pm.expect(b.stage_out).to.eql('QUALIFYING');",
+                  "});",
+                  "pm.test('autopilot reply sent', () => pm.expect(b.reply.status).to.eql('sent'));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "2. Qualification — budget + locality",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": {
+              "raw": "{{base_url}}/v1/turns",
+              "host": ["{{base_url}}"],
+              "path": ["v1", "turns"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"request_id\": \"{{$guid}}\",\n  \"received_at\": \"{{$isoTimestamp}}\",\n  \"tenant_id\": \"plucia\",\n  \"channel\": \"whatsapp\",\n  \"granted_scopes\": [\"channel:whatsapp\"],\n  \"runtime\": {\n    \"playbook_id\": \"real-estate-v1\",\n    \"knowledge_source_id\": \"plucia_re\",\n    \"model_id\": \"qwen3.5-9b-base\",\n    \"adapter_id\": \"real-estate-v2\",\n    \"playbook_version\": 8,\n    \"prompt_version\": \"2026-06-01\"\n  },\n  \"message\": {\n    \"external_contact_id\": \"+971501234567\",\n    \"type\": \"text\",\n    \"text\": \"Budget is around 2 million dirhams, I want a 2 bedroom in Dubai Marina ideally\",\n    \"media\": [],\n    \"channel_timestamp\": \"{{$isoTimestamp}}\",\n    \"raw_ref\": null\n  },\n  \"mode\": \"autopilot\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const b = pm.response.json();",
+                  "pm.test('lead captured and stage moved to RECOMMENDING', () => {",
+                  "  pm.expect(b.lead_profile.qualification_score).to.be.above(0);",
+                  "  pm.expect(b.stage_out).to.eql('RECOMMENDING');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "3. Price question (retrieval)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": {
+              "raw": "{{base_url}}/v1/turns",
+              "host": ["{{base_url}}"],
+              "path": ["v1", "turns"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"request_id\": \"{{$guid}}\",\n  \"received_at\": \"{{$isoTimestamp}}\",\n  \"tenant_id\": \"plucia\",\n  \"channel\": \"whatsapp\",\n  \"granted_scopes\": [\"channel:whatsapp\"],\n  \"runtime\": {\n    \"playbook_id\": \"real-estate-v1\",\n    \"knowledge_source_id\": \"plucia_re\",\n    \"model_id\": \"qwen3.5-9b-base\",\n    \"adapter_id\": \"real-estate-v2\",\n    \"playbook_version\": 8,\n    \"prompt_version\": \"2026-06-01\"\n  },\n  \"message\": {\n    \"external_contact_id\": \"+971501234567\",\n    \"type\": \"text\",\n    \"text\": \"What is the exact price of the 2 bedroom in Marina Crest? And when is handover?\",\n    \"media\": [],\n    \"channel_timestamp\": \"{{$isoTimestamp}}\",\n    \"raw_ref\": null\n  },\n  \"mode\": \"autopilot\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": { "exec": [""], "type": "text/javascript" }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const b = pm.response.json();",
+                  "pm.collectionVariables.set('re_last_request_id', b.request_id);",
+                  "pm.test('retrieval produced hits', () => pm.expect(b.retrieval_hits.length).to.be.above(0));",
+                  "pm.test('some hits were used in FACTS', () => pm.expect(b.retrieval_hits.some(h => h.used)).to.be.true);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "4. Objection",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": {
+              "raw": "{{base_url}}/v1/turns",
+              "host": ["{{base_url}}"],
+              "path": ["v1", "turns"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"request_id\": \"{{$guid}}\",\n  \"received_at\": \"{{$isoTimestamp}}\",\n  \"tenant_id\": \"plucia\",\n  \"channel\": \"whatsapp\",\n  \"granted_scopes\": [\"channel:whatsapp\"],\n  \"runtime\": {\n    \"playbook_id\": \"real-estate-v1\",\n    \"knowledge_source_id\": \"plucia_re\",\n    \"model_id\": \"qwen3.5-9b-base\",\n    \"adapter_id\": \"real-estate-v2\",\n    \"playbook_version\": 8,\n    \"prompt_version\": \"2026-06-01\"\n  },\n  \"message\": {\n    \"external_contact_id\": \"+971501234567\",\n    \"type\": \"text\",\n    \"text\": \"Hmm that feels expensive for Dubai Marina honestly, other projects are cheaper\",\n    \"media\": [],\n    \"channel_timestamp\": \"{{$isoTimestamp}}\",\n    \"raw_ref\": null\n  },\n  \"mode\": \"autopilot\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const b = pm.response.json();",
+                  "pm.test('objection detour', () => pm.expect(b.stage_out).to.eql('OBJECTION_HANDLING'));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "5. Visit request",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": {
+              "raw": "{{base_url}}/v1/turns",
+              "host": ["{{base_url}}"],
+              "path": ["v1", "turns"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"request_id\": \"{{$guid}}\",\n  \"received_at\": \"{{$isoTimestamp}}\",\n  \"tenant_id\": \"plucia\",\n  \"channel\": \"whatsapp\",\n  \"granted_scopes\": [\"channel:whatsapp\"],\n  \"runtime\": {\n    \"playbook_id\": \"real-estate-v1\",\n    \"knowledge_source_id\": \"plucia_re\",\n    \"model_id\": \"qwen3.5-9b-base\",\n    \"adapter_id\": \"real-estate-v2\",\n    \"playbook_version\": 8,\n    \"prompt_version\": \"2026-06-01\"\n  },\n  \"message\": {\n    \"external_contact_id\": \"+971501234567\",\n    \"type\": \"text\",\n    \"text\": \"Ok fine. Can I come see the Marina Crest show apartment this weekend?\",\n    \"media\": [],\n    \"channel_timestamp\": \"{{$isoTimestamp}}\",\n    \"raw_ref\": null\n  },\n  \"mode\": \"autopilot\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const b = pm.response.json();",
+                  "pm.test('moved to SITE_VISIT_BOOKING', () => pm.expect(b.stage_out).to.eql('SITE_VISIT_BOOKING'));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "6. Read conversation transcript",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/v1/conversations/{{re_conversation_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["v1", "conversations", "{{re_conversation_id}}"]
+            }
+          }
+        },
+        {
+          "name": "7. Read contact (lead profile)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/v1/contacts/{{re_contact_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["v1", "contacts", "{{re_contact_id}}"]
+            }
+          }
+        },
+        {
+          "name": "8. Read the turn document",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/v1/turns/{{re_last_request_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["v1", "turns", "{{re_last_request_id}}"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "2 · Insurance journey (adapter null)",
+      "item": [
+        {
+          "name": "1. Needs assessment",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": {
+              "raw": "{{base_url}}/v1/turns",
+              "host": ["{{base_url}}"],
+              "path": ["v1", "turns"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"request_id\": \"{{$guid}}\",\n  \"received_at\": \"{{$isoTimestamp}}\",\n  \"tenant_id\": \"acme\",\n  \"channel\": \"whatsapp\",\n  \"granted_scopes\": [\"channel:whatsapp\"],\n  \"runtime\": {\n    \"playbook_id\": \"insurance-v1\",\n    \"knowledge_source_id\": \"acme_insurance\",\n    \"model_id\": \"qwen3.5-9b-base\",\n    \"adapter_id\": null,\n    \"playbook_version\": 4,\n    \"prompt_version\": \"2026-06-01\"\n  },\n  \"message\": {\n    \"external_contact_id\": \"+971509876543\",\n    \"type\": \"text\",\n    \"text\": \"Hello, I am looking for health insurance for my family\",\n    \"media\": [],\n    \"channel_timestamp\": \"{{$isoTimestamp}}\",\n    \"raw_ref\": null\n  },\n  \"mode\": \"autopilot\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const b = pm.response.json();",
+                  "pm.collectionVariables.set('ins_conversation_id', b.conversation_id);",
+                  "pm.test('stage GREETING -> NEEDS_ASSESSMENT', () => pm.expect(b.stage_out).to.eql('NEEDS_ASSESSMENT'));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "2. Plan question (retrieval)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": {
+              "raw": "{{base_url}}/v1/turns",
+              "host": ["{{base_url}}"],
+              "path": ["v1", "turns"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"request_id\": \"{{$guid}}\",\n  \"received_at\": \"{{$isoTimestamp}}\",\n  \"tenant_id\": \"acme\",\n  \"channel\": \"whatsapp\",\n  \"granted_scopes\": [\"channel:whatsapp\"],\n  \"runtime\": {\n    \"playbook_id\": \"insurance-v1\",\n    \"knowledge_source_id\": \"acme_insurance\",\n    \"model_id\": \"qwen3.5-9b-base\",\n    \"adapter_id\": null,\n    \"playbook_version\": 4,\n    \"prompt_version\": \"2026-06-01\"\n  },\n  \"message\": {\n    \"external_contact_id\": \"+971509876543\",\n    \"type\": \"text\",\n    \"text\": \"I am 35, two kids, budget about 15,000 dirhams per year. What does the family plan cost for AED 500,000 cover?\",\n    \"media\": [],\n    \"channel_timestamp\": \"{{$isoTimestamp}}\",\n    \"raw_ref\": null\n  },\n  \"mode\": \"autopilot\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const b = pm.response.json();",
+                  "pm.test('reached PLAN_RECOMMENDATION with retrieval', () => {",
+                  "  pm.expect(b.stage_out).to.eql('PLAN_RECOMMENDATION');",
+                  "  pm.expect(b.retrieval_hits.length).to.be.above(0);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "3. \"Guarantee my claim\" → guardrail + handoff",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": {
+              "raw": "{{base_url}}/v1/turns",
+              "host": ["{{base_url}}"],
+              "path": ["v1", "turns"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"request_id\": \"{{$guid}}\",\n  \"received_at\": \"{{$isoTimestamp}}\",\n  \"tenant_id\": \"acme\",\n  \"channel\": \"whatsapp\",\n  \"granted_scopes\": [\"channel:whatsapp\"],\n  \"runtime\": {\n    \"playbook_id\": \"insurance-v1\",\n    \"knowledge_source_id\": \"acme_insurance\",\n    \"model_id\": \"qwen3.5-9b-base\",\n    \"adapter_id\": null,\n    \"playbook_version\": 4,\n    \"prompt_version\": \"2026-06-01\"\n  },\n  \"message\": {\n    \"external_contact_id\": \"+971509876543\",\n    \"type\": \"text\",\n    \"text\": \"Before I pay — can you guarantee my claim gets approved if something happens?\",\n    \"media\": [],\n    \"channel_timestamp\": \"{{$isoTimestamp}}\",\n    \"raw_ref\": null\n  },\n  \"mode\": \"autopilot\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const b = pm.response.json();",
+                  "pm.test('handoff triggered, nothing auto-sent', () => {",
+                  "  pm.expect(b.handoff.triggered).to.be.true;",
+                  "  pm.expect(b.stage_out).to.eql('HANDOFF');",
+                  "  pm.expect(b.reply.status).to.be.oneOf(['suppressed', 'draft']);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "3 · Copilot drafts loop",
+      "item": [
+        {
+          "name": "1. Copilot turn (reply becomes a draft)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": {
+              "raw": "{{base_url}}/v1/turns",
+              "host": ["{{base_url}}"],
+              "path": ["v1", "turns"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"request_id\": \"{{$guid}}\",\n  \"received_at\": \"{{$isoTimestamp}}\",\n  \"tenant_id\": \"plucia\",\n  \"channel\": \"whatsapp\",\n  \"granted_scopes\": [\"channel:whatsapp\"],\n  \"runtime\": {\n    \"playbook_id\": \"real-estate-v1\",\n    \"knowledge_source_id\": \"plucia_re\",\n    \"model_id\": \"qwen3.5-9b-base\",\n    \"adapter_id\": \"real-estate-v2\",\n    \"playbook_version\": 8,\n    \"prompt_version\": \"2026-06-01\"\n  },\n  \"message\": {\n    \"external_contact_id\": \"+971501234567\",\n    \"type\": \"text\",\n    \"text\": \"Also what are the amenities like at Marina Crest?\",\n    \"media\": [],\n    \"channel_timestamp\": \"{{$isoTimestamp}}\",\n    \"raw_ref\": null\n  },\n  \"mode\": \"copilot\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const b = pm.response.json();",
+                  "pm.test('copilot reply is a draft', () => pm.expect(b.reply.status).to.eql('draft'));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "2. List pending drafts",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/v1/drafts?tenant_id=plucia",
+              "host": ["{{base_url}}"],
+              "path": ["v1", "drafts"],
+              "query": [{ "key": "tenant_id", "value": "plucia" }]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const drafts = pm.response.json();",
+                  "pm.test('at least one draft pending', () => pm.expect(drafts.length).to.be.above(0));",
+                  "if (drafts.length) pm.collectionVariables.set('draft_message_id', drafts[0]._id);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "3. Approve draft (optionally edited) → dispatched",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": {
+              "raw": "{{base_url}}/v1/drafts/{{draft_message_id}}/approve",
+              "host": ["{{base_url}}"],
+              "path": ["v1", "drafts", "{{draft_message_id}}", "approve"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"edited_text\": \"Marina Crest has an infinity pool, a 12,000 sq ft gym and a padel court with direct promenade access. Want me to send the full amenities sheet?\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('draft approved', () => pm.expect(pm.response.json().status).to.eql('approved'));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "4 · Idempotency & scope",
+      "item": [
+        {
+          "name": "1. Send with fixed request_id",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": {
+              "raw": "{{base_url}}/v1/turns",
+              "host": ["{{base_url}}"],
+              "path": ["v1", "turns"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"request_id\": \"{{dedupe_request_id}}\",\n  \"received_at\": \"{{$isoTimestamp}}\",\n  \"tenant_id\": \"plucia\",\n  \"channel\": \"whatsapp\",\n  \"granted_scopes\": [\"channel:whatsapp\"],\n  \"runtime\": {\n    \"playbook_id\": \"real-estate-v1\",\n    \"knowledge_source_id\": \"plucia_re\",\n    \"model_id\": \"qwen3.5-9b-base\",\n    \"adapter_id\": \"real-estate-v2\",\n    \"playbook_version\": 8,\n    \"prompt_version\": \"2026-06-01\"\n  },\n  \"message\": {\n    \"external_contact_id\": \"+971500000001\",\n    \"type\": \"text\",\n    \"text\": \"Hi, do you have anything in JVC?\",\n    \"media\": [],\n    \"channel_timestamp\": \"{{$isoTimestamp}}\",\n    \"raw_ref\": null\n  },\n  \"mode\": \"autopilot\"\n}"
+            }
+          }
+        },
+        {
+          "name": "2. Resend same request_id → deduped:true",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": {
+              "raw": "{{base_url}}/v1/turns",
+              "host": ["{{base_url}}"],
+              "path": ["v1", "turns"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"request_id\": \"{{dedupe_request_id}}\",\n  \"received_at\": \"{{$isoTimestamp}}\",\n  \"tenant_id\": \"plucia\",\n  \"channel\": \"whatsapp\",\n  \"granted_scopes\": [\"channel:whatsapp\"],\n  \"runtime\": {\n    \"playbook_id\": \"real-estate-v1\",\n    \"knowledge_source_id\": \"plucia_re\",\n    \"model_id\": \"qwen3.5-9b-base\",\n    \"adapter_id\": \"real-estate-v2\",\n    \"playbook_version\": 8,\n    \"prompt_version\": \"2026-06-01\"\n  },\n  \"message\": {\n    \"external_contact_id\": \"+971500000001\",\n    \"type\": \"text\",\n    \"text\": \"Hi, do you have anything in JVC?\",\n    \"media\": [],\n    \"channel_timestamp\": \"{{$isoTimestamp}}\",\n    \"raw_ref\": null\n  },\n  \"mode\": \"autopilot\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('replayed, pipeline not re-run', () => pm.expect(pm.response.json().deduped).to.be.true);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "3. Wrong scope → 403",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": {
+              "raw": "{{base_url}}/v1/turns",
+              "host": ["{{base_url}}"],
+              "path": ["v1", "turns"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"request_id\": \"{{$guid}}\",\n  \"received_at\": \"{{$isoTimestamp}}\",\n  \"tenant_id\": \"plucia\",\n  \"channel\": \"whatsapp\",\n  \"granted_scopes\": [\"channel:email\"],\n  \"runtime\": {\n    \"playbook_id\": \"real-estate-v1\",\n    \"knowledge_source_id\": \"plucia_re\",\n    \"model_id\": \"qwen3.5-9b-base\",\n    \"adapter_id\": \"real-estate-v2\",\n    \"playbook_version\": 8,\n    \"prompt_version\": \"2026-06-01\"\n  },\n  \"message\": {\n    \"external_contact_id\": \"+971500000002\",\n    \"type\": \"text\",\n    \"text\": \"This should be rejected\",\n    \"media\": [],\n    \"channel_timestamp\": \"{{$isoTimestamp}}\",\n    \"raw_ref\": null\n  },\n  \"mode\": \"autopilot\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('scope rejected with 403', () => pm.response.to.have.status(403));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "5 · Metrics",
+      "item": [
+        {
+          "name": "GET /v1/metrics/summary (plucia, by adapter)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/v1/metrics/summary?tenant_id=plucia",
+              "host": ["{{base_url}}"],
+              "path": ["v1", "metrics", "summary"],
+              "query": [{ "key": "tenant_id", "value": "plucia" }]
+            }
+          }
+        },
+        {
+          "name": "GET /v1/metrics/summary (acme)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/v1/metrics/summary?tenant_id=acme",
+              "host": ["{{base_url}}"],
+              "path": ["v1", "metrics", "summary"],
+              "query": [{ "key": "tenant_id", "value": "acme" }]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}
