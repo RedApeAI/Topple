@@ -119,6 +119,81 @@ async def update_lead(db, contact_id, lead: dict) -> None:
 
 
 # --------------------------------------------------------------------------- #
+# Bulk lead import (CSV/Excel upload)
+# --------------------------------------------------------------------------- #
+async def import_lead(
+    db, tenant_id: str, name: str | None, identities: list[dict]
+) -> tuple[dict | None, str, str | None]:
+    """Create or update one contact from an imported row.
+
+    `identities` is the set of (channel, external_id) pairs parsed from the
+    row — a row can carry several (whatsapp + email, say) for the same
+    person. Matches an existing contact by ANY of them (mirrors
+    `resolve_or_create`'s per-identity lookup, generalized to a set), unions
+    in any identities the existing contact doesn't already have, and fills
+    `profile.name` only if it isn't already set — imported names never
+    clobber a name the conversation pipeline already learned.
+
+    Returns (contact_doc, status, reason) where status is one of
+    "created" / "updated" / "skipped". A row with no usable identities is
+    skipped outright — there is nothing to contact them on.
+    """
+    if not identities:
+        return None, "skipped", "no channel identities provided"
+
+    query = {
+        "tenant_id": tenant_id,
+        "$or": [
+            {"identities": {"$elemMatch": {"channel": i["channel"], "external_id": i["external_id"]}}}
+            for i in identities
+        ],
+    }
+    existing = await db.contacts.find_one(query)
+
+    if existing is None:
+        doc = {
+            "tenant_id": tenant_id,
+            "identities": identities,
+            "profile": {"name": name, "language": None},
+            "lead": {"qualification_score": 0},
+            "created_at": _now(),
+            "updated_at": _now(),
+        }
+        try:
+            res = await db.contacts.insert_one(doc)
+            doc["_id"] = res.inserted_id
+            return doc, "created", None
+        except DuplicateKeyError:
+            # one of these identities was just claimed by a concurrent row —
+            # fall through and treat it as an update against the winner.
+            existing = await db.contacts.find_one(query)
+            if existing is None:
+                return None, "skipped", "identity conflict"
+
+    merged = list(existing.get("identities", []))
+    seen = {(i["channel"], i["external_id"]) for i in merged}
+    for ident in identities:
+        if (ident["channel"], ident["external_id"]) not in seen:
+            merged.append(ident)
+            seen.add((ident["channel"], ident["external_id"]))
+
+    profile = dict(existing.get("profile") or {})
+    if name and not profile.get("name"):
+        profile["name"] = name
+
+    update = {"identities": merged, "profile": profile, "updated_at": _now()}
+    try:
+        await db.contacts.update_one({"_id": existing["_id"]}, {"$set": update})
+    except DuplicateKeyError:
+        # a new identity in this row belongs to a different contact —
+        # partial collision; leave both docs alone rather than guess.
+        return existing, "skipped", "identity conflict"
+
+    existing.update(update)
+    return existing, "updated", None
+
+
+# --------------------------------------------------------------------------- #
 # Bifurcation merge
 # --------------------------------------------------------------------------- #
 class ContactNotFound(Exception):

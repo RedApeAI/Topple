@@ -58,18 +58,18 @@ export function Sidebar() {
       <div
         className={cn(
           "flex w-full flex-col gap-[30px]",
-          collapsed && "items-center gap-5",
+          collapsed && "items-center gap-7",
         )}
       >
-        <div className="flex w-full flex-col gap-5">
+        <div className={cn("flex w-full flex-col gap-5", collapsed && "gap-6")}>
           <div
             className={cn(
               "flex items-center justify-between",
-              collapsed && "flex-col gap-3",
+              collapsed && "flex-col gap-4",
             )}
           >
             <div className="flex items-center gap-2">
-              <LogoMark size={32} />
+              <LogoMark size={36} />
               {!collapsed && (
                 <div className="flex flex-col">
                   <div className="flex items-center gap-1">
@@ -81,7 +81,7 @@ export function Sidebar() {
                     </span>
                   </div>
                   <span className="text-[12px] font-medium text-muted-foreground">
-                    Pluciatest@gmail.com
+                    pluciatest@gmail.com
                   </span>
                 </div>
               )}
@@ -108,9 +108,9 @@ export function Sidebar() {
             <Tooltip>
               <TooltipTrigger
                 aria-label="Search"
-                className="flex h-9 w-9 items-center justify-center rounded-md bg-secondary text-muted-foreground hover:text-foreground"
+                className="flex h-11 w-11 items-center justify-center rounded-xl bg-secondary text-muted-foreground hover:text-foreground"
               >
-                <Search className="h-4 w-4" />
+                <Search className="h-5 w-5" />
               </TooltipTrigger>
               <TooltipContent side="right">Search</TooltipContent>
             </Tooltip>
@@ -147,7 +147,12 @@ export function Sidebar() {
           collapsed && "items-center",
         )}
       >
-        <div className="flex w-full flex-col gap-0.5">
+        <div
+          className={cn(
+            "flex w-full flex-col gap-0.5",
+            collapsed && "items-center gap-1.5",
+          )}
+        >
           {bottomNavItems.map((item) => (
             <NavRow
               key={item.href}
@@ -160,9 +165,9 @@ export function Sidebar() {
         </div>
         <Separator />
         {collapsed ? (
-          <Avatar className="h-9 w-9">
+          <Avatar className="h-11 w-11 rounded-xl">
             <AvatarImage src={currentUser.avatarUrl} alt={currentUser.name} />
-            <AvatarFallback className="text-[11px]">
+            <AvatarFallback className="rounded-xl text-[12px]">
               {initials(currentUser.name)}
             </AvatarFallback>
           </Avatar>
@@ -214,7 +219,12 @@ function NavGroup({
           <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
         </div>
       )}
-      <div className="flex w-full flex-col gap-0.5">
+      <div
+        className={cn(
+          "flex w-full flex-col gap-0.5",
+          collapsed && "items-center gap-1.5",
+        )}
+      >
         {section.items.map((item) => (
           <NavRow
             key={item.href}
@@ -250,10 +260,10 @@ function NavRow({
       className={cn(
         "flex w-full items-center gap-1.5 rounded-[10px] px-2.5 py-2 text-[14px] font-medium text-secondary-foreground transition-colors hover:bg-accent",
         active && "bg-card text-foreground shadow-row",
-        collapsed && "w-9 justify-center px-0",
+        collapsed && "h-11 w-11 justify-center rounded-xl p-0",
       )}
     >
-      <Icon className="h-5 w-5 shrink-0" />
+      <Icon className={cn("h-5 w-5 shrink-0", collapsed && "h-6 w-6")} />
       {!collapsed && (
         <>
           <span className="flex-1 truncate">{item.label}</span>

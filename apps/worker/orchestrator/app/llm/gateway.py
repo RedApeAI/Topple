@@ -222,6 +222,22 @@ async def generate(*, model: str, messages: list[dict]) -> GenerationCall:
     )
 
 
+# --------------------------------------------------------------------------- #
+# Plain chat — used by the operator agent loop (JSON protocol lives upstream)
+# --------------------------------------------------------------------------- #
+async def chat_text(
+    *, model: str, messages: list[dict], temperature: float = 0.3
+) -> tuple[str, LLMCallStats]:
+    """One chat completion, raw text back. Thinking disabled — the agent
+    protocol carries its reasoning explicitly in the JSON `thought` field."""
+    started = time.monotonic()
+    text, stats = await _chat(
+        messages, model=model, temperature=temperature, disable_thinking=True
+    )
+    stats.latency_ms = int((time.monotonic() - started) * 1000)
+    return text, stats
+
+
 async def ping() -> bool:
     try:
         await get_client().with_options(timeout=3.0).models.list()

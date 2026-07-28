@@ -1,5 +1,7 @@
 import { create } from "zustand";
 
+export type OperatorMode = "copilot" | "autopilot";
+
 interface UIState {
   sidebarCollapsed: boolean;
   toggleSidebar: () => void;
@@ -8,6 +10,10 @@ interface UIState {
   openOperator: () => void;
   closeOperator: () => void;
   toggleOperator: () => void;
+
+  /** Co-pilot drafts replies for approval; autopilot acts on its own. */
+  operatorMode: OperatorMode;
+  setOperatorMode: (mode: OperatorMode) => void;
 }
 
 export const useUIStore = create<UIState>((set) => ({
@@ -19,4 +25,7 @@ export const useUIStore = create<UIState>((set) => ({
   openOperator: () => set({ operatorOpen: true }),
   closeOperator: () => set({ operatorOpen: false }),
   toggleOperator: () => set((state) => ({ operatorOpen: !state.operatorOpen })),
+
+  operatorMode: "copilot",
+  setOperatorMode: (mode) => set({ operatorMode: mode }),
 }));

@@ -1,7 +1,12 @@
 {
   "$schema": "https://turborepo.dev/schema.json",
   "ui": "tui",
-  "globalEnv": ["PORT", "OPENAI_API_KEY"],
+  "globalEnv": [
+    "PORT",
+    "OPENAI_API_KEY",
+    "ORCHESTRATOR_URL",
+    "NEXT_PUBLIC_TENANT_ID"
+  ],
   "tasks": {
     "build": {
       "dependsOn": ["^build"],

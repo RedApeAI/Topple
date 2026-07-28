@@ -35,6 +35,8 @@
   --color-success-foreground: var(--success-foreground);
   --color-warning: var(--warning);
   --color-warning-foreground: var(--warning-foreground);
+  --color-bubble-outgoing: var(--bubble-outgoing);
+  --color-bubble-incoming: var(--bubble-incoming);
   --color-border: var(--border);
   --color-border-subtle: var(--border-subtle);
   --color-input: var(--input);
@@ -105,6 +107,10 @@
   --warning: #f5a623;
   --warning-foreground: #111111;
 
+  /* Chat bubbles (design.md §2.6) */
+  --bubble-outgoing: #dcf7c5;
+  --bubble-incoming: #ffffff;
+
   --border: #d6d3cd;
   --border-subtle: rgba(32, 32, 32, 0.05);
   --input: #d6d3cd;
@@ -131,7 +137,7 @@
   --chart-4: #f5a623;
   --chart-5: #ff2f2f;
 
-  --sidebar: #ffffff;
+  --sidebar: #f1f0ee;
   --sidebar-foreground: #292929;
   --sidebar-border: #d6d3cd;
   --sidebar-accent: #f1f0ee;
@@ -164,6 +170,10 @@
   --success-foreground: #0d1f13;
   --warning: #f8b84e;
   --warning-foreground: #171715;
+
+  /* Chat bubbles — same mint identity, dimmed for dark canvas */
+  --bubble-outgoing: #24422c;
+  --bubble-incoming: #262624;
 
   --border: #35342f;
   --border-subtle: rgba(255, 255, 255, 0.06);
@@ -282,5 +292,15 @@
       0 7px 16px rgba(0, 0, 0, 0.05),
       0 35px 28px rgba(0, 0, 0, 0.05),
       0 17px 13px rgba(0, 0, 0, 0.05);
+  }
+
+  /* WhatsApp-style paper texture behind chat threads (design.md §2.6) —
+     decorative only, must stay far below text contrast. */
+  .chat-watermark {
+    background-image: repeating-linear-gradient(
+      45deg,
+      var(--border-subtle) 0 1px,
+      transparent 1px 16px
+    );
   }
 }

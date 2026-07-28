@@ -6,5 +6,7 @@ export function useConversations(scope: InboxScope) {
   return useQuery({
     queryKey: ["conversations", scope],
     queryFn: () => fetchConversations(scope),
+    // The orchestrator has no push channel yet — poll to keep the inbox live.
+    refetchInterval: 15_000,
   });
 }

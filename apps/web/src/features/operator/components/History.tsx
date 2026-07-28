@@ -1,8 +1,13 @@
 import { Skeleton } from "@/components/ui/skeleton";
 import { useOperatorHistory } from "../hooks/use-operator-threads";
 import { ThreadCard } from "./ThreadCard";
+import type { OperatorThread } from "../types/operator.types";
 
-export function History() {
+interface HistoryProps {
+  onSelectThread?: (thread: OperatorThread) => void;
+}
+
+export function History({ onSelectThread }: HistoryProps) {
   const { data: history, isLoading } = useOperatorHistory();
 
   if (isLoading) {
@@ -18,7 +23,7 @@ export function History() {
   return (
     <div className="flex flex-col gap-0.5">
       {history?.map((thread) => (
-        <ThreadCard key={thread.id} thread={thread} />
+        <ThreadCard key={thread.id} thread={thread} onSelect={onSelectThread} />
       ))}
     </div>
   );

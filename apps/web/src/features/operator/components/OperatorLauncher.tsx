@@ -20,7 +20,7 @@ export function OperatorLauncher() {
       className="surface-primary-gradient shadow-fab fixed bottom-5 right-[30px] z-40 flex h-[58px] w-[58px] items-center justify-center rounded-full"
     >
       <span
-        className="surface-brand-gradient absolute inset-0 -z-10 rounded-full opacity-70 blur-md"
+        className="absolute inset-0 -z-10 rounded-full opacity-70 blur-md"
         aria-hidden
       />
       <TaskListIcon className="h-[34px] w-[34px]" />

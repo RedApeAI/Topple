@@ -1,3 +1,6 @@
+"use client";
+
+import * as React from "react";
 import {
   ChevronDown,
   Database,
@@ -13,18 +16,35 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { AddLeadDialog } from "@/features/crm/components/AddLeadDialog";
+import { ImportLeadsDialog } from "@/features/crm/components/ImportLeadsDialog";
 import { ScopeTabs } from "./ScopeTabs";
 import type { InboxScope } from "../types/conversation.types";
 
 interface InboxToolbarProps {
   scope: InboxScope;
   onScopeChange: (scope: InboxScope) => void;
+  /** When set, the toolbar shows this heading instead of the scope tabs. */
+  title?: string;
 }
 
-export function InboxToolbar({ scope, onScopeChange }: InboxToolbarProps) {
+export function InboxToolbar({
+  scope,
+  onScopeChange,
+  title,
+}: InboxToolbarProps) {
+  const [importOpen, setImportOpen] = React.useState(false);
+  const [addLeadOpen, setAddLeadOpen] = React.useState(false);
+
   return (
     <div className="flex w-full items-center justify-between border-b border-border-subtle pb-2.5">
-      <ScopeTabs value={scope} onChange={onScopeChange} />
+      {title ? (
+        <span className="px-1 font-heading text-[16px] tracking-[-0.16px] text-foreground">
+          {title}
+        </span>
+      ) : (
+        <ScopeTabs value={scope} onChange={onScopeChange} />
+      )}
 
       <div className="flex items-center gap-2">
         <div className="flex items-center gap-1.5">
@@ -49,11 +69,11 @@ export function InboxToolbar({ scope, onScopeChange }: InboxToolbarProps) {
             <ChevronDown className="h-3.5 w-3.5" />
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="min-w-44">
-            <DropdownMenuItem>
+            <DropdownMenuItem onClick={() => setAddLeadOpen(true)}>
               <UserPlus className="h-3.5 w-3.5" />
               Add lead manually
             </DropdownMenuItem>
-            <DropdownMenuItem>
+            <DropdownMenuItem onClick={() => setImportOpen(true)}>
               <FileSpreadsheet className="h-3.5 w-3.5" />
               Import from Excel
             </DropdownMenuItem>
@@ -64,6 +84,9 @@ export function InboxToolbar({ scope, onScopeChange }: InboxToolbarProps) {
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
+
+      <ImportLeadsDialog open={importOpen} onOpenChange={setImportOpen} />
+      <AddLeadDialog open={addLeadOpen} onOpenChange={setAddLeadOpen} />
     </div>
   );
 }

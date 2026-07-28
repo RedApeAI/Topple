@@ -9,20 +9,21 @@ from __future__ import annotations
 import logging
 from contextlib import asynccontextmanager
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
 
 from bson import ObjectId
 from bson.errors import InvalidId
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 from .engine import contacts as contacts_engine
 from .engine.pipeline import ScopeDenied, TurnInProgress, run_turn
 from .llm import gateway
 from .llm.gateway import LLMUnavailable
+from .operator import agent as operator_agent
 from .outbound import dispatcher
-from .schemas.envelope import OrchestratorInput, OrchestratorResult
+from .schemas.envelope import OrchestratorInput, OrchestratorResult, RuntimeConfig
 from .stores import mongo, qdrant
 
 logging.basicConfig(level=logging.INFO)
@@ -181,12 +182,108 @@ async def get_conversation(conversation_id: str):
     return _jsonable({**convo, "messages": messages})
 
 
+@app.get("/v1/contacts")
+async def list_contacts(tenant_id: str = Query(...), limit: int = Query(200, le=500)):
+    """All contacts for a tenant, newest first — the CRM lead list."""
+    docs = await (
+        mongo.get_db()
+        .contacts.find({"tenant_id": tenant_id})
+        .sort([("created_at", -1), ("_id", -1)])
+        .to_list(length=limit)
+    )
+    return _jsonable(docs)
+
+
 @app.get("/v1/contacts/{contact_id}")
 async def get_contact(contact_id: str):
     doc = await mongo.get_db().contacts.find_one({"_id": _oid(contact_id, "contact")})
     if doc is None:
         raise HTTPException(status_code=404, detail="contact not found")
     return _jsonable(doc)
+
+
+# --------------------------------------------------------------------------- #
+# Bulk lead import (CSV/Excel upload from the CRM)
+# --------------------------------------------------------------------------- #
+# Row field → identity channel. "linkedin" is stored on the contact like any
+# other identity even though the turn pipeline doesn't serve it yet — the
+# schema only restricts *turn* channels (see `schemas.envelope.Channel`).
+IMPORT_FIELD_CHANNEL = {
+    "whatsapp": "whatsapp",
+    "email": "email",
+    "phone": "voice",
+    "instagram": "instagram",
+    "linkedin": "linkedin",
+}
+
+
+class LeadImportRow(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    name: str | None = None
+    whatsapp: str | None = None
+    email: str | None = None
+    phone: str | None = None
+    instagram: str | None = None
+    linkedin: str | None = None
+
+
+class LeadImportRequest(BaseModel):
+    tenant_id: str
+    rows: list[LeadImportRow]
+
+
+class LeadImportRowResult(BaseModel):
+    row: int
+    status: Literal["created", "updated", "skipped"]
+    contact_id: str | None = None
+    reason: str | None = None
+
+
+class LeadImportResponse(BaseModel):
+    created: int
+    updated: int
+    skipped: int
+    results: list[LeadImportRowResult]
+
+
+@app.post("/v1/contacts/import", response_model=LeadImportResponse)
+async def import_contacts(body: LeadImportRequest):
+    db = mongo.get_db()
+    results: list[LeadImportRowResult] = []
+    created = updated = skipped = 0
+
+    for idx, row in enumerate(body.rows):
+        identities = [
+            {"channel": channel, "external_id": value.strip()}
+            for field, channel in IMPORT_FIELD_CHANNEL.items()
+            if (value := getattr(row, field)) and value.strip()
+        ]
+        name = (row.name or "").strip() or None
+        contact, status, reason = await contacts_engine.import_lead(
+            db, body.tenant_id, name, identities
+        )
+        if status == "created":
+            created += 1
+        elif status == "updated":
+            updated += 1
+        else:
+            skipped += 1
+        contact_id = str(contact["_id"]) if contact else None
+        log = logger.warning if status == "skipped" else logger.info
+        log(
+            "lead import row=%d tenant=%s status=%s contact_id=%s reason=%s",
+            idx, body.tenant_id, status, contact_id, reason,
+        )
+        results.append(
+            LeadImportRowResult(row=idx, status=status, contact_id=contact_id, reason=reason)
+        )
+
+    logger.info(
+        "lead import complete: tenant=%s rows=%d created=%d updated=%d skipped=%d",
+        body.tenant_id, len(body.rows), created, updated, skipped,
+    )
+    return LeadImportResponse(created=created, updated=updated, skipped=skipped, results=results)
 
 
 class MergeRequest(BaseModel):
@@ -205,6 +302,63 @@ async def merge_contacts(body: MergeRequest):
     except (ValueError, InvalidId) as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return _jsonable(merged)
+
+
+# --------------------------------------------------------------------------- #
+# Operator agent — the salesperson's command chat
+# --------------------------------------------------------------------------- #
+class OperatorCommandRequest(BaseModel):
+    tenant_id: str
+    text: str
+    mode: Literal["copilot", "autopilot"] = "copilot"
+    thread_id: str | None = None
+    preferred_channel: str | None = None
+    # Same upstream-resolved runtime as /v1/turns; used to pick the agent's
+    # base model (vllm) and the playbook stage for brand-new conversations.
+    runtime: RuntimeConfig | None = None
+
+
+@app.post("/v1/operator/messages")
+async def post_operator_command(body: OperatorCommandRequest):
+    if not body.text.strip():
+        raise HTTPException(status_code=422, detail="text must not be empty")
+    try:
+        result = await operator_agent.run_command(
+            mongo.get_db(),
+            tenant_id=body.tenant_id,
+            text=body.text.strip(),
+            mode=body.mode,
+            thread_id=body.thread_id,
+            preferred_channel=body.preferred_channel,
+            runtime=body.runtime,
+        )
+    except operator_agent.ThreadNotFound:
+        raise HTTPException(status_code=404, detail="operator thread not found") from None
+    except (InvalidId, ValueError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return _jsonable(result)
+
+
+@app.get("/v1/operator/threads")
+async def list_operator_threads(tenant_id: str = Query(...), limit: int = Query(30, le=100)):
+    docs = await (
+        mongo.get_db()
+        .operator_threads.find({"tenant_id": tenant_id})
+        .sort([("last_message_at", -1), ("_id", -1)])
+        .to_list(length=limit)
+    )
+    return _jsonable(docs)
+
+
+@app.get("/v1/operator/threads/{thread_id}/messages")
+async def list_operator_messages(thread_id: str):
+    docs = await (
+        mongo.get_db()
+        .operator_messages.find({"thread_id": _oid(thread_id, "thread")})
+        .sort([("created_at", 1), ("_id", 1)])
+        .to_list(length=500)
+    )
+    return _jsonable(docs)
 
 
 # --------------------------------------------------------------------------- #

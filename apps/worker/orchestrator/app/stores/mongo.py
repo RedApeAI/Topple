@@ -19,7 +19,16 @@ _db_name: str = settings.mongo_db
 
 # raw_events: pass-through storage if the envelope ever carries an inline raw
 # payload; for now only referenced via message.raw_ref.
-COLLECTIONS = ("raw_events", "contacts", "conversations", "messages", "turns")
+# operator_threads/messages: the salesperson↔agent command chat (not buyer data).
+COLLECTIONS = (
+    "raw_events",
+    "contacts",
+    "conversations",
+    "messages",
+    "turns",
+    "operator_threads",
+    "operator_messages",
+)
 
 
 def set_client(client, db_name: str | None = None) -> None:
@@ -73,6 +82,13 @@ async def init_indexes(db=None) -> None:
     )
     await db.turns.create_index(
         [("conversation_id", 1), ("ts_start", 1)], name="convo_ts"
+    )
+
+    await db.operator_threads.create_index(
+        [("tenant_id", 1), ("last_message_at", -1)], name="tenant_last_message"
+    )
+    await db.operator_messages.create_index(
+        [("thread_id", 1), ("created_at", 1)], name="thread_created"
     )
 
     logger.info("mongo indexes ensured on database %r", _db_name)
