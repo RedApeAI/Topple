@@ -5,6 +5,7 @@
     "PORT",
     "OPENAI_API_KEY",
     "ORCHESTRATOR_URL",
+    "NEXT_PUBLIC_ORCHESTRATOR_URL",
     "NEXT_PUBLIC_TENANT_ID"
   ],
   "tasks": {

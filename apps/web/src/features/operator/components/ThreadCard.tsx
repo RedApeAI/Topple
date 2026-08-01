@@ -20,7 +20,7 @@ export function ThreadCard({ thread, onSelect }: ThreadCardProps) {
         </span>
         <div className="flex items-center gap-2 text-[12px] text-muted-foreground">
           <span>{thread.timestamp}</span>
-          <StatusBadge status={thread.status} />
+          {thread.status && <StatusBadge status={thread.status} />}
         </div>
       </div>
       <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />

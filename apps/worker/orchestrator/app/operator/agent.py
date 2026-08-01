@@ -28,10 +28,16 @@ from ..llm.gateway import _parse_json_block
 from ..outbound import dispatcher
 from ..playbooks.loader import PlaybookNotFound, load_playbook
 from ..schemas.envelope import RuntimeConfig
+from ..stores import events
+from .sanitize import (
+    salvage_operator_output,
+    sanitize_customer_text,
+    sanitize_operator_output,
+)
 
 logger = logging.getLogger(__name__)
 
-MAX_STEPS = 5
+MAX_STEPS = 6
 HISTORY_WINDOW = 12
 ACTION_CHANNELS = ("whatsapp", "email", "voice", "instagram")
 
@@ -42,24 +48,27 @@ class ThreadNotFound(Exception):
 SYSTEM_PROMPT = """\
 You are Plucia Operator, an AI sales operator working FOR a salesperson — you \
 are never talking to their customer directly. Read the salesperson's command, \
-work out the intent, gather what you need with tools, then act.
+work out the intent, gather what you need with tools, act with tools, then \
+report back.
 
 Respond with ONLY one JSON object per turn, in exactly one of these shapes:
 1. Tool call:
    {{"thought": "<your reasoning>", "tool": "<tool name>", "args": {{...}}}}
-2. Clarifying question (a required detail is missing or ambiguous):
-   {{"thought": "<why you must ask>", "operator_output": "<ONE short question to the salesperson>", "action": null}}
-3. Final answer:
-   {{"thought": "<what you decided>", "operator_output": "<brief report to the salesperson>", "action": <action object or null>}}
-
-The only action available:
-   {{"type": "send_message", "contact_id": "<id from find_contact>", "channel": "whatsapp|email|voice|instagram", "text": "<the message the customer will receive>"}}
+2. Message to the salesperson — a clarifying question OR your final report:
+   {{"thought": "<what you decided>", "operator_output": "<one short question, or a brief report of what you did>"}}
 
 Tools:
 - find_contact — args {{"query": "<name, phone, or handle>"}} → CRM contacts matching, with their channels
 - get_conversation — args {{"contact_id": "...", "channel": "<optional>"}} → that contact's conversation: stage, recent messages, lead profile
+- send_message — args {{"contact_id": "<id from find_contact>", "channel": "whatsapp|email|voice|instagram", "text": "<the message the customer will receive>"}} → in copilot mode creates a DRAFT for the salesperson to approve; in autopilot mode sends it immediately. Returns the result.
 
-Rules:
+How to act:
+- To contact someone you MUST call the send_message tool — a draft (copilot) or \
+a real send (autopilot) only happens THROUGH send_message. Writing the message \
+in your thought is NOT drafting it; never claim you drafted or sent anything \
+unless send_message has already returned. Do NOT ask permission to send — \
+sending IS your job; just call send_message (find_contact first to get the id). \
+Only after it returns do you give your final report.
 - Never invent a contact_id — always find_contact first.
 - If several contacts match, or the contact is on several channels and neither \
 the command nor the default names one, ask ONE clarifying question instead of \
@@ -72,8 +81,8 @@ that channel: first person, no meta commentary, no placeholders, at most a \
 couple of sentences.
 - "operator_output" speaks to the salesperson: short and factual — what you \
 did or found, or the one question you need answered.
-- Mode is "{mode}": copilot means send_message creates a DRAFT the salesperson \
-must approve (phrase your report accordingly); autopilot sends immediately.
+- Mode is "{mode}": in copilot your send_message becomes a DRAFT awaiting \
+approval (report it that way); in autopilot it is sent immediately.
 """
 
 
@@ -168,6 +177,38 @@ TOOLS = {
 }
 
 
+async def _run_tool(
+    db,
+    tenant_id: str,
+    mode: str,
+    runtime: RuntimeConfig | None,
+    name: str,
+    args: dict,
+    sent_keys: set[tuple],
+) -> dict:
+    """Dispatch one tool call. `send_message` acts (mode-gated) and is deduped
+    so a re-issued identical send returns the prior result instead of firing
+    twice; the read tools go through the plain TOOLS map."""
+    if name == "send_message":
+        key = (
+            str(args.get("contact_id", "")),
+            str(args.get("channel", "")),
+            (args.get("text") or "").strip(),
+        )
+        if key in sent_keys:
+            return {"type": "send_message", "status": "duplicate",
+                    "note": "already sent this in the current command"}
+        result = await _execute_send_message(db, tenant_id, mode, runtime, args)
+        if result.get("status") in ("draft", "sent"):
+            sent_keys.add(key)
+        return result
+
+    tool = TOOLS.get(name)
+    if tool is None:
+        return {"error": f"unknown tool {name!r}"}
+    return await tool(db, tenant_id, args)
+
+
 # --------------------------------------------------------------------------- #
 # Action execution
 # --------------------------------------------------------------------------- #
@@ -184,9 +225,10 @@ async def _execute_send_message(
     db, tenant_id: str, mode: str, runtime: RuntimeConfig | None, action: dict
 ) -> dict:
     channel = action.get("channel")
-    text = (action.get("text") or "").strip()
     if channel not in ACTION_CHANNELS:
         return {"type": "send_message", "status": "failed", "reason": f"unknown channel {channel!r}"}
+    # guardrail: the customer never sees an id / json / tool name
+    text = sanitize_customer_text(action.get("text") or "")
     if not text:
         return {"type": "send_message", "status": "failed", "reason": "empty message text"}
     try:
@@ -275,6 +317,26 @@ async def _execute_send_message(
 # --------------------------------------------------------------------------- #
 # The agent loop
 # --------------------------------------------------------------------------- #
+_CHANNEL_WORDS = {"whatsapp": "WhatsApp", "email": "email", "voice": "phone", "instagram": "Instagram"}
+
+
+def _fallback_report(action_result: dict | None) -> str:
+    """A clean, deterministic report when the model's own wording is unusable
+    (leaked internals) or empty."""
+    if not action_result:
+        return "Done."
+    who = action_result.get("contact_name") or "the contact"
+    where = _CHANNEL_WORDS.get(action_result.get("channel"), action_result.get("channel") or "")
+    status = action_result.get("status")
+    if status == "sent":
+        return f"Sent your message to {who} on {where}."
+    if status == "draft":
+        return f"Drafted a message to {who} on {where} for your approval."
+    if status == "failed":
+        return f"Couldn't send — {action_result.get('reason', 'please try again')}."
+    return "Done."
+
+
 async def _thread_history(db, thread_id: ObjectId) -> list[dict]:
     docs = await (
         db.operator_messages.find({"thread_id": thread_id})
@@ -296,9 +358,14 @@ async def run_command(
     thread_id: str | None = None,
     preferred_channel: str | None = None,
     runtime: RuntimeConfig | None = None,
+    client_ref: str | None = None,
 ) -> dict:
     """One salesperson command through the full loop. Returns the persisted
-    operator reply (with steps + action result) and the thread id."""
+    operator reply (with steps + action result) and the thread id.
+
+    `client_ref` correlates the live `operator.step` events (streamed as the
+    loop runs) back to the dashboard that issued the command, so it can show
+    the reasoning happening in real time."""
     model = _resolve_agent_model(runtime)
 
     # -- thread + user message ------------------------------------------------
@@ -337,8 +404,18 @@ async def run_command(
                          {"role": "user", "content": text}]
     steps: list[dict] = []
     operator_output = ""
-    action: dict | None = None
+    action_result: dict | None = None  # last send_message result — drives the UI
+    sent_keys: set[tuple] = set()  # dedupe identical sends within one run
     parse_failures = 0
+
+    async def emit_step(step: dict) -> None:
+        """Record a step and stream it live to the issuing dashboard."""
+        steps.append(step)
+        await events.publish(
+            tenant_id,
+            "operator.step",
+            {"thread_id": str(tid), "client_ref": client_ref, "step": step},
+        )
 
     for _ in range(MAX_STEPS):
         raw, _stats = await gateway.chat_text(model=model, messages=convo)
@@ -347,8 +424,11 @@ async def run_command(
         except (ValueError, json.JSONDecodeError):
             parse_failures += 1
             if parse_failures >= 2:
-                # twice unparseable — surface the raw text rather than a 500
-                operator_output = raw.strip() or "I couldn't process that — try rephrasing?"
+                # twice unparseable — recover the intended report if the raw
+                # carries one, else fall through to the plain text; the final
+                # guardrail below scrubs any protocol debris either way, so raw
+                # JSON never reaches the salesperson.
+                operator_output = salvage_operator_output(raw) or raw.strip()
                 break
             convo.append({"role": "assistant", "content": raw})
             convo.append(
@@ -361,17 +441,31 @@ async def run_command(
 
         thought = str(data.get("thought") or "").strip()
         if thought:
-            steps.append({"type": "thought", "text": thought})
+            await emit_step({"type": "thought", "text": thought})
 
         tool_name = data.get("tool")
         if tool_name:
-            tool = TOOLS.get(str(tool_name))
             args = data.get("args") or {}
-            if tool is None:
-                observation: dict = {"error": f"unknown tool {tool_name!r}"}
-            else:
-                observation = await tool(db, tenant_id, args)
-            steps.append(
+            observation = await _run_tool(
+                db, tenant_id, mode, runtime, str(tool_name), args, sent_keys
+            )
+            # send_message is the acting tool — its result drives the UI action
+            if str(tool_name) == "send_message" and observation.get("type") == "send_message":
+                action_result = observation
+                log = logger.warning if observation["status"] == "failed" else logger.info
+                log("operator send tenant=%s %s", tenant_id, observation)
+                if observation["status"] in ("draft", "sent"):
+                    await events.publish(
+                        tenant_id,
+                        "message.created",
+                        {
+                            "conversation_id": observation["conversation_id"],
+                            "channel": observation["channel"],
+                            "direction": "outbound",
+                            "status": observation["status"],
+                        },
+                    )
+            await emit_step(
                 {"type": "tool", "tool": str(tool_name), "args": args, "observation": observation}
             )
             convo.append({"role": "assistant", "content": json.dumps(data)})
@@ -381,29 +475,21 @@ async def run_command(
             continue
 
         operator_output = str(data.get("operator_output") or "").strip()
-        action = data.get("action") if isinstance(data.get("action"), dict) else None
         break
     else:
         operator_output = (
             "I ran out of steps before finishing — try a more specific command."
         )
 
-    # -- act ------------------------------------------------------------------
-    action_result: dict | None = None
-    if action is not None:
-        if action.get("type") == "send_message":
-            action_result = await _execute_send_message(db, tenant_id, mode, runtime, action)
-        else:
-            action_result = {
-                "type": str(action.get("type")),
-                "status": "failed",
-                "reason": "unsupported action type",
-            }
-        log = logger.warning if action_result["status"] == "failed" else logger.info
-        log("operator action tenant=%s %s", tenant_id, action_result)
-
-    if not operator_output:
-        operator_output = "Done." if action_result else "Nothing to do."
+    # guardrail: the salesperson's report never leaks an id / json / tool name.
+    # When nothing usable survives, prefer a summary of what actually happened;
+    # with no action, a rephrase prompt beats a hollow "Done." for a failed run.
+    fallback = (
+        _fallback_report(action_result)
+        if action_result
+        else "I couldn't complete that cleanly — could you rephrase the command?"
+    )
+    operator_output = sanitize_operator_output(operator_output, fallback)
 
     # -- persist reply --------------------------------------------------------
     reply = {
@@ -425,4 +511,5 @@ async def run_command(
         tenant_id, tid, len(steps),
         (action_result or {}).get("status", "none"),
     )
+    await events.publish(tenant_id, "operator.updated", {"thread_id": str(tid)})
     return {"thread_id": str(tid), "message": reply}

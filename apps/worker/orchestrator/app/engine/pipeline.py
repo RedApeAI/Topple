@@ -37,7 +37,7 @@ from ..schemas.envelope import (
     RetrievalHit,
     Totals,
 )
-from ..stores import mongo, qdrant
+from ..stores import events, mongo, qdrant
 from . import contacts, guardrails, state_machine
 from .trace import TurnTrace
 
@@ -168,6 +168,16 @@ async def run_turn(envelope: OrchestratorInput) -> OrchestratorResult:
         }
         ins = await db.messages.insert_one(inbound)
         inbound["_id"] = ins.inserted_id
+        # announce the inbound immediately — the reply takes an LLM round-trip
+        await events.publish(
+            envelope.tenant_id,
+            "message.created",
+            {
+                "conversation_id": str(convo["_id"]),
+                "channel": envelope.channel.value,
+                "direction": "inbound",
+            },
+        )
         stage_in = convo["stage"]
 
         # a handed-off conversation stays silent — humans own it now

@@ -6,17 +6,20 @@ observability (turns, conversations, contacts, metrics), the copilot drafts
 loop, and the manual contact-bifurcation merge."""
 from __future__ import annotations
 
+import json
 import logging
 from contextlib import asynccontextmanager
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Literal
 
 from bson import ObjectId
 from bson.errors import InvalidId
 from fastapi import FastAPI, HTTPException, Query
-from fastapi.responses import JSONResponse
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, ConfigDict
 
+from .config import settings
 from .engine import contacts as contacts_engine
 from .engine.pipeline import ScopeDenied, TurnInProgress, run_turn
 from .llm import gateway
@@ -24,7 +27,7 @@ from .llm.gateway import LLMUnavailable
 from .operator import agent as operator_agent
 from .outbound import dispatcher
 from .schemas.envelope import OrchestratorInput, OrchestratorResult, RuntimeConfig
-from .stores import mongo, qdrant
+from .stores import events, mongo, qdrant
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -40,6 +43,15 @@ async def lifespan(_app: FastAPI):
 
 
 app = FastAPI(title="plucia-orchestrator", version="2.0.0", lifespan=lifespan)
+
+# The dashboard talks REST through its own proxy, but SSE (/v1/events)
+# connects straight to this origin — that cross-origin hop needs CORS.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.cors_origins,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 @app.exception_handler(LLMUnavailable)
@@ -92,7 +104,21 @@ async def post_turn(envelope: OrchestratorInput):
             status_code=422,
             detail=f"message.type {envelope.message.type!r} is not implemented yet — only 'text' is supported",
         )
-    return await run_turn(envelope)
+    result = await run_turn(envelope)
+    # one consolidated event per turn — covers the reply, stage change, and
+    # threads list on every success path (including dedupe replays)
+    await events.publish(
+        envelope.tenant_id,
+        "turn.completed",
+        {
+            "conversation_id": result.conversation_id,
+            "contact_id": result.contact_id,
+            "channel": envelope.channel.value,
+            "reply_status": result.reply.status,
+            "stage_out": result.stage_out,
+        },
+    )
+    return result
 
 
 # --------------------------------------------------------------------------- #
@@ -283,6 +309,12 @@ async def import_contacts(body: LeadImportRequest):
         "lead import complete: tenant=%s rows=%d created=%d updated=%d skipped=%d",
         body.tenant_id, len(body.rows), created, updated, skipped,
     )
+    if created or updated:
+        await events.publish(
+            body.tenant_id,
+            "contacts.updated",
+            {"created": created, "updated": updated},
+        )
     return LeadImportResponse(created=created, updated=updated, skipped=skipped, results=results)
 
 
@@ -313,6 +345,8 @@ class OperatorCommandRequest(BaseModel):
     mode: Literal["copilot", "autopilot"] = "copilot"
     thread_id: str | None = None
     preferred_channel: str | None = None
+    # Correlates live `operator.step` events back to the issuing dashboard.
+    client_ref: str | None = None
     # Same upstream-resolved runtime as /v1/turns; used to pick the agent's
     # base model (vllm) and the playbook stage for brand-new conversations.
     runtime: RuntimeConfig | None = None
@@ -331,6 +365,7 @@ async def post_operator_command(body: OperatorCommandRequest):
             thread_id=body.thread_id,
             preferred_channel=body.preferred_channel,
             runtime=body.runtime,
+            client_ref=body.client_ref,
         )
     except operator_agent.ThreadNotFound:
         raise HTTPException(status_code=404, detail="operator thread not found") from None
@@ -388,6 +423,19 @@ async def _get_draft(message_id: str) -> dict:
     return msg
 
 
+async def _reflect_operator_decision(db, message_id: str, status: str) -> None:
+    """Mirror a draft's approve/discard back onto the operator reply that
+    created it. A copilot draft raised by the Operator agent embeds its result
+    on the reply (``action.status == "draft"``); without this, reopening the
+    thread would replay a stale draft — live Approve/Discard buttons over an
+    already-decided message (a re-click 409s). Persisting the decision also lets
+    evals filter agent suggestions the salesperson approved vs. discarded."""
+    await db.operator_messages.update_one(
+        {"action.message_id": message_id, "action.status": "draft"},
+        {"$set": {"action.status": status, "action.decided_at": datetime.now(timezone.utc)}},
+    )
+
+
 @app.post("/v1/drafts/{message_id}/approve")
 async def approve_draft(message_id: str, body: DraftApprove | None = None):
     db = mongo.get_db()
@@ -413,16 +461,37 @@ async def approve_draft(message_id: str, body: DraftApprove | None = None):
         messages=[text],
     )
     msg.update(text=text, status="approved")
+    await _reflect_operator_decision(db, message_id, "sent")
+    await events.publish(
+        msg["tenant_id"],
+        "draft.updated",
+        {
+            "message_id": message_id,
+            "conversation_id": str(msg["conversation_id"]),
+            "status": "approved",
+        },
+    )
     return _jsonable(msg)
 
 
 @app.post("/v1/drafts/{message_id}/discard")
 async def discard_draft(message_id: str):
+    db = mongo.get_db()
     msg = await _get_draft(message_id)
-    await mongo.get_db().messages.update_one(
+    await db.messages.update_one(
         {"_id": msg["_id"]}, {"$set": {"status": "discarded"}}
     )
     msg["status"] = "discarded"
+    await _reflect_operator_decision(db, message_id, "discarded")
+    await events.publish(
+        msg["tenant_id"],
+        "draft.updated",
+        {
+            "message_id": message_id,
+            "conversation_id": str(msg["conversation_id"]),
+            "status": "discarded",
+        },
+    )
     return _jsonable(msg)
 
 
@@ -515,6 +584,27 @@ async def metrics_summary(
 
 
 # --------------------------------------------------------------------------- #
+# Events (SSE) — the dashboard's live feed off the Dragonfly bus
+# --------------------------------------------------------------------------- #
+@app.get("/v1/events")
+async def stream_events(tenant_id: str = Query(...)):
+    async def event_stream():
+        # an immediate hello lets the client mark the bus as connected
+        yield f"event: connected\ndata: {json.dumps({'tenant_id': tenant_id})}\n\n"
+        async for event in events.subscribe(tenant_id):
+            if event is None:
+                yield ": keep-alive\n\n"  # heartbeat comment (ignored by EventSource)
+                continue
+            yield f"event: {event['type']}\ndata: {json.dumps(event, default=str)}\n\n"
+
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
+# --------------------------------------------------------------------------- #
 # Health
 # --------------------------------------------------------------------------- #
 @app.get("/health")
@@ -522,10 +612,14 @@ async def health():
     mongo_ok = await mongo.ping()
     qdrant_ok = await qdrant.ping()
     llm_ok = await gateway.ping()
+    events_ok = await events.ping()
+    # the event bus is optional infra — the UI falls back to polling without
+    # it — so it is reported but does not flip the overall status
     ok = mongo_ok and qdrant_ok and llm_ok
     return {
         "status": "ok" if ok else "degraded",
         "mongo": mongo_ok,
         "qdrant": qdrant_ok,
         "llm": llm_ok,
+        "dragonfly": events_ok,
     }

@@ -40,7 +40,7 @@ class FakeAgentLLM:
     async def chat_text(self, *, model, messages, temperature=0.3):
         self.calls.append(messages)
         text = self.outputs.pop(0) if self.outputs else json.dumps(
-            {"thought": "done", "operator_output": "Done.", "action": None}
+            {"thought": "done", "operator_output": "Done."}
         )
         return text, LLMCallStats(latency_ms=3, prompt_tokens=50, completion_tokens=20)
 
@@ -78,14 +78,19 @@ async def test_copilot_command_drafts_message(db, agent_llm, sent):
         ),
         json.dumps(
             {
-                "thought": "One match, only on WhatsApp — no need to ask.",
-                "operator_output": "Drafted a WhatsApp hello to Priya for your approval.",
-                "action": {
-                    "type": "send_message",
+                "thought": "One match, only on WhatsApp — draft the hello.",
+                "tool": "send_message",
+                "args": {
                     "contact_id": str(contact["_id"]),
                     "channel": "whatsapp",
                     "text": "Hi Priya! 👋",
                 },
+            }
+        ),
+        json.dumps(
+            {
+                "thought": "Draft created.",
+                "operator_output": "Drafted a WhatsApp hello to Priya for your approval.",
             }
         ),
     ]
@@ -97,13 +102,14 @@ async def test_copilot_command_drafts_message(db, agent_llm, sent):
     msg = result["message"]
     assert msg["role"] == "operator"
     assert "approval" in msg["text"]
-    # trace: a thought + a tool step with its observation, then the final thought
+    # trace: find_contact, then send_message, each with a thought
     kinds = [s["type"] for s in msg["steps"]]
-    assert kinds == ["thought", "tool", "thought"]
+    assert kinds == ["thought", "tool", "thought", "tool", "thought"]
     assert msg["steps"][1]["tool"] == "find_contact"
     assert msg["steps"][1]["observation"]["matches"][0]["name"] == "Priya Patel"
+    assert msg["steps"][3]["tool"] == "send_message"
 
-    # the action produced a DRAFT, nothing dispatched
+    # the send_message tool produced a DRAFT, nothing dispatched
     assert msg["action"]["status"] == "draft"
     assert sent == []
     draft = await db.messages.find_one({"text": "Hi Priya! 👋"})
@@ -126,14 +132,16 @@ async def test_autopilot_command_sends_and_dispatches(db, agent_llm, sent):
         json.dumps(
             {
                 "thought": "Send it.",
-                "operator_output": "Sent Priya a WhatsApp hello.",
-                "action": {
-                    "type": "send_message",
+                "tool": "send_message",
+                "args": {
                     "contact_id": str(contact["_id"]),
                     "channel": "whatsapp",
                     "text": "Hi Priya!",
                 },
             }
+        ),
+        json.dumps(
+            {"thought": "Sent.", "operator_output": "Sent Priya a WhatsApp hello."}
         ),
     ]
 
@@ -158,7 +166,6 @@ async def test_clarifying_question_takes_no_action(db, agent_llm, sent):
             {
                 "thought": "She's on two channels and the command names none.",
                 "operator_output": "Priya is on WhatsApp and email — which should I use?",
-                "action": None,
             }
         ),
     ]
@@ -178,7 +185,7 @@ async def test_thread_continuation_carries_history(db, agent_llm):
         db, tenant_id="plucia", text="find Priya", mode="copilot"
     )
     agent_llm.outputs = [
-        json.dumps({"thought": "ok", "operator_output": "Using WhatsApp.", "action": None})
+        json.dumps({"thought": "ok", "operator_output": "Using WhatsApp."})
     ]
     second = await agent.run_command(
         db,
@@ -216,20 +223,106 @@ async def test_unparseable_output_degrades_to_text(db, agent_llm):
     assert result["message"]["action"] is None
 
 
+async def test_malformed_json_salvages_report_not_raw(db, agent_llm):
+    # the reported bug: broken JSON (no opening brace) whose only clean part is
+    # the operator_output value — recover it, never dump the raw object
+    debris = (
+        'I will draft a warm intro. Mode is copilot, so a DRAFT awaits approval.", '
+        '"operator_output": "Drafting a WhatsApp message about the Dubai Marina property."}'
+    )
+    agent_llm.outputs = ["also broken {oops", debris]
+    result = await agent.run_command(
+        db, tenant_id="plucia", text="message David", mode="copilot"
+    )
+    text = result["message"]["text"]
+    assert text == "Drafting a WhatsApp message about the Dubai Marina property."
+    assert "operator_output" not in text and "}" not in text
+
+
+# --------------------------------------------------------------------------- #
+# The copilot draft decision reflects back onto the operator reply
+# --------------------------------------------------------------------------- #
+def _draft_outputs(contact) -> list[str]:
+    """LLM script that finds the contact then drafts a WhatsApp message."""
+    return [
+        json.dumps(
+            {
+                "thought": "find her",
+                "tool": "find_contact",
+                "args": {"query": "Priya"},
+            }
+        ),
+        json.dumps(
+            {
+                "thought": "draft it",
+                "tool": "send_message",
+                "args": {
+                    "contact_id": str(contact["_id"]),
+                    "channel": "whatsapp",
+                    "text": "Hi Priya! 👋",
+                },
+            }
+        ),
+        json.dumps(
+            {"thought": "done", "operator_output": "Drafted a WhatsApp hello for your approval."}
+        ),
+    ]
+
+
+async def test_approving_operator_draft_marks_reply_sent(db, agent_llm, sent):
+    from app.main import approve_draft
+
+    contact = await seed_contact(db)
+    agent_llm.outputs = _draft_outputs(contact)
+    result = await agent.run_command(
+        db, tenant_id="plucia", text="say hi to Priya", mode="copilot"
+    )
+    action = result["message"]["action"]
+    assert action["status"] == "draft"
+
+    await approve_draft(action["message_id"])
+
+    # the operator reply now records the decision — reopening the thread shows a
+    # sent action (no live buttons), and evals can filter approved suggestions
+    reply = await db.operator_messages.find_one({"_id": result["message"]["_id"]})
+    assert reply["action"]["status"] == "sent"
+    assert reply["action"]["decided_at"] is not None
+    assert len(sent) == 1  # approval dispatched
+
+
+async def test_discarding_operator_draft_marks_reply_discarded(db, agent_llm, sent):
+    from app.main import discard_draft
+
+    contact = await seed_contact(db)
+    agent_llm.outputs = _draft_outputs(contact)
+    result = await agent.run_command(
+        db, tenant_id="plucia", text="say hi to Priya", mode="copilot"
+    )
+
+    await discard_draft(result["message"]["action"]["message_id"])
+
+    reply = await db.operator_messages.find_one({"_id": result["message"]["_id"]})
+    assert reply["action"]["status"] == "discarded"
+    assert reply["action"]["decided_at"] is not None
+    assert sent == []  # nothing dispatched on discard
+
+
 async def test_action_on_missing_channel_identity_fails_cleanly(db, agent_llm, sent):
     contact = await seed_contact(db)  # whatsapp only
     agent_llm.outputs = [
         json.dumps(
             {
                 "thought": "email her",
-                "operator_output": "Emailing Priya.",
-                "action": {
-                    "type": "send_message",
+                "tool": "send_message",
+                "args": {
                     "contact_id": str(contact["_id"]),
                     "channel": "email",
                     "text": "Hello!",
                 },
             }
+        ),
+        json.dumps(
+            {"thought": "no email on file", "operator_output": "Priya has no email — try another channel?"}
         ),
     ]
     result = await agent.run_command(

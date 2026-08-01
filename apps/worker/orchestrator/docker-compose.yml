@@ -20,6 +20,20 @@ services:
     volumes:
       - qdrant_data:/qdrant/storage
 
+  # Event bus (Redis-protocol). Same image runs on the EC2 Graviton box —
+  # Dragonfly ships arm64 images, so t4g works as-is.
+  dragonfly:
+    image: docker.dragonflydb.io/dragonflydb/dragonfly
+    ulimits:
+      memlock: -1
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
 volumes:
   mongo_data:
   qdrant_data:

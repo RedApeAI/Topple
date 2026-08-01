@@ -10,9 +10,8 @@ export interface OperatorThread {
   id: string;
   title: string;
   timestamp: string;
+  /** Empty when the thread has no running/done state (agent threads). */
   status: OperatorThreadStatus;
-  /** Backing orchestrator conversation, when the thread came from a live turn. */
-  conversationId?: string | null;
 }
 
 export type OperatorMessageRole = "user" | "operator";

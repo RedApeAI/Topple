@@ -10,21 +10,24 @@ import {
 } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { IconButton } from "@/components/shared/IconButton";
-import { LogoSmall } from "@/components/shared/Logo";
+import { LogoMark, LogoSmall } from "@/components/shared/Logo";
 import { useUIStore } from "@/store/ui.store";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useOperatorThreads } from "../hooks/use-operator-threads";
-import { useOperatorTranscript } from "../hooks/use-operator-transcript";
 import { useOperatorAgent } from "../hooks/use-operator-agent";
 import { useOperatorDraftActions } from "../hooks/use-operator-draft-actions";
 import { ThreadsRunning } from "./ThreadsRunning";
 import { History } from "./History";
 import { StreamingMessage } from "./StreamingMessage";
+import { LiveThinking } from "./AgentTrace";
 import { PromptInput } from "./PromptInput";
 import { drawerVariants } from "@/design/tokens/motion";
-import type { OperatorThread } from "../types/operator.types";
 
 type PanelTab = "threads" | "history";
-type PanelView = { mode: "list" } | { mode: "chat"; thread?: OperatorThread };
+/** New Chat opens a fresh session; selecting a thread opens it by id. */
+type PanelView =
+  | { mode: "list" }
+  | { mode: "chat"; threadId?: string; title?: string };
 
 export function OperatorPanel() {
   const operatorOpen = useUIStore((s) => s.operatorOpen);
@@ -69,25 +72,33 @@ export function OperatorPanel() {
                 {tab === "threads" ? (
                   <ThreadsRunning
                     onSelectThread={(thread) =>
-                      setView({ mode: "chat", thread })
+                      setView({
+                        mode: "chat",
+                        threadId: thread.id,
+                        title: thread.title,
+                      })
                     }
                   />
                 ) : (
                   <History
                     onSelectThread={(thread) =>
-                      setView({ mode: "chat", thread })
+                      setView({
+                        mode: "chat",
+                        threadId: thread.id,
+                        title: thread.title,
+                      })
                     }
                   />
                 )}
               </div>
             </div>
-          ) : view.thread ? (
-            <TranscriptView
-              thread={view.thread}
+          ) : (
+            <AgentChatView
+              key={view.threadId ?? "new"}
+              threadId={view.threadId}
+              title={view.title}
               onBack={() => setView({ mode: "list" })}
             />
-          ) : (
-            <AgentChatView onBack={() => setView({ mode: "list" })} />
           )}
         </motion.aside>
       )}
@@ -165,19 +176,28 @@ function BackBar({ label, onBack }: { label: string; onBack: () => void }) {
   );
 }
 
+interface AgentChatViewProps {
+  /** Existing thread to reopen; omitted for a fresh New Chat. */
+  threadId?: string;
+  title?: string;
+  onBack: () => void;
+}
+
 /**
  * The command chat with the Operator agent: intent → tools → clarify or act.
- * Messages live on an operator thread created by the backend on first send.
+ * Opens fresh (New Chat) or reopens an existing thread by id, replaying its
+ * messages, reasoning traces, and pending drafts.
  */
-function AgentChatView({ onBack }: { onBack: () => void }) {
-  const { messages, send, patchActionStatus } = useOperatorAgent();
+function AgentChatView({ threadId, title, onBack }: AgentChatViewProps) {
+  const { messages, hydrating, liveSteps, send, patchActionStatus } =
+    useOperatorAgent(threadId);
   const { approve, discard } = useOperatorDraftActions();
   const operatorMode = useUIStore((s) => s.operatorMode);
   const bottomRef = React.useRef<HTMLDivElement>(null);
 
   React.useEffect(() => {
     bottomRef.current?.scrollIntoView({ block: "end" });
-  }, [messages.length, send.isPending]);
+  }, [messages.length, send.isPending, hydrating, liveSteps.length]);
 
   const approveAction = (message: (typeof messages)[number]) => (id: string) =>
     approve.mutate(id, {
@@ -188,12 +208,20 @@ function AgentChatView({ onBack }: { onBack: () => void }) {
       onSuccess: () => patchActionStatus(message.id, "discarded"),
     });
 
+  const showEmptyHint =
+    !threadId && messages.length === 0 && !send.isPending && !hydrating;
+
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3 p-3">
-      <BackBar label="New Chat" onBack={onBack} />
+      <BackBar label={title ?? "New Chat"} onBack={onBack} />
 
       <div className="scrollbar-none flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto px-1 py-2">
-        {messages.length === 0 && !send.isPending ? (
+        {hydrating ? (
+          <div className="flex flex-col gap-4">
+            <Skeleton className="h-10 w-2/3 self-end rounded-[16px]" />
+            <Skeleton className="h-16 w-4/5 self-start rounded-[16px]" />
+          </div>
+        ) : showEmptyHint ? (
           <p className="m-auto max-w-[280px] text-center text-[13px] text-muted-foreground">
             Command the Operator — &ldquo;say hi to Priya Patel&rdquo;,
             &ldquo;what&apos;s the latest with Mary?&rdquo;, &ldquo;draft a
@@ -214,14 +242,26 @@ function AgentChatView({ onBack }: { onBack: () => void }) {
           />
         ))}
         {send.isPending && (
-          <StreamingMessage
-            message={{
-              id: "pending-status",
-              role: "operator",
-              text: operatorMode === "copilot" ? "Working on it…" : "On it…",
-              status: "running",
-            }}
-          />
+          <div className="flex items-start gap-2.5">
+            <LogoMark size={36} round className="shrink-0" />
+            <div className="max-w-[85%] flex-1 pt-1.5">
+              {liveSteps.length > 0 ? (
+                <LiveThinking steps={liveSteps} />
+              ) : (
+                <motion.span
+                  animate={{ opacity: [0.4, 1, 0.4] }}
+                  transition={{
+                    duration: 1.4,
+                    repeat: Infinity,
+                    ease: "easeInOut",
+                  }}
+                  className="text-[14px] font-medium text-muted-foreground"
+                >
+                  {operatorMode === "copilot" ? "Working on it…" : "On it…"}
+                </motion.span>
+              )}
+            </div>
+          </div>
         )}
         <div ref={bottomRef} />
       </div>
@@ -237,46 +277,6 @@ function AgentChatView({ onBack }: { onBack: () => void }) {
         onSubmit={(text, channel) => send.mutate({ text, channel })}
         disabled={send.isPending}
       />
-    </div>
-  );
-}
-
-/** Read-only view of a live buyer conversation behind a turn thread. */
-function TranscriptView({
-  thread,
-  onBack,
-}: {
-  thread: OperatorThread;
-  onBack: () => void;
-}) {
-  const { data: messages } = useOperatorTranscript(
-    thread.conversationId ?? undefined,
-  );
-  const { approve, discard } = useOperatorDraftActions();
-
-  return (
-    <div className="flex min-h-0 flex-1 flex-col gap-3 p-3">
-      <BackBar label={thread.title} onBack={onBack} />
-
-      <div className="scrollbar-none flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto px-1 py-2">
-        <span className="self-center text-[12px] font-medium text-muted-foreground">
-          Today
-        </span>
-        {messages?.map((message) => (
-          <StreamingMessage
-            key={message.id}
-            message={message}
-            onApprove={(id) => approve.mutate(id)}
-            onDiscard={(id) => discard.mutate(id)}
-            draftBusy={approve.isPending || discard.isPending}
-          />
-        ))}
-      </div>
-
-      <p className="rounded-[12px] bg-secondary px-3 py-2.5 text-center text-[12px] text-muted-foreground">
-        Live conversation transcript — start a New Chat to command the Operator
-        about it.
-      </p>
     </div>
   );
 }

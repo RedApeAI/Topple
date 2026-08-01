@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useEventsStore } from "@/store/events.store";
 import {
   approveDraft,
   discardDraft,
@@ -8,12 +9,13 @@ import {
 import type { ChatDetail } from "../types/chat.types";
 
 export function useChatDetail(conversationId: string | undefined) {
+  // Live updates come off the event bus; polling is only the fallback.
+  const live = useEventsStore((s) => s.eventsConnected);
   return useQuery({
     queryKey: ["chat", conversationId],
     queryFn: () => fetchChatDetail(conversationId!),
     enabled: Boolean(conversationId),
-    // New turns can land from the channel side at any time.
-    refetchInterval: 5_000,
+    refetchInterval: live ? false : 5_000,
   });
 }
 

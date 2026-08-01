@@ -81,7 +81,7 @@ export function Sidebar() {
                     </span>
                   </div>
                   <span className="text-[12px] font-medium text-muted-foreground">
-                    pluciatest@gmail.com
+                    your AI Sales Operator
                   </span>
                 </div>
               )}

@@ -73,17 +73,19 @@ export function ActionChip({
     return (
       <div className="flex items-center gap-2 rounded-lg bg-secondary px-3 py-2 text-[13px] text-muted-foreground">
         <Trash2 className="h-3.5 w-3.5 shrink-0" />
-        Draft discarded
+        Draft to {who} discarded
       </div>
     );
   }
 
-  // sent / approved
+  // sent / approved — a compact record of what happened, not the full message
+  // body: once decided there's nothing to act on, and the terse line is what
+  // evals scan to tell approved sends from discarded drafts.
   return (
-    <div className="flex items-start gap-2 rounded-lg bg-success/10 px-3 py-2 text-[13px] text-foreground">
-      <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-success" />
+    <div className="flex items-center gap-2 rounded-lg bg-success/10 px-3 py-2 text-[13px] text-foreground">
+      <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-success" />
       <span>
-        Sent to {who} on {channel}: &ldquo;{action.text}&rdquo;
+        Message sent to {who} on {channel}
       </span>
     </div>
   );

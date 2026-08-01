@@ -33,6 +33,12 @@ class Settings(BaseSettings):
     qdrant_url: str = "http://localhost:6333"
     qdrant_api_key: str | None = None  # required for Qdrant Cloud; unused locally
 
+    # --- Event bus (Dragonfly, Redis-protocol) ---
+    dragonfly_url: str = "redis://localhost:6379"
+
+    # --- CORS (the dashboard connects to /v1/events directly for SSE) ---
+    cors_origins: list[str] = ["http://localhost:3000"]
+
     # --- Outbound (channel adapters live in another service) ---
     outbound_webhook_url: str | None = None
 
