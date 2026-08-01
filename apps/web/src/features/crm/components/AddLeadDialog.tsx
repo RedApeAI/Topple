@@ -14,11 +14,15 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { useImportLeads } from "../hooks/use-import-leads";
+// Missing integration module: ../lib/column-mapping
+// import { LEAD_FIELD_LABELS } from "../lib/column-mapping";
+// Missing integration module: @/lib/api/orchestrator.types
+// import type { ApiLeadImportRow, ApiLeadImportRowResult } from "@/lib/api/orchestrator.types";
 import { LEAD_FIELD_LABELS } from "../lib/column-mapping";
 import type {
   ApiLeadImportRow,
   ApiLeadImportRowResult,
-} from "@/lib/api/orchestrator.types";
+} from "@/lib/mock/orchestrator.types";
 
 const FIELDS: (keyof ApiLeadImportRow)[] = [
   "name",

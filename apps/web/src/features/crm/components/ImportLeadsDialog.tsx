@@ -13,6 +13,14 @@ import {
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { parseLeadFile, type ParsedSheet } from "../services/file-parser";
+// Missing integration module: ../lib/column-mapping
+// import {
+//   applyColumnMapping,
+//   guessColumnMapping,
+//   LEAD_FIELD_LABELS,
+//   LEAD_FIELD_OPTIONS,
+//   type LeadField,
+// } from "../lib/column-mapping";
 import {
   applyColumnMapping,
   guessColumnMapping,
@@ -21,7 +29,9 @@ import {
   type LeadField,
 } from "../lib/column-mapping";
 import { useImportLeads } from "../hooks/use-import-leads";
-import type { ApiLeadImportResponse } from "@/lib/api/orchestrator.types";
+// Missing integration module: @/lib/api/orchestrator.types
+// import type { ApiLeadImportResponse } from "@/lib/api/orchestrator.types";
+import type { ApiLeadImportResponse } from "@/lib/mock/orchestrator.types";
 
 type Step =
   | { kind: "upload"; error?: string }

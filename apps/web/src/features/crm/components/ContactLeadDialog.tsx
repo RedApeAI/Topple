@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import Link from "next/link";
+import { Link } from "react-router-dom";
 import { Loader2, Send } from "lucide-react";
 import {
   Dialog,
@@ -113,7 +113,7 @@ export function ContactLeadDialog({
               )}
             </div>
             <Link
-              href={CHANNEL_INBOX_HREF[channel.channel] ?? "/inbox"}
+              to={CHANNEL_INBOX_HREF[channel.channel] ?? "/inbox"}
               className="self-start text-[13px] font-medium text-foreground underline underline-offset-2"
             >
               Continue in the{" "}

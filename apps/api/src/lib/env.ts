@@ -21,6 +21,25 @@ const rawEnvSchema = z
       .enum(["true", "false"])
       .default("false")
       .transform((value) => value === "true"),
+    // Force the session cookie to be marked Secure even when the app is
+    // behind a TLS-terminating proxy and NODE_ENV is not "production".
+    // Defaults to true in production, false in development.
+    COOKIE_SECURE: z
+      .enum(["true", "false"])
+      .optional()
+      .transform((value) => (value === undefined ? undefined : value === "true")),
+    // Session lifetime in seconds (Better Auth default is 7 days).
+    SESSION_EXPIRES_IN: z.coerce.number().int().min(60).default(60 * 60 * 24 * 7),
+    // Auth rate limiting (sliding window).
+    RATE_LIMIT_WINDOW_MS: z.coerce.number().int().min(1000).default(60_000),
+    RATE_LIMIT_MAX: z.coerce.number().int().min(1).default(10),
+    // Password policy.
+    PASSWORD_MIN_LENGTH: z.coerce.number().int().min(8).max(64).default(10),
+    PASSWORD_MAX_LENGTH: z.coerce.number().int().min(16).max(256).default(128),
+    // Optional per-account lockout after N failed sign-ins.
+    AUTH_LOCKOUT_THRESHOLD: z.coerce.number().int().min(3).default(5),
+    AUTH_LOCKOUT_WINDOW_MS: z.coerce.number().int().min(60_000).default(15 * 60_000),
+    AUTH_LOCKOUT_DURATION_MS: z.coerce.number().int().min(60_000).default(15 * 60_000),
     GOOGLE_CLIENT_ID: optionalCredential,
     GOOGLE_CLIENT_SECRET: optionalCredential,
     APPLE_CLIENT_ID: optionalCredential,
@@ -85,7 +104,13 @@ try {
   throw new Error(`Invalid API environment: FRONTEND_ORIGINS: ${message}`);
 }
 
+const parsedData = parsed.data;
+
 export const env = {
-  ...parsed.data,
+  ...parsedData,
   FRONTEND_ORIGINS: frontendOrigins,
+  COOKIE_SECURE:
+    parsedData.COOKIE_SECURE ??
+    (parsedData.NODE_ENV === "production" ||
+      parsedData.COOKIE_CROSS_SITE === true),
 };

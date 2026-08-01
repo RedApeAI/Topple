@@ -1,0 +1,16 @@
+<svg preserveAspectRatio="none" width="100%" height="100%" overflow="visible" style="display: block;" viewBox="0 0 161.229 140.863" fill="none" xmlns="http://www.w3.org/2000/svg">
+<g id="Rectangle 1000001786">
+<rect width="161.229" height="140.863" fill="url(#paint0_radial_2877_47617)" style="mix-blend-mode:difference"/>
+</g>
+<defs>
+<radialGradient id="paint0_radial_2877_47617" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(80.8973 57.1373) rotate(90) scale(98.4345 112.666)">
+<stop stop-color="white" stop-opacity="0"/>
+<stop offset="0.215742" stop-color="white" stop-opacity="0.150376"/>
+<stop offset="0.322465" stop-color="white" stop-opacity="0.723099"/>
+<stop offset="0.398949" stop-color="white"/>
+<stop offset="0.457646" stop-color="white" stop-opacity="0.712502"/>
+<stop offset="0.663976" stop-color="white" stop-opacity="0.452386"/>
+<stop offset="0.787308" stop-color="white" stop-opacity="0"/>
+</radialGradient>
+</defs>
+</svg>

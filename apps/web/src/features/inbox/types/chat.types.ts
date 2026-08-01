@@ -1,5 +1,7 @@
 import type { ChannelKey } from "@/types/channel.types";
-import type { ApiMessage } from "@/lib/api/orchestrator.types";
+// Missing integration module: @/lib/api/orchestrator.types
+// import type { ApiMessage } from "@/lib/api/orchestrator.types";
+import type { ApiMessage } from "@/lib/mock/orchestrator.types";
 
 export interface ChatMessage {
   id: string;

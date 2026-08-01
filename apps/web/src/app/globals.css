@@ -81,6 +81,9 @@
 }
 
 :root {
+  --font-inter: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-poppins: "Poppins", ui-sans-serif, system-ui, sans-serif;
+  --font-geist-mono: "Geist Mono", ui-monospace, SFMono-Regular, monospace;
   --radius: 10px;
 
   /* Neutrals */

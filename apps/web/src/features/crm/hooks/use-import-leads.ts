@@ -1,9 +1,13 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { importLeads } from "@/lib/api/orchestrator";
+// Missing integration module: @/lib/api/orchestrator
+// import { importLeads } from "@/lib/api/orchestrator";
+// Missing integration module: @/lib/api/orchestrator.types
+// import type { ApiLeadImportResponse, ApiLeadImportRow } from "@/lib/api/orchestrator.types";
+import { importLeads } from "@/lib/mock/orchestrator";
 import type {
   ApiLeadImportResponse,
   ApiLeadImportRow,
-} from "@/lib/api/orchestrator.types";
+} from "@/lib/mock/orchestrator.types";
 
 export function useImportLeads() {
   const queryClient = useQueryClient();

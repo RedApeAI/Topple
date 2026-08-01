@@ -1,0 +1,247 @@
+@import "tailwindcss";
+
+/*
+  Design tokens — pulled from the Plucia Figma file.
+  Fonts are loaded via next/font in layout.tsx and exposed as CSS variables.
+*/
+@theme inline {
+  --font-manrope: var(--font-manrope);
+  --font-inter: var(--font-inter);
+  --font-urbanist: var(--font-urbanist);
+  --font-geist: var(--font-geist);
+  --font-dmsans: var(--font-dm-sans);
+  --font-poppins: var(--font-poppins);
+  --font-worksans: var(--font-work-sans);
+  --font-msmadi: var(--font-ms-madi);
+  --font-hand: var(--font-hand);
+
+  --color-ink: #202020;
+  --color-ink-soft: #606060;
+  --color-accent-green: #34a853;
+  --color-surface: #f4f4f4;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+html,
+body {
+  overflow-x: clip;
+}
+
+/* Hide the native scrollbar everywhere while keeping scroll fully functional. */
+html {
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* legacy Edge/IE */
+}
+html::-webkit-scrollbar {
+  display: none; /* Chromium/Safari */
+}
+
+/* Reusable on any inner scroll container (e.g. dropdown lists) that should
+   scroll without showing a scrollbar. */
+.no-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+body {
+  background: #ffffff;
+  color: #202020;
+  font-family: var(--font-inter), sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Lenis smooth-scroll recommended styles */
+html.lenis,
+html.lenis body {
+  height: auto;
+}
+.lenis.lenis-smooth {
+  scroll-behavior: auto !important;
+}
+.lenis.lenis-smooth [data-lenis-prevent] {
+  overscroll-behavior: contain;
+}
+.lenis.lenis-stopped {
+  overflow: hidden;
+}
+
+/* "Just Tell Plucia" motion-section animations: rotating cloud/orb rings and
+   light pulses traveling up the connector lines. Pure CSS so the parts of
+   the section that only need these stay server components. The chat
+   notification carousel (swipe-out + toast) lives in
+   components/NotificationCarousel.tsx since it needs real state/timers.
+   Disabled under prefers-reduced-motion. */
+@media (prefers-reduced-motion: no-preference) {
+  .orb-cloud-rotate {
+    animation: orb-cloud-spin 16s linear infinite;
+    transform-origin: 50% 50%;
+  }
+
+  /* Single small drop-shadow only: the pulse animates background-position,
+     which repaints every frame, and each extra/wider blur multiplies that
+     paint cost (8+ pulses run at once in the integration section). The wider
+     halo is baked into the gradient's soft edges instead. */
+  .pulse-glow {
+    background-image: linear-gradient(
+      to top,
+      transparent 0%,
+      rgba(249, 115, 22, 0.35) 12%,
+      rgba(249, 115, 22, 0.95) 24%,
+      #ffffff 38%,
+      #ffffff 50%,
+      rgba(249, 115, 22, 0.95) 64%,
+      rgba(249, 115, 22, 0.35) 78%,
+      transparent 92%,
+      transparent 100%
+    );
+    background-repeat: no-repeat;
+    background-size: 100% 165%;
+    mask-repeat: no-repeat;
+    -webkit-mask-repeat: no-repeat;
+    mask-size: 100% 100%;
+    -webkit-mask-size: 100% 100%;
+    filter: drop-shadow(0 0 6px rgba(249, 115, 22, 0.9));
+    animation: pulse-travel-up 3.6s ease-in-out infinite;
+  }
+
+  /* Variant for pulse hosts living inside a -rotate-90 wrapper (the center
+     vertical line): sweep along local X, which the rotation maps to screen
+     bottom→top. */
+  .pulse-glow-h {
+    background-image: linear-gradient(
+      to right,
+      transparent 0%,
+      rgba(249, 115, 22, 0.35) 12%,
+      rgba(249, 115, 22, 0.95) 24%,
+      #ffffff 38%,
+      #ffffff 50%,
+      rgba(249, 115, 22, 0.95) 64%,
+      rgba(249, 115, 22, 0.35) 78%,
+      transparent 92%,
+      transparent 100%
+    );
+    background-size: 165% 100%;
+    animation-name: pulse-travel-right;
+  }
+}
+
+/* Automation section scene — app tiles travel along the dotted path into the
+   hub (CSS motion path), the hub's dashed rings spin in opposite directions,
+   and the output cards bob gently. All inert under prefers-reduced-motion. */
+@media (prefers-reduced-motion: no-preference) {
+  .auto-flow-icon {
+    offset-rotate: 0deg;
+    opacity: 0;
+    animation: auto-flow 8s linear infinite;
+    animation-delay: var(--flow-delay, 0s);
+  }
+
+  .auto-spin {
+    animation: orb-cloud-spin 26s linear infinite;
+    transform-origin: 50% 50%;
+  }
+
+  .auto-spin-reverse {
+    animation: orb-cloud-spin 36s linear infinite reverse;
+    transform-origin: 50% 50%;
+  }
+
+  .auto-bob {
+    animation: auto-bob 5.5s ease-in-out infinite;
+    animation-delay: var(--bob-delay, 0s);
+  }
+}
+
+@keyframes auto-flow {
+  0% {
+    offset-distance: 0%;
+    opacity: 0;
+  }
+  8% {
+    opacity: 1;
+  }
+  78% {
+    opacity: 1;
+  }
+  100% {
+    offset-distance: 100%;
+    opacity: 0;
+  }
+}
+
+@keyframes auto-bob {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+/* Integrations logo marquee — track holds two copies of the logo row and
+   slides left by half its width, looping seamlessly right→left. */
+@media (prefers-reduced-motion: no-preference) {
+  .marquee-track {
+    animation: marquee-scroll 32s linear infinite;
+  }
+}
+
+@keyframes marquee-scroll {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+@keyframes orb-cloud-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes pulse-travel-up {
+  0% {
+    background-position-y: -160%;
+    opacity: 0;
+  }
+  8% {
+    opacity: 1;
+  }
+  92% {
+    opacity: 1;
+  }
+  100% {
+    background-position-y: 130%;
+    opacity: 0;
+  }
+}
+
+/* local left→right; inside the -rotate-90 wrapper this reads bottom→top */
+@keyframes pulse-travel-right {
+  0% {
+    background-position-x: 130%;
+    opacity: 0;
+  }
+  8% {
+    opacity: 1;
+  }
+  92% {
+    opacity: 1;
+  }
+  100% {
+    background-position-x: -160%;
+    opacity: 0;
+  }
+}

@@ -1,10 +1,20 @@
 import conversationsFixture from "@mock/fixtures/conversations.json";
 import channelsFixture from "@mock/fixtures/channels.json";
+// Missing integration module: @/lib/api/client
+// import { isBackendUnreachable } from "@/lib/api/client";
+// Missing integration module: @/lib/api/channel-map
+// import { toApiChannel, toUiChannel } from "@/lib/api/channel-map";
+// Missing integration module: @/lib/api/orchestrator
+// import { listConversations } from "@/lib/api/orchestrator";
+// Missing integration module: @/lib/format-relative-time
+// import { formatRelativeTime } from "@/lib/format-relative-time";
+// Missing integration module: @/lib/api/orchestrator.types
+// import type { ApiConversation } from "@/lib/api/orchestrator.types";
 import { isBackendUnreachable } from "@/lib/api/client";
 import { toApiChannel, toUiChannel } from "@/lib/api/channel-map";
-import { listConversations } from "@/lib/api/orchestrator";
+import { listConversations } from "@/lib/mock/orchestrator";
 import { formatRelativeTime } from "@/lib/format-relative-time";
-import type { ApiConversation } from "@/lib/api/orchestrator.types";
+import type { ApiConversation } from "@/lib/mock/orchestrator.types";
 import type { Conversation, InboxScope } from "../types/conversation.types";
 import type { ChannelKey, ChannelNavItem } from "@/types/channel.types";
 

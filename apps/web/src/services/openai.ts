@@ -48,10 +48,6 @@ function delay<T>(value: T, ms = MOCK_LATENCY_MS): Promise<T> {
 export async function createChatCompletion(
   request: CompletionRequest,
 ): Promise<CompletionResult> {
-  if (!process.env.OPENAI_API_KEY) {
-    // Expected in local/dev — every caller falls back to a mocked result.
-  }
-
   const lastUserMessage =
     [...request.messages].reverse().find((m) => m.role === "user")?.content ??
     "";

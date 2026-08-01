@@ -2,18 +2,15 @@ import { drizzleAdapter } from "@better-auth/drizzle-adapter";
 import {
   accounts,
   getDb,
-  invitations,
-  members,
-  organizations,
   sessions,
   users,
   verifications,
 } from "@repo/db-sql";
 import { betterAuth } from "better-auth";
-import { organization } from "better-auth/plugins";
 import { eq } from "drizzle-orm";
 
 import { env } from "./env.js";
+import { validatePassword } from "./security.js";
 
 const socialProviders = {
   ...(env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET
@@ -47,25 +44,37 @@ export const auth = betterAuth({
       account: accounts,
       session: sessions,
       verification: verifications,
-      organization: organizations,
-      member: members,
-      invitation: invitations,
     },
   }),
   advanced: {
     database: { generateId: "uuid" },
     defaultCookieAttributes: {
       httpOnly: true,
-      secure: env.NODE_ENV === "production" || env.COOKIE_CROSS_SITE,
+      secure: env.COOKIE_SECURE,
       sameSite: env.COOKIE_CROSS_SITE ? "none" : "lax",
+      path: "/",
       ...(env.COOKIE_CROSS_SITE ? { partitioned: true } : {}),
     },
+    useSecureCookies: env.COOKIE_SECURE,
+  },
+  session: {
+    expiresIn: env.SESSION_EXPIRES_IN,
   },
   emailAndPassword: {
     enabled: true,
-    minPasswordLength: 10,
-    maxPasswordLength: 128,
+    minPasswordLength: env.PASSWORD_MIN_LENGTH,
+    maxPasswordLength: env.PASSWORD_MAX_LENGTH,
     revokeSessionsOnPasswordReset: true,
+    passwordValidator: ({ password }: { password: string }) => {
+      const problems = validatePassword(password);
+      if (problems.length > 0) {
+        return {
+          valid: false,
+          error: problems.join("; "),
+        };
+      }
+      return { valid: true };
+    },
   },
   socialProviders,
   account: {
@@ -101,14 +110,7 @@ export const auth = betterAuth({
       },
     },
   },
-  plugins: [
-    organization({
-      allowUserToCreateOrganization: true,
-      creatorRole: "owner",
-      membershipLimit: 100,
-      invitationExpiresIn: 60 * 60 * 48,
-    }),
-  ],
+  plugins: [],
   rateLimit: {
     enabled: true,
     storage: "memory",

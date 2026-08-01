@@ -1,5 +1,9 @@
-import { sendInboundMessage } from "@/lib/api/send-inbound-message";
-import type { ApiTurnResult } from "@/lib/api/orchestrator.types";
+// Missing integration module: @/lib/api/send-inbound-message
+// import { sendInboundMessage } from "@/lib/api/send-inbound-message";
+// Missing integration module: @/lib/api/orchestrator.types
+// import type { ApiTurnResult } from "@/lib/api/orchestrator.types";
+import { sendInboundMessage } from "@/lib/mock/orchestrator";
+import type { ApiTurnResult } from "@/lib/mock/orchestrator.types";
 import type { LeadChannel } from "../types/lead.types";
 
 /**

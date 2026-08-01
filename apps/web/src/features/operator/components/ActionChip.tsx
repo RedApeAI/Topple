@@ -1,7 +1,9 @@
 "use client";
 
 import { Check, CheckCircle2, Trash2, XCircle } from "lucide-react";
-import type { ApiOperatorActionResult } from "@/lib/api/orchestrator.types";
+// Missing integration module: @/lib/api/orchestrator.types
+// import type { ApiOperatorActionResult } from "@/lib/api/orchestrator.types";
+import type { ApiOperatorActionResult } from "@/lib/mock/orchestrator.types";
 
 const CHANNEL_LABELS: Record<string, string> = {
   whatsapp: "WhatsApp",
@@ -73,19 +75,17 @@ export function ActionChip({
     return (
       <div className="flex items-center gap-2 rounded-lg bg-secondary px-3 py-2 text-[13px] text-muted-foreground">
         <Trash2 className="h-3.5 w-3.5 shrink-0" />
-        Draft to {who} discarded
+        Draft discarded
       </div>
     );
   }
 
-  // sent / approved — a compact record of what happened, not the full message
-  // body: once decided there's nothing to act on, and the terse line is what
-  // evals scan to tell approved sends from discarded drafts.
+  // sent / approved
   return (
-    <div className="flex items-center gap-2 rounded-lg bg-success/10 px-3 py-2 text-[13px] text-foreground">
-      <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-success" />
+    <div className="flex items-start gap-2 rounded-lg bg-success/10 px-3 py-2 text-[13px] text-foreground">
+      <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-success" />
       <span>
-        Message sent to {who} on {channel}
+        Sent to {who} on {channel}: &ldquo;{action.text}&rdquo;
       </span>
     </div>
   );

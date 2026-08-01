@@ -1,0 +1,7 @@
+<svg preserveAspectRatio="none" width="100%" height="100%" overflow="visible" style="display: block;" viewBox="0 0 3.64244 71.2901" fill="none" xmlns="http://www.w3.org/2000/svg">
+<g id="Graph">
+<path id="Shape Copy" fill-rule="evenodd" clip-rule="evenodd" d="M0 32.7794V15.8681C0 14.8623 0.815387 14.0469 1.82122 14.0469C2.82705 14.0469 3.64244 14.8623 3.64244 15.8681V32.7794C3.64244 32.7794 3.31208 31.2127 1.82221 31.2127C0.332341 31.2127 0 32.7794 0 32.7794Z" fill="var(--fill-0, #50B5FF)"/>
+<path id="Shape Copy 2" fill-rule="evenodd" clip-rule="evenodd" d="M0 13.5291V1.82122C0 0.815388 0.815387 0 1.82122 0C2.82705 0 3.64244 0.815388 3.64244 1.82122V13.5291C3.64244 13.5291 3.31208 11.9623 1.82221 11.9623C0.332341 11.9623 0 13.5291 0 13.5291Z" fill="var(--fill-0, #E2E2EA)"/>
+<path id="Shape" fill-rule="evenodd" clip-rule="evenodd" d="M1.82122 71.2901C0.815387 71.2901 0 70.4747 0 69.4689V35.1259C0 34.1201 0.815387 33.3047 1.82122 33.3047C2.82705 33.3047 3.64244 34.1201 3.64244 35.1259V69.4689C3.64244 70.4747 2.82705 71.2901 1.82122 71.2901Z" fill="var(--fill-0, #0062FF)"/>
+</g>
+</svg>

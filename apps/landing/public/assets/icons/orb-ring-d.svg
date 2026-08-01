@@ -1,0 +1,12 @@
+<svg preserveAspectRatio="none" width="100%" height="100%" overflow="visible" style="display: block;" viewBox="0 0 82.1393 82.2034" fill="none" xmlns="http://www.w3.org/2000/svg">
+<g id="gabarito05" filter="url(#filter0_f_2877_47005)">
+<path d="M41.0701 3.65118C61.7354 3.65143 78.4879 20.4183 78.4881 41.1014C78.4881 61.7846 61.7355 78.5523 41.0701 78.5525C20.4045 78.5525 3.65118 61.7847 3.65118 41.1014C3.65135 20.4182 20.4046 3.65118 41.0701 3.65118Z" stroke="var(--stroke-0, #FEFEFE)" stroke-width="0.0723009"/>
+</g>
+<defs>
+<filter id="filter0_f_2877_47005" x="0" y="0" width="82.1393" height="82.2034" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+<feFlood flood-opacity="0" result="BackgroundImageFix"/>
+<feBlend mode="normal" in="SourceGraphic" in2="BackgroundImageFix" result="shape"/>
+<feGaussianBlur stdDeviation="1.80752" result="effect1_foregroundBlur_2877_47005"/>
+</filter>
+</defs>
+</svg>

@@ -1,12 +1,3 @@
-/**
- * Icon components backed by the SVG assets exported from the Figma source
- * file (fileKey KoGKyrJFudZYnm3ecY6K88) into `src/assets/icons/`. Colors are
- * baked into the assets exactly as designed — do not tint these with CSS.
- * Monochrome icons opt into `darkInvert` so they stay legible in dark mode.
- * Generic UI chrome (chevrons, plus, settings, bell, search, filter) stays
- * on lucide-react, matching the icon names used in the Figma file.
- */
-import type { StaticImageData } from "next/image";
 import { cn } from "@/lib/utils";
 
 import callBadgeSvg from "@/assets/icons/call-badge.svg";
@@ -33,15 +24,14 @@ export interface FigmaIconProps {
 }
 
 function createIcon(
-  asset: StaticImageData,
+  asset: string,
   displayName: string,
   options?: { darkInvert?: boolean },
 ) {
   function Icon({ className }: FigmaIconProps) {
     return (
-      // eslint-disable-next-line @next/next/no-img-element -- tiny static SVG icon, next/image adds no value
       <img
-        src={asset.src}
+        src={asset}
         alt=""
         aria-hidden
         draggable={false}

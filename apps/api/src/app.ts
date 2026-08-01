@@ -5,11 +5,13 @@ import { secureHeaders } from "hono/secure-headers";
 
 import { auth } from "./lib/auth.js";
 import { env } from "./lib/env.js";
+import { getSecurityHeaders } from "./lib/security.js";
 import { errorHandler } from "./middleware/error-handler.js";
 import { requestContext } from "./middleware/request-context.js";
 import { requireAuth } from "./middleware/require-auth.js";
 import { requireOrganizationMember } from "./middleware/require-org-role.js";
 import { agentConfigRoutes } from "./routes/agent-config.js";
+import { authRoutes } from "./routes/auth.js";
 import { channelRoutes } from "./routes/channels.js";
 import { conversationRoutes } from "./routes/conversations.js";
 import type { AppEnv } from "./types.js";
@@ -18,6 +20,12 @@ export const app = new Hono<AppEnv>();
 
 app.use("*", requestContext);
 app.use("*", secureHeaders());
+app.use("*", async (context, next) => {
+  await next();
+  for (const [name, value] of Object.entries(getSecurityHeaders())) {
+    context.res.headers.set(name, value);
+  }
+});
 app.use(
   "*",
   cors({
@@ -50,6 +58,9 @@ app.get("/", (context) =>
   context.json({ ok: true, service: "plucia-api", version: 1 }),
 );
 app.get("/healthz", (context) => context.json({ ok: true }));
+
+// Single-user auth layer (login, register, session, me, password).
+app.route("/api/v1/auth", authRoutes);
 
 // Better Auth validates its own payloads and owns all auth/OAuth callbacks.
 app.on(["GET", "POST"], "/api/auth/*", (context) =>

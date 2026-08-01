@@ -1,31 +1,54 @@
 import threadsFixture from "@mock/fixtures/operator-threads.json";
 import historyFixture from "@mock/fixtures/operator-history.json";
+import transcriptFixture from "@mock/fixtures/operator-transcript.json";
+// Missing integration module: @/lib/api/client
+// import { isBackendUnreachable } from "@/lib/api/client";
+// Missing integration module: @/lib/api/orchestrator
+// import { getConversation, listTurns } from "@/lib/api/orchestrator";
+// Missing integration module: @/lib/format-relative-time
+// import { formatRelativeTime } from "@/lib/format-relative-time";
+// Missing integration module: @/lib/api/orchestrator.types
+// import type { ApiTurnSummary } from "@/lib/api/orchestrator.types";
 import { isBackendUnreachable } from "@/lib/api/client";
-import {
-  getOperatorThreadMessages,
-  listOperatorThreads,
-} from "@/lib/api/operator-agent";
+import { getConversation, listTurns } from "@/lib/mock/orchestrator";
 import { formatRelativeTime } from "@/lib/format-relative-time";
-import type {
-  ApiOperatorMessage,
-  ApiOperatorThread,
-} from "@/lib/api/orchestrator.types";
+import type { ApiTurnSummary } from "@/lib/mock/orchestrator.types";
 import type { OperatorMessage, OperatorThread } from "../types/operator.types";
 
-function toThread(thread: ApiOperatorThread): OperatorThread {
+function turnTitle(turn: ApiTurnSummary): string {
+  if (turn.intent) {
+    const intent = turn.intent.replace(/_/g, " ");
+    return intent.charAt(0).toUpperCase() + intent.slice(1);
+  }
+  if (turn.messages.length > 0) return turn.messages[0];
+  return `${turn.channel} turn`;
+}
+
+function turnStatus(turn: ApiTurnSummary): string {
+  if (turn.status === "in_progress") return "running";
+  if (turn.status === "error") return "failed";
+  if (turn.handoff) return "handed off";
+  if (turn.reply_status === "draft") return "needs review";
+  return "done";
+}
+
+function toThread(turn: ApiTurnSummary): OperatorThread {
   return {
-    id: thread._id,
-    title: thread.title || "Operator chat",
-    timestamp: formatRelativeTime(thread.last_message_at ?? thread.created_at),
-    status: "", // agent threads have no running/done state yet — no badge
+    id: turn.request_id,
+    title: turnTitle(turn),
+    timestamp: formatRelativeTime(turn.ts_start),
+    status: turnStatus(turn),
+    conversationId: turn.conversation_id,
   };
 }
 
-/** The salesperson's recent Operator command threads. */
+/** Live and recently finished orchestrator turns. */
 export async function fetchOperatorThreads(): Promise<OperatorThread[]> {
   try {
-    const threads = await listOperatorThreads(30);
-    return threads.map(toThread);
+    const turns = await listTurns(30);
+    return turns
+      .filter((t) => t.status === "in_progress" || !t.error)
+      .map(toThread);
   } catch (error) {
     if (isBackendUnreachable(error)) {
       console.warn(
@@ -38,11 +61,11 @@ export async function fetchOperatorThreads(): Promise<OperatorThread[]> {
   }
 }
 
-/** Every Operator command thread — the full history. */
+/** Every recorded turn, errors included — the audit trail. */
 export async function fetchOperatorHistory(): Promise<OperatorThread[]> {
   try {
-    const threads = await listOperatorThreads(100);
-    return threads.map(toThread);
+    const turns = await listTurns(100);
+    return turns.map(toThread);
   } catch (error) {
     if (isBackendUnreachable(error)) {
       console.warn(
@@ -55,21 +78,28 @@ export async function fetchOperatorHistory(): Promise<OperatorThread[]> {
   }
 }
 
-function toOperatorMessage(api: ApiOperatorMessage): OperatorMessage {
-  return {
-    id: api._id,
-    role: api.role,
-    text: api.text,
-    status: "done",
-    steps: api.steps,
-    action: api.action,
-  };
-}
-
-/** Replay one Operator command thread — its messages, reasoning, and drafts. */
-export async function fetchOperatorThreadMessages(
-  threadId: string,
+/** Message history of one conversation. */
+export async function fetchOperatorTranscript(
+  conversationId: string,
 ): Promise<OperatorMessage[]> {
-  const messages = await getOperatorThreadMessages(threadId);
-  return messages.map(toOperatorMessage);
+  try {
+    const detail = await getConversation(conversationId);
+    return detail.messages
+      .filter((msg) => msg.status !== "discarded")
+      .map((msg) => ({
+        id: msg._id,
+        role: msg.direction === "inbound" ? "user" : "operator",
+        text: msg.text,
+        status: msg.status === "draft" ? "draft" : "done",
+      }));
+  } catch (error) {
+    if (isBackendUnreachable(error)) {
+      console.warn(
+        "[operator] orchestrator unreachable — showing fixture data",
+        error,
+      );
+      return transcriptFixture as OperatorMessage[];
+    }
+    throw error;
+  }
 }

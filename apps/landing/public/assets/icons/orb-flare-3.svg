@@ -1,0 +1,12 @@
+<svg preserveAspectRatio="none" width="100%" height="100%" overflow="visible" style="display: block;" viewBox="0 0 122.806 122.806" fill="none" xmlns="http://www.w3.org/2000/svg">
+<g id="gabarito06" filter="url(#filter0_f_2877_46961)">
+<circle cx="61.4028" cy="61.4028" r="57.7516" stroke="var(--stroke-0, #FEFEFE)" stroke-width="0.0723009"/>
+</g>
+<defs>
+<filter id="filter0_f_2877_46961" x="0" y="0" width="122.806" height="122.806" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+<feFlood flood-opacity="0" result="BackgroundImageFix"/>
+<feBlend mode="normal" in="SourceGraphic" in2="BackgroundImageFix" result="shape"/>
+<feGaussianBlur stdDeviation="1.80752" result="effect1_foregroundBlur_2877_46961"/>
+</filter>
+</defs>
+</svg>

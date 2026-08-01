@@ -1,17 +1,27 @@
+// Missing integration module: @/lib/api/channel-map
+// import { toUiChannel } from "@/lib/api/channel-map";
+// Missing integration module: @/lib/api/orchestrator
+// import { approveDraft, discardDraft, getContact, getConversation } from "@/lib/api/orchestrator";
+// Missing integration module: @/lib/api/send-inbound-message
+// import { sendInboundMessage } from "@/lib/api/send-inbound-message";
+// Missing integration module: @/lib/format-relative-time
+// import { formatMessageTime } from "@/lib/format-relative-time";
+// Missing integration module: @/lib/api/orchestrator.types
+// import type { ApiContact, ApiTurnResult, OrchestratorChannel } from "@/lib/api/orchestrator.types";
 import { toUiChannel } from "@/lib/api/channel-map";
 import {
   approveDraft,
   discardDraft,
   getContact,
   getConversation,
-} from "@/lib/api/orchestrator";
-import { sendInboundMessage } from "@/lib/api/send-inbound-message";
+  sendInboundMessage,
+} from "@/lib/mock/orchestrator";
 import { formatMessageTime } from "@/lib/format-relative-time";
 import type {
   ApiContact,
   ApiTurnResult,
   OrchestratorChannel,
-} from "@/lib/api/orchestrator.types";
+} from "@/lib/mock/orchestrator.types";
 import type { ChatDetail, ChatMessage } from "../types/chat.types";
 
 function contactName(

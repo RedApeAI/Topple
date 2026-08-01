@@ -1,10 +1,10 @@
 "use client";
 
-import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
   ChevronDown,
   ChevronsUpDown,
+  LogOut,
   PanelLeftClose,
   PanelLeftOpen,
   Search,
@@ -21,7 +21,7 @@ import { UnreadBadge } from "@/components/shared/UnreadBadge";
 import { cn } from "@/lib/utils";
 import { useUIStore } from "@/store/ui.store";
 import { useChannelNav } from "@/hooks/use-channel-nav";
-import { currentUser } from "@/constants/team.constants";
+import { useAuth } from "@/lib/auth-context";
 import {
   bottomNavItems,
   dashboardSection,
@@ -42,11 +42,18 @@ function initials(name: string) {
 export function Sidebar() {
   const collapsed = useUIStore((s) => s.sidebarCollapsed);
   const toggleSidebar = useUIStore((s) => s.toggleSidebar);
-  const pathname = usePathname();
+  const { pathname } = useLocation();
+  const navigate = useNavigate();
   const { data: channelNav } = useChannelNav();
+  const { user, logout } = useAuth();
 
   const unreadFor = (unreadKey?: string) =>
     channelNav?.find((c) => c.key === unreadKey)?.unread ?? 0;
+
+  const handleLogout = async () => {
+    await logout();
+    navigate("/welcome", { replace: true });
+  };
 
   return (
     <aside
@@ -81,7 +88,7 @@ export function Sidebar() {
                     </span>
                   </div>
                   <span className="text-[12px] font-medium text-muted-foreground">
-                    your AI Sales Operator
+                    {user?.email ?? "pluciatest@gmail.com"}
                   </span>
                 </div>
               )}
@@ -165,33 +172,58 @@ export function Sidebar() {
         </div>
         <Separator />
         {collapsed ? (
-          <Avatar className="h-11 w-11 rounded-xl">
-            <AvatarImage src={currentUser.avatarUrl} alt={currentUser.name} />
-            <AvatarFallback className="rounded-xl text-[12px]">
-              {initials(currentUser.name)}
-            </AvatarFallback>
-          </Avatar>
-        ) : (
-          <button
-            type="button"
-            className="flex w-full items-center gap-2.5 rounded-[10px] bg-card px-2 py-2 pr-3 shadow-row hover:bg-accent"
-          >
-            <Avatar className="h-10 w-10 rounded-[6px]">
-              <AvatarImage src={currentUser.avatarUrl} alt={currentUser.name} />
-              <AvatarFallback className="rounded-[6px] text-[13px]">
-                {initials(currentUser.name)}
+          <div className="flex flex-col items-center gap-2">
+            <Avatar className="h-11 w-11 rounded-xl">
+              <AvatarImage src={user?.image ?? ""} alt={user?.name ?? "User"} />
+              <AvatarFallback className="rounded-xl text-[12px]">
+                {initials(user?.name ?? "User")}
               </AvatarFallback>
             </Avatar>
-            <div className="flex flex-1 flex-col items-start overflow-hidden text-left">
-              <span className="w-full truncate font-heading text-[14px] font-semibold text-foreground">
-                {currentUser.name}
-              </span>
-              <span className="w-full truncate text-[14px] font-medium text-muted-foreground">
-                {currentUser.email}
-              </span>
-            </div>
-            <ChevronsUpDown className="h-4 w-4 shrink-0 text-muted-foreground" />
-          </button>
+            <Tooltip>
+              <TooltipTrigger
+                onClick={handleLogout}
+                aria-label="Logout"
+                className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground"
+              >
+                <LogOut className="h-4 w-4" />
+              </TooltipTrigger>
+              <TooltipContent side="right">Logout</TooltipContent>
+            </Tooltip>
+          </div>
+        ) : (
+          <div className="flex flex-col gap-2">
+            <button
+              type="button"
+              className="flex w-full items-center gap-2.5 rounded-[10px] bg-card px-2 py-2 pr-3 shadow-row hover:bg-accent"
+            >
+              <Avatar className="h-10 w-10 rounded-[6px]">
+                <AvatarImage
+                  src={user?.image ?? ""}
+                  alt={user?.name ?? "User"}
+                />
+                <AvatarFallback className="rounded-[6px] text-[13px]">
+                  {initials(user?.name ?? "User")}
+                </AvatarFallback>
+              </Avatar>
+              <div className="flex flex-1 flex-col items-start overflow-hidden text-left">
+                <span className="w-full truncate font-heading text-[14px] font-semibold text-foreground">
+                  {user?.name ?? "User"}
+                </span>
+                <span className="w-full truncate text-[14px] font-medium text-muted-foreground">
+                  {user?.email ?? "user@example.com"}
+                </span>
+              </div>
+              <ChevronsUpDown className="h-4 w-4 shrink-0 text-muted-foreground" />
+            </button>
+            <button
+              type="button"
+              onClick={handleLogout}
+              className="flex w-full items-center gap-2 rounded-[8px] px-2 py-1.5 text-[14px] font-medium text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+            >
+              <LogOut className="h-4 w-4" />
+              <span>Logout</span>
+            </button>
+          </div>
         )}
       </div>
     </aside>
@@ -255,7 +287,7 @@ function NavRow({
 
   const row = (
     <Link
-      href={item.href}
+      to={item.href}
       aria-label={item.label}
       className={cn(
         "flex w-full items-center gap-1.5 rounded-[10px] px-2.5 py-2 text-[14px] font-medium text-secondary-foreground transition-colors hover:bg-accent",

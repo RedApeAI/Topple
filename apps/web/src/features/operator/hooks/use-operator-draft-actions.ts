@@ -1,5 +1,7 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { approveDraft, discardDraft } from "@/lib/api/orchestrator";
+// Missing integration module: @/lib/api/orchestrator
+// import { approveDraft, discardDraft } from "@/lib/api/orchestrator";
+import { approveDraft, discardDraft } from "@/lib/mock/orchestrator";
 
 /** Approve (dispatch) or discard a co-pilot draft from the Operator panel. */
 export function useOperatorDraftActions() {

@@ -1,7 +1,9 @@
+// Missing integration module: @/lib/api/orchestrator.types
+// import type { ApiOperatorActionResult, ApiOperatorStep } from "@/lib/api/orchestrator.types";
 import type {
   ApiOperatorActionResult,
   ApiOperatorStep,
-} from "@/lib/api/orchestrator.types";
+} from "@/lib/mock/orchestrator.types";
 
 /** Status is an open string, not a closed enum — new agent workflows introduce new statuses. */
 export type OperatorThreadStatus = string;
@@ -10,8 +12,9 @@ export interface OperatorThread {
   id: string;
   title: string;
   timestamp: string;
-  /** Empty when the thread has no running/done state (agent threads). */
   status: OperatorThreadStatus;
+  /** Backing orchestrator conversation, when the thread came from a live turn. */
+  conversationId?: string | null;
 }
 
 export type OperatorMessageRole = "user" | "operator";
