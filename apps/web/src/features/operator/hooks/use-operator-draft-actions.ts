@@ -1,24 +1,21 @@
-import { useMutation, useQueryClient } from "@tanstack/react-query";
-// Missing integration module: @/lib/api/orchestrator
-// import { approveDraft, discardDraft } from "@/lib/api/orchestrator";
-import { approveDraft, discardDraft } from "@/lib/mock/orchestrator";
+import { useOperatorStore } from "@/store/operator.store";
 
-/** Approve (dispatch) or discard a co-pilot draft from the Operator panel. */
+interface MutationOptions {
+  onSuccess?: () => void;
+  onError?: (error: unknown) => void;
+}
+
 export function useOperatorDraftActions() {
-  const queryClient = useQueryClient();
-  const invalidate = () => {
-    queryClient.invalidateQueries({ queryKey: ["operator-transcript"] });
-    queryClient.invalidateQueries({ queryKey: ["operator-threads"] });
-    queryClient.invalidateQueries({ queryKey: ["conversations"] });
-    queryClient.invalidateQueries({ queryKey: ["channel-nav"] });
-  };
-  const approve = useMutation({
-    mutationFn: (messageId: string) => approveDraft(messageId),
-    onSettled: invalidate,
+  const approveAction = useOperatorStore((state) => state.approve);
+  const discardAction = useOperatorStore((state) => state.discard);
+  const isPending = useOperatorStore((state) => state.draftPending);
+  const wrap = (action: (messageId: string) => Promise<void>) => ({
+    isPending,
+    mutate: (messageId: string, options?: MutationOptions) => {
+      void action(messageId)
+        .then(() => options?.onSuccess?.())
+        .catch((error: unknown) => options?.onError?.(error));
+    },
   });
-  const discard = useMutation({
-    mutationFn: (messageId: string) => discardDraft(messageId),
-    onSettled: invalidate,
-  });
-  return { approve, discard };
+  return { approve: wrap(approveAction), discard: wrap(discardAction) };
 }

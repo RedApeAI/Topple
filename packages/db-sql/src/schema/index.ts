@@ -5,3 +5,4 @@ export * from "./conversation.js";
 export * from "./orchestrator.js";
 export * from "./subscription.js";
 export * from "./user.js";
+export * from "./zernio.js";

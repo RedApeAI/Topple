@@ -28,9 +28,7 @@ export const requestContext: MiddlewareHandler<AppEnv> = async (
   };
 
   const user = context.get("user");
-  const organizationId = context.get("organizationId");
   if (user) log.userId = user.id;
-  if (organizationId) log.organizationId = organizationId;
 
   console.info(JSON.stringify(log));
 };

@@ -1,10 +1,5 @@
 import type { LucideIcon } from "lucide-react";
-import {
-  Activity,
-  CalendarMinus2,
-  GalleryVerticalEnd,
-  Route,
-} from "lucide-react";
+import { Activity, CalendarMinus2, GalleryVerticalEnd } from "lucide-react";
 import {
   CallSparkIcon,
   CrmIcon,
@@ -30,10 +25,10 @@ export interface NavSection {
 export const dashboardSection: NavSection = {
   label: "Dashboard",
   items: [
-    { label: "Overview", href: "/overview", icon: Activity },
+    { label: "Overview", href: "/dashboard/overview", icon: Activity },
     {
       label: "AI Agent Campaigns",
-      href: "/campaigns",
+      href: "/dashboard/campaigns",
       icon: GalleryVerticalEnd,
     },
   ],
@@ -42,37 +37,54 @@ export const dashboardSection: NavSection = {
 export const socialsSection: NavSection = {
   label: "Socials",
   items: [
-    { label: "One Inbox", href: "/inbox", icon: MessageCircleMoreIcon },
+    {
+      label: "One Inbox",
+      href: "/dashboard/inbox",
+      icon: MessageCircleMoreIcon,
+    },
     {
       label: "WhatsApp",
-      href: "/whatsapp",
+      href: "/dashboard/whatsapp",
       icon: WhatsAppIcon,
       unreadKey: "whatsapp",
     },
     {
       label: "Linkedin",
-      href: "/linkedin",
+      href: "/dashboard/linkedin",
       icon: LinkedInIcon,
       unreadKey: "linkedin",
     },
-    { label: "Mail", href: "/mail", icon: GmailIcon, unreadKey: "mail" },
+    {
+      label: "Mail",
+      href: "/dashboard/mail",
+      icon: GmailIcon,
+      unreadKey: "mail",
+    },
     {
       label: "AI Cold Calling",
-      href: "/ai-calling",
+      href: "/dashboard/ai-calling",
       icon: CallSparkIcon,
       unreadKey: "ai-cold-calling",
     },
     {
       label: "Instagram",
-      href: "/instagram",
+      href: "/dashboard/instagram",
       icon: InstagramIcon,
       unreadKey: "instagram",
     },
-    { label: "CRM", href: "/crm", icon: CrmIcon, unreadKey: "crm" },
+    {
+      label: "CRM",
+      href: "/dashboard/crm",
+      icon: CrmIcon,
+      unreadKey: "crm",
+    },
   ],
 };
 
 export const bottomNavItems: NavItem[] = [
-  { label: "Calendar", href: "/calendar", icon: CalendarMinus2 },
-  { label: "Integrations", href: "/integrations", icon: Route },
+  {
+    label: "Calendar",
+    href: "/dashboard/calendar",
+    icon: CalendarMinus2,
+  },
 ];

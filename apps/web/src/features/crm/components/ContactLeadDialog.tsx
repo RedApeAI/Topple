@@ -23,10 +23,10 @@ const CHANNEL_LABEL: Record<string, string> = {
 };
 
 const CHANNEL_INBOX_HREF: Record<string, string> = {
-  whatsapp: "/whatsapp",
-  mail: "/mail",
-  call: "/ai-calling",
-  instagram: "/instagram",
+  whatsapp: "/dashboard/whatsapp",
+  mail: "/dashboard/mail",
+  call: "/dashboard/ai-calling",
+  instagram: "/dashboard/instagram",
 };
 
 interface ContactLeadDialogProps {
@@ -113,7 +113,7 @@ export function ContactLeadDialog({
               )}
             </div>
             <Link
-              to={CHANNEL_INBOX_HREF[channel.channel] ?? "/inbox"}
+              to={CHANNEL_INBOX_HREF[channel.channel] ?? "/dashboard/inbox"}
               className="self-start text-[13px] font-medium text-foreground underline underline-offset-2"
             >
               Continue in the{" "}

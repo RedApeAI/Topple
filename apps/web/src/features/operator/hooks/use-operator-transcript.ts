@@ -1,12 +1,13 @@
-import { useQuery } from "@tanstack/react-query";
-import { fetchOperatorTranscript } from "../services/operator.service";
+import { useEffect } from "react";
+import { useOperatorStore } from "@/store/operator.store";
 
-/** No query until a real conversation exists — a brand-new chat starts empty. */
 export function useOperatorTranscript(conversationId?: string) {
-  return useQuery({
-    queryKey: ["operator-transcript", conversationId ?? "new"],
-    queryFn: () => fetchOperatorTranscript(conversationId!),
-    enabled: Boolean(conversationId),
-    refetchInterval: 5_000,
-  });
+  const data = useOperatorStore((state) =>
+    conversationId ? state.transcripts[conversationId] : undefined,
+  );
+  const load = useOperatorStore((state) => state.loadTranscript);
+  useEffect(() => {
+    if (conversationId) void load(conversationId);
+  }, [conversationId, load]);
+  return { data };
 }

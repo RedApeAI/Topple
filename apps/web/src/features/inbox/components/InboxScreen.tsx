@@ -7,18 +7,31 @@ import { InboxToolbar } from "./InboxToolbar";
 import { InboxList } from "./InboxList";
 import { ChatPane } from "./ChatPane";
 import type { Conversation, InboxScope } from "../types/conversation.types";
+import { useWhatsAppRealtime } from "@/features/channels/hooks/use-whatsapp-realtime";
 
 interface InboxScreenProps {
-  /** Pin the screen to one channel (channel pages) instead of showing scope tabs. */
   lockedScope?: InboxScope;
-  /** Toolbar heading shown in place of the scope tabs when the scope is locked. */
   title?: string;
+  toolbarAction?: React.ReactNode;
+  emptyContent?: React.ReactNode;
 }
 
-export function InboxScreen({ lockedScope, title }: InboxScreenProps) {
+export function InboxScreen({
+  lockedScope,
+  title,
+  toolbarAction,
+  emptyContent,
+}: InboxScreenProps) {
   const [scope, setScope] = React.useState<InboxScope>(lockedScope ?? "all");
   const [active, setActive] = React.useState<Conversation>();
-  const { data: conversations, isLoading } = useConversations(scope);
+  const {
+    data: conversations,
+    isLoading,
+    isError,
+    error,
+    retry,
+  } = useConversations(scope);
+  useWhatsAppRealtime(lockedScope === "whatsapp", active);
 
   const handleScopeChange = (next: InboxScope) => {
     setScope(next);
@@ -31,6 +44,7 @@ export function InboxScreen({ lockedScope, title }: InboxScreenProps) {
         scope={scope}
         onScopeChange={handleScopeChange}
         title={lockedScope ? title : undefined}
+        action={toolbarAction}
       />
       <div className="flex min-h-0 flex-1 gap-3">
         <div
@@ -42,8 +56,11 @@ export function InboxScreen({ lockedScope, title }: InboxScreenProps) {
           <InboxList
             conversations={conversations}
             isLoading={isLoading}
+            error={isError ? error : undefined}
+            onRetry={() => void retry().catch(() => undefined)}
             activeId={active?.id}
             onSelect={setActive}
+            emptyContent={emptyContent}
           />
         </div>
         {active && (

@@ -13,10 +13,13 @@ Requirements: Node.js 18+, pnpm 9, and a Postgres/Neon database.
 
 ```sh
 cp apps/api/.env.example apps/api/.env
+cp apps/web/.env.example apps/web/.env.local
 pnpm install
 pnpm --filter @repo/db-sql db:migrate
-pnpm --filter api dev
 ```
+
+After filling in the two environment files, run `pnpm --filter api dev` and
+`pnpm --filter web dev` in separate terminals.
 
 The API listens on `http://localhost:4000` by default. `GET /healthz` is the
 load-balancer health endpoint and deliberately does not query the database.
@@ -31,16 +34,21 @@ pnpm --filter api lint
 
 ## Environment
 
-| Variable                                   | Required | Purpose                                                                          |
-| ------------------------------------------ | -------- | -------------------------------------------------------------------------------- |
-| `DATABASE_URL`                             | yes      | Neon/Postgres connection string                                                  |
-| `BETTER_AUTH_SECRET`                       | yes      | Random secret, at least 32 characters                                            |
-| `BETTER_AUTH_URL`                          | yes      | Public API origin, for example `https://api.example.com`                         |
-| `FRONTEND_ORIGINS`                         | yes      | Exact comma-separated browser origins allowed by CORS and Better Auth            |
-| `PORT`                                     | no       | HTTP port, default `4000`                                                        |
-| `COOKIE_CROSS_SITE`                        | no       | Use `Secure; SameSite=None` cookies when frontend and API are on different sites |
-| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | together | Enables Google sign-in                                                           |
-| `APPLE_CLIENT_ID`, `APPLE_CLIENT_SECRET`   | together | Enables Apple sign-in                                                            |
+| Variable                                   | Required         | Purpose                                                                                   |
+| ------------------------------------------ | ---------------- | ----------------------------------------------------------------------------------------- |
+| `DATABASE_URL`                             | yes              | Neon/Postgres connection string                                                           |
+| `BETTER_AUTH_SECRET`                       | yes              | Random secret, at least 32 characters                                                     |
+| `BETTER_AUTH_URL`                          | yes              | Fallback public auth origin; allowlisted incoming frontend hosts are resolved per request |
+| `FRONTEND_ORIGINS`                         | yes              | Exact comma-separated browser origins allowed by CORS and Better Auth                     |
+| `PORT`                                     | no               | HTTP port, default `4000`                                                                 |
+| `COOKIE_CROSS_SITE`                        | no               | Use `Secure; SameSite=None` cookies when frontend and API are on different sites          |
+| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | together         | Enables Google sign-in                                                                    |
+| `APPLE_CLIENT_ID`, `APPLE_CLIENT_SECRET`   | together         | Enables Apple sign-in                                                                     |
+| `ZERNIO_API_KEY`                           | yes for channels | Server-only Zernio API key                                                                |
+| `ZERNIO_BASE_URL`                          | no               | Zernio API root, default `https://zernio.com/api/v1`                                      |
+| `ZERNIO_WEBHOOK_SECRET`                    | for realtime     | Verifies signed Zernio webhook bodies                                                     |
+| `ZERNIO_WEBHOOK_PUBLIC_URL`                | for realtime     | Public HTTPS URL ending in `/api/v1/zernio/webhooks`                                      |
+| `ZERNIO_CONNECT_REDIRECT_URL`              | for LinkedIn     | Frontend callback used by hosted LinkedIn OAuth                                           |
 
 Wildcards are rejected in `FRONTEND_ORIGINS`. Never combine a wildcard origin
 with credentialed CORS. When `COOKIE_CROSS_SITE=true`, both the frontend and API
@@ -65,6 +73,62 @@ for that organization. Roles are:
 
 Cross-tenant item lookups always include both the item ID and organization ID,
 so an Org A member cannot read an Org B row by guessing its UUID.
+
+## Zernio channel connections
+
+Authenticated WhatsApp and LinkedIn account onboarding is exposed under
+`/api/v1/zernio`. The server owns the Zernio API key and maintains one Zernio
+profile per Better Auth organization. The browser never receives the key or
+temporary hosted-OAuth tokens. During headless WhatsApp setup, the browser sends
+the customer-supplied Meta System User token once to this authenticated API;
+the API forwards it to Zernio without persisting or logging it.
+
+| Method   | Route                                                   | Purpose                                            |
+| -------- | ------------------------------------------------------- | -------------------------------------------------- |
+| `GET`    | `/api/v1/zernio/channels`                               | Sync and return connected account status           |
+| `POST`   | `/api/v1/zernio/channels/linkedin/connect`              | Start hosted LinkedIn OAuth                        |
+| `POST`   | `/api/v1/zernio/channels/whatsapp/credentials`          | Connect WhatsApp with server-side Meta credentials |
+| `DELETE` | `/api/v1/zernio/channels/:platform/:accountId`          | Disconnect a tenant-owned account                  |
+| `GET`    | `/api/v1/zernio/conversations`                          | List authenticated tenant WhatsApp threads         |
+| `POST`   | `/api/v1/zernio/conversations`                          | Start WhatsApp chat with approved template         |
+| `GET`    | `/api/v1/zernio/conversations/:id/messages?accountId=…` | Read a tenant-owned WhatsApp thread                |
+| `POST`   | `/api/v1/zernio/conversations/:id/messages`             | Send in an existing tenant-owned thread            |
+| `POST`   | `/api/v1/zernio/conversations/:id/read?accountId=…`     | Mark a WhatsApp thread read                        |
+| `GET`    | `/api/v1/zernio/whatsapp/templates?accountId=…`         | List approved WhatsApp templates                   |
+| `POST`   | `/api/v1/zernio/webhooks`                               | Receive signed Zernio events                       |
+| `POST`   | `/api/v1/zernio/webhooks/configure`                     | Register/update the Zernio subscription            |
+| `GET`    | `/api/v1/zernio/events?after=…`                         | Poll tenant-scoped real-time notifications         |
+
+Required production configuration:
+
+- `ZERNIO_API_KEY`: server-only Zernio secret key.
+- `ZERNIO_BASE_URL`: defaults to `https://zernio.com/api/v1`.
+- `ZERNIO_WEBHOOK_SECRET`: server-only secret used to verify Zernio's
+  `X-Zernio-Signature` HMAC header.
+- `ZERNIO_WEBHOOK_PUBLIC_URL`: public HTTPS URL for
+  `/api/v1/zernio/webhooks`; required for real-time inbox events.
+- `ZERNIO_CONNECT_REDIRECT_URL`: frontend completion route for hosted OAuth
+  platforms such as LinkedIn; defaults to `/dashboard/zernio/callback` on the
+  first configured frontend origin.
+
+WhatsApp uses the headless credentials route with a permanent
+Meta System User token, WABA ID, Phone Number ID, and optional six-digit PIN.
+The API derives the tenant's Zernio profile, forwards those values without
+persisting or logging them, and returns `Cache-Control: no-store`. This flow
+does not use the Facebook JS SDK, browser redirects, or domain allowlisting.
+The Meta token must include `whatsapp_business_management` and
+`whatsapp_business_messaging`. These Meta credentials are entered in the
+WhatsApp dashboard connection form; they do not belong in either `.env` file.
+
+When the WhatsApp inbox opens, the web app idempotently calls the configure
+route. The API creates or updates the `Plucia WhatsApp Inbox` webhook in
+Zernio. In local development, expose port 4000 through an HTTPS tunnel and set
+its full webhook endpoint as `ZERNIO_WEBHOOK_PUBLIC_URL`; Zernio cannot deliver
+webhooks to `localhost`.
+
+Apply the database migrations before enabling the integration. LinkedIn OAuth
+is supported, but LinkedIn does not expose direct-message APIs to third-party
+applications; only WhatsApp uses the inbox and send routes.
 
 ## Auth endpoints
 
@@ -107,11 +171,15 @@ For social sign-in, use:
 }
 ```
 
-The callback URL must belong to `FRONTEND_ORIGINS`. Configure these provider
-redirect URIs:
+The callback URL must belong to `FRONTEND_ORIGINS`. Better Auth resolves the
+callback origin from the incoming allowlisted host, with `BETTER_AUTH_URL` as
+the fallback. Configure every origin used for social login at the provider:
 
-- Google: `${BETTER_AUTH_URL}/api/auth/callback/google`
-- Apple: `${BETTER_AUTH_URL}/api/auth/callback/apple`
+- Google: `<origin>/api/auth/callback/google`
+- Apple: `<origin>/api/auth/callback/apple`
+
+For example, an HTTPS development tunnel needs its own Google redirect URI:
+`https://your-tunnel.example/api/auth/callback/google`.
 
 Implicit account linking is disabled to prevent an unverified local account
 from being merged solely because an OAuth provider returns the same email. A

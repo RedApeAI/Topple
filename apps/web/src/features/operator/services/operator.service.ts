@@ -1,14 +1,6 @@
 import threadsFixture from "@mock/fixtures/operator-threads.json";
 import historyFixture from "@mock/fixtures/operator-history.json";
 import transcriptFixture from "@mock/fixtures/operator-transcript.json";
-// Missing integration module: @/lib/api/client
-// import { isBackendUnreachable } from "@/lib/api/client";
-// Missing integration module: @/lib/api/orchestrator
-// import { getConversation, listTurns } from "@/lib/api/orchestrator";
-// Missing integration module: @/lib/format-relative-time
-// import { formatRelativeTime } from "@/lib/format-relative-time";
-// Missing integration module: @/lib/api/orchestrator.types
-// import type { ApiTurnSummary } from "@/lib/api/orchestrator.types";
 import { isBackendUnreachable } from "@/lib/api/client";
 import { getConversation, listTurns } from "@/lib/mock/orchestrator";
 import { formatRelativeTime } from "@/lib/format-relative-time";

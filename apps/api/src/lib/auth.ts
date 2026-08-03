@@ -2,11 +2,15 @@ import { drizzleAdapter } from "@better-auth/drizzle-adapter";
 import {
   accounts,
   getDb,
+  invitations,
+  members,
+  organizations,
   sessions,
   users,
   verifications,
 } from "@repo/db-sql";
 import { betterAuth } from "better-auth";
+import { organization } from "better-auth/plugins";
 import { eq } from "drizzle-orm";
 
 import { env } from "./env.js";
@@ -31,9 +35,23 @@ const socialProviders = {
     : {}),
 };
 
+const authAllowedHosts = [
+  ...new Set([
+    new URL(env.BETTER_AUTH_URL).host,
+    ...env.FRONTEND_ORIGINS.map((origin) => new URL(origin).host),
+  ]),
+];
+
 export const auth = betterAuth({
   appName: "Plucia",
-  baseURL: env.BETTER_AUTH_URL,
+  // Plucia is accessed directly on localhost and through HTTPS development
+  // tunnels. Resolve callbacks from the incoming, allowlisted host so OAuth
+  // state cookies are created and verified on the same browser origin.
+  baseURL: {
+    allowedHosts: authAllowedHosts,
+    protocol: "auto",
+    fallback: env.BETTER_AUTH_URL,
+  },
   basePath: "/api/auth",
   secret: env.BETTER_AUTH_SECRET,
   trustedOrigins: env.FRONTEND_ORIGINS,
@@ -44,6 +62,9 @@ export const auth = betterAuth({
       account: accounts,
       session: sessions,
       verification: verifications,
+      organization: organizations,
+      member: members,
+      invitation: invitations,
     },
   }),
   advanced: {
@@ -110,7 +131,7 @@ export const auth = betterAuth({
       },
     },
   },
-  plugins: [],
+  plugins: [organization()],
   rateLimit: {
     enabled: true,
     storage: "memory",
