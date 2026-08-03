@@ -3,7 +3,6 @@
 import * as React from "react";
 import { ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
-// Missing integration module: @/lib/api/orchestrator.types
 // import type { ApiOperatorStep } from "@/lib/api/orchestrator.types";
 import type { ApiOperatorStep } from "@/lib/mock/orchestrator.types";
 

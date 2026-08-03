@@ -21,7 +21,7 @@ import { UnreadBadge } from "@/components/shared/UnreadBadge";
 import { cn } from "@/lib/utils";
 import { useUIStore } from "@/store/ui.store";
 import { useChannelNav } from "@/hooks/use-channel-nav";
-import { useAuth } from "@/lib/auth-context";
+import { useAuthStore } from "@/store/auth.store";
 import {
   bottomNavItems,
   dashboardSection,
@@ -45,7 +45,8 @@ export function Sidebar() {
   const { pathname } = useLocation();
   const navigate = useNavigate();
   const { data: channelNav } = useChannelNav();
-  const { user, logout } = useAuth();
+  const user = useAuthStore((state) => state.user);
+  const logout = useAuthStore((state) => state.logout);
 
   const unreadFor = (unreadKey?: string) =>
     channelNav?.find((c) => c.key === unreadKey)?.unread ?? 0;

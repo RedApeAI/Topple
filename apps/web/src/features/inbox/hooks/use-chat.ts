@@ -1,51 +1,79 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import {
-  approveDraft,
-  discardDraft,
-  fetchChatDetail,
-  sendContactMessage,
-} from "../services/chat.service";
+import { useEffect } from "react";
+import { useInboxStore } from "@/store/inbox.store";
+import { markChatRead } from "../services/chat.service";
 import type { ChatDetail } from "../types/chat.types";
+import type { Conversation } from "../types/conversation.types";
 
-export function useChatDetail(conversationId: string | undefined) {
-  return useQuery({
-    queryKey: ["chat", conversationId],
-    queryFn: () => fetchChatDetail(conversationId!),
-    enabled: Boolean(conversationId),
-    // New turns can land from the channel side at any time.
-    refetchInterval: 5_000,
-  });
-}
+export function useChatDetail(conversation: Conversation | undefined) {
+  const conversationId = conversation?.id;
+  const data = useInboxStore((state) =>
+    conversationId ? state.chats[conversationId] : undefined,
+  );
+  const isLoading = useInboxStore((state) =>
+    conversationId ? (state.chatLoading[conversationId] ?? false) : false,
+  );
+  const error = useInboxStore((state) =>
+    conversationId ? state.chatErrors[conversationId] : undefined,
+  );
+  const load = useInboxStore((state) => state.loadChat);
 
-function useChatInvalidation(conversationId: string | undefined) {
-  const queryClient = useQueryClient();
-  return () => {
-    queryClient.invalidateQueries({ queryKey: ["chat", conversationId] });
-    queryClient.invalidateQueries({ queryKey: ["conversations"] });
-    queryClient.invalidateQueries({ queryKey: ["channel-nav"] });
-  };
+  useEffect(() => {
+    if (conversation) void load(conversation);
+
+    if (conversation?.source !== "zernio") return;
+    const refreshOnFocus = () => {
+      void load(conversation, true);
+    };
+    window.addEventListener("focus", refreshOnFocus);
+    return () => window.removeEventListener("focus", refreshOnFocus);
+  }, [conversation, load]);
+
+  useEffect(() => {
+    if (data?.source === "zernio") {
+      void markChatRead(data).catch(() => undefined);
+    }
+  }, [data]);
+
+  return { data, isLoading, isError: Boolean(error), error };
 }
 
 export function useSendMessage(chat: ChatDetail | undefined) {
-  const invalidate = useChatInvalidation(chat?.id);
-  return useMutation({
-    mutationFn: (text: string) => {
-      if (!chat) throw new Error("Conversation still loading");
-      return sendContactMessage(chat, text);
+  const sendMessage = useInboxStore((state) => state.sendMessage);
+  const isPending = useInboxStore((state) => state.sendPending);
+  const variables = useInboxStore((state) => state.sendVariables);
+  const error = useInboxStore((state) => state.sendError);
+  return {
+    isPending,
+    variables,
+    isError: Boolean(error),
+    error,
+    mutate: (text: string) => {
+      if (!chat) return;
+      void sendMessage(chat, text).catch(() => undefined);
     },
-    onSettled: invalidate,
-  });
+  };
 }
 
 export function useDraftActions(conversationId: string | undefined) {
-  const invalidate = useChatInvalidation(conversationId);
-  const approve = useMutation({
-    mutationFn: (messageId: string) => approveDraft(messageId),
-    onSettled: invalidate,
-  });
-  const discard = useMutation({
-    mutationFn: (messageId: string) => discardDraft(messageId),
-    onSettled: invalidate,
-  });
-  return { approve, discard };
+  const approveDraft = useInboxStore((state) => state.approveDraft);
+  const discardDraft = useInboxStore((state) => state.discardDraft);
+  const isPending = useInboxStore((state) => state.draftPending);
+  return {
+    approve: {
+      isPending,
+      mutate: (messageId: string) => {
+        if (conversationId) {
+          void approveDraft(conversationId, messageId).catch(() => undefined);
+        }
+      },
+    },
+    discard: {
+      isPending,
+      mutate: (messageId: string) => {
+        if (conversationId) {
+          void discardDraft(conversationId, messageId).catch(() => undefined);
+        }
+      },
+    },
+  };
 }

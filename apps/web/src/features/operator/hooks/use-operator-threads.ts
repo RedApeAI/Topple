@@ -1,19 +1,18 @@
-import { useQuery } from "@tanstack/react-query";
-import {
-  fetchOperatorHistory,
-  fetchOperatorThreads,
-} from "../services/operator.service";
+import { useEffect } from "react";
+import { useOperatorStore } from "@/store/operator.store";
 
 export function useOperatorThreads() {
-  return useQuery({
-    queryKey: ["operator-threads"],
-    queryFn: fetchOperatorThreads,
-  });
+  const data = useOperatorStore((state) => state.threads);
+  const isLoading = useOperatorStore((state) => state.threadsLoading);
+  const load = useOperatorStore((state) => state.loadThreads);
+  useEffect(() => void load(), [load]);
+  return { data, isLoading };
 }
 
 export function useOperatorHistory() {
-  return useQuery({
-    queryKey: ["operator-history"],
-    queryFn: fetchOperatorHistory,
-  });
+  const data = useOperatorStore((state) => state.history);
+  const isLoading = useOperatorStore((state) => state.historyLoading);
+  const load = useOperatorStore((state) => state.loadHistory);
+  useEffect(() => void load(), [load]);
+  return { data, isLoading };
 }

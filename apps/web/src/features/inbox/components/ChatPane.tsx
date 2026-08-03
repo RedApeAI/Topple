@@ -18,6 +18,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { ChannelBadge } from "@/components/shared/ChannelBadge";
 import { IconButton } from "@/components/shared/IconButton";
 import { cn } from "@/lib/utils";
+import { errorMessage } from "@/lib/api/client";
 import {
   useChatDetail,
   useDraftActions,
@@ -57,7 +58,7 @@ interface ChatPaneProps {
 }
 
 export function ChatPane({ conversation, onClose }: ChatPaneProps) {
-  const { data: chat, isLoading, isError } = useChatDetail(conversation.id);
+  const { data: chat, isLoading, isError } = useChatDetail(conversation);
   const send = useSendMessage(chat);
   const { approve, discard } = useDraftActions(conversation.id);
 
@@ -137,8 +138,8 @@ export function ChatPane({ conversation, onClose }: ChatPaneProps) {
             Couldn&apos;t open this conversation
           </p>
           <p className="max-w-[360px] text-[13px] text-muted-foreground">
-            It isn&apos;t available from the orchestrator — it may be fixture
-            data, or the backend may be offline.
+            The messages aren&apos;t available right now. Check the channel
+            connection and try again.
           </p>
         </div>
       ) : (
@@ -153,10 +154,16 @@ export function ChatPane({ conversation, onClose }: ChatPaneProps) {
           <MessageList
             messages={chat.messages}
             pendingText={send.isPending ? send.variables : undefined}
+            pendingOutbound={chat.source === "zernio"}
             onApprove={(id) => approve.mutate(id)}
             onDiscard={(id) => discard.mutate(id)}
             draftBusy={approve.isPending || discard.isPending}
           />
+          {send.isError ? (
+            <p className="px-4 pb-1 text-[12px] text-destructive" role="alert">
+              {errorMessage(send.error, "Message could not be sent")}
+            </p>
+          ) : null}
           <Composer
             disabled={send.isPending}
             onSend={(text) => send.mutate(text)}
@@ -181,6 +188,7 @@ interface MessageListProps {
   messages: ChatMessage[];
   /** Optimistic echo of the message currently being sent. */
   pendingText?: string;
+  pendingOutbound: boolean;
   onApprove: (messageId: string) => void;
   onDiscard: (messageId: string) => void;
   draftBusy: boolean;
@@ -189,6 +197,7 @@ interface MessageListProps {
 function MessageList({
   messages,
   pendingText,
+  pendingOutbound,
   onApprove,
   onDiscard,
   draftBusy,
@@ -217,13 +226,25 @@ function MessageList({
         />
       ))}
       {pendingText && (
-        <div className="flex max-w-[75%] flex-col items-start gap-1 self-start">
-          <div className="rounded-[12px] rounded-bl-[4px] border border-border/60 bg-bubble-incoming px-3.5 py-2.5 text-[14px] leading-[1.4] text-foreground opacity-70">
+        <div
+          className={cn(
+            "flex max-w-[75%] flex-col gap-1",
+            pendingOutbound ? "items-end self-end" : "items-start self-start",
+          )}
+        >
+          <div
+            className={cn(
+              "rounded-[12px] px-3.5 py-2.5 text-[14px] leading-[1.4] text-foreground opacity-70",
+              pendingOutbound
+                ? "rounded-br-[4px] bg-bubble-outgoing"
+                : "rounded-bl-[4px] border border-border/60 bg-bubble-incoming",
+            )}
+          >
             {pendingText}
           </div>
           <span className="flex items-center gap-1 px-1 text-[12px] text-muted-foreground">
             <Loader2 className="h-3 w-3 animate-spin" />
-            Waiting for the agent…
+            {pendingOutbound ? "Sending…" : "Waiting for the agent…"}
           </span>
         </div>
       )}
@@ -248,6 +269,7 @@ function MessageBubble({
   const inbound = message.direction === "inbound";
   const isDraft = message.status === "draft";
   const suppressed = message.status === "suppressed";
+  const failed = message.status === "failed";
 
   return (
     <div
@@ -265,6 +287,7 @@ function MessageBubble({
           isDraft &&
             "border border-dashed border-foreground/40 bg-bubble-outgoing/50",
           suppressed && "opacity-50",
+          failed && "border border-destructive/40",
         )}
       >
         {message.text}
@@ -295,6 +318,7 @@ function MessageBubble({
           </>
         )}
         {suppressed && <span>Suppressed by guardrails</span>}
+        {failed && <span className="text-destructive">Failed</span>}
       </span>
     </div>
   );

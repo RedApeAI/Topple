@@ -1,5 +1,3 @@
-// Missing integration module: @/lib/api/orchestrator.types
-// import type { ApiOperatorActionResult, ApiOperatorStep } from "@/lib/api/orchestrator.types";
 import type {
   ApiOperatorActionResult,
   ApiOperatorStep,
@@ -32,3 +30,8 @@ export interface OperatorMessage {
 }
 
 export type OperatorPanelTab = "threads" | "history";
+
+export interface WorkflowStep {
+  label: string;
+  status: "pending" | "running" | "done" | "failed";
+}

@@ -1,9 +1,3 @@
-// Missing integration module: @/lib/api/channel-map
-// import { identityChannelToUi } from "@/lib/api/channel-map";
-// Missing integration module: @/lib/api/orchestrator
-// import { listContacts } from "@/lib/api/orchestrator";
-// Missing integration module: @/lib/api/orchestrator.types
-// import type { ApiContact } from "@/lib/api/orchestrator.types";
 import { identityChannelToUi } from "@/lib/api/channel-map";
 import { listContacts } from "@/lib/mock/orchestrator";
 import type { ApiContact } from "@/lib/mock/orchestrator.types";

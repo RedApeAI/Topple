@@ -44,6 +44,17 @@ const rawEnvSchema = z
     GOOGLE_CLIENT_SECRET: optionalCredential,
     APPLE_CLIENT_ID: optionalCredential,
     APPLE_CLIENT_SECRET: optionalCredential,
+    ZERNIO_API_KEY: optionalCredential,
+    ZERNIO_WEBHOOK_SECRET: optionalCredential,
+    ZERNIO_WEBHOOK_PUBLIC_URL: z.preprocess(
+      (value) => (value === "" ? undefined : value),
+      z.url().optional(),
+    ),
+    ZERNIO_BASE_URL: z.url().default("https://zernio.com/api/v1"),
+    ZERNIO_CONNECT_REDIRECT_URL: z.preprocess(
+      (value) => (value === "" ? undefined : value),
+      z.url().optional(),
+    ),
   })
   .superRefine((value, context) => {
     for (const [provider, clientId, clientSecret] of [
@@ -58,6 +69,7 @@ const rawEnvSchema = z
         });
       }
     }
+
   });
 
 function parseOrigins(value: string): string[] {

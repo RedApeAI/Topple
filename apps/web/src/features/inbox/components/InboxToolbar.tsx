@@ -16,22 +16,33 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { AddLeadDialog } from "@/features/crm/components/AddLeadDialog";
-import { ImportLeadsDialog } from "@/features/crm/components/ImportLeadsDialog";
 import { ScopeTabs } from "./ScopeTabs";
 import type { InboxScope } from "../types/conversation.types";
+
+const AddLeadDialog = React.lazy(() =>
+  import("@/features/crm/components/AddLeadDialog").then((module) => ({
+    default: module.AddLeadDialog,
+  })),
+);
+const ImportLeadsDialog = React.lazy(() =>
+  import("@/features/crm/components/ImportLeadsDialog").then((module) => ({
+    default: module.ImportLeadsDialog,
+  })),
+);
 
 interface InboxToolbarProps {
   scope: InboxScope;
   onScopeChange: (scope: InboxScope) => void;
   /** When set, the toolbar shows this heading instead of the scope tabs. */
   title?: string;
+  action?: React.ReactNode;
 }
 
 export function InboxToolbar({
   scope,
   onScopeChange,
   title,
+  action,
 }: InboxToolbarProps) {
   const [importOpen, setImportOpen] = React.useState(false);
   const [addLeadOpen, setAddLeadOpen] = React.useState(false);
@@ -47,6 +58,7 @@ export function InboxToolbar({
       )}
 
       <div className="flex items-center gap-2">
+        {action}
         <div className="flex items-center gap-1.5">
           <IconButton
             aria-label="Filter conversations"
@@ -85,8 +97,16 @@ export function InboxToolbar({
         </DropdownMenu>
       </div>
 
-      <ImportLeadsDialog open={importOpen} onOpenChange={setImportOpen} />
-      <AddLeadDialog open={addLeadOpen} onOpenChange={setAddLeadOpen} />
+      {importOpen ? (
+        <React.Suspense fallback={null}>
+          <ImportLeadsDialog open onOpenChange={setImportOpen} />
+        </React.Suspense>
+      ) : null}
+      {addLeadOpen ? (
+        <React.Suspense fallback={null}>
+          <AddLeadDialog open onOpenChange={setAddLeadOpen} />
+        </React.Suspense>
+      ) : null}
     </div>
   );
 }

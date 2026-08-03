@@ -9,7 +9,6 @@ import {
 } from "@tanstack/react-table";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Skeleton } from "@/components/ui/skeleton";
-// Missing integration module: @/lib/format-relative-time
 // import { formatRelativeTime } from "@/lib/format-relative-time";
 import { formatRelativeTime } from "@/lib/format-relative-time";
 import { ContactChannelBadges } from "./ContactChannelBadges";

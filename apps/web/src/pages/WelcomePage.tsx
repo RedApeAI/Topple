@@ -1,19 +1,28 @@
 import { useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
-import { useAuth } from "@/lib/auth-context";
-
-const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:4000";
+import { apiClient, errorMessage } from "@/lib/api/client";
+import { useAuthStore } from "@/store/auth.store";
 
 type Step = "oauth" | "email" | "password";
+
+function authReturnPath(state: unknown): string {
+  const pathname = (state as { from?: { pathname?: unknown } } | null)?.from
+    ?.pathname;
+  return typeof pathname === "string" && pathname.startsWith("/dashboard/")
+    ? pathname
+    : "/dashboard/inbox";
+}
 
 function OAuthButton({
   provider,
   label,
   icon,
+  returnTo,
 }: {
   provider: string;
   label: string;
   icon: React.ReactNode;
+  returnTo: string;
 }) {
   const [isLoading, setIsLoading] = useState(false);
 
@@ -21,37 +30,24 @@ function OAuthButton({
     setIsLoading(true);
     try {
       // Better Auth requires POST request for social sign-in
-      const redirectTo = `${window.location.origin}/dashboard/inbox`;
-      const res = await fetch(`${API_URL}/api/auth/sign-in/social`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({
-          provider,
-          callbackURL: redirectTo,
-        }),
-      });
-
-      if (res.ok) {
-        const data = await res.json();
-        // Better Auth returns a URL to redirect to
-        if (data.url) {
-          window.location.href = data.url;
-        } else {
-          // Fallback: try to open the provider's auth URL
-          const url = res.headers.get("Location");
-          if (url) {
-            window.location.href = url;
-          }
-        }
-      } else {
-        const error = await res.text();
-        console.error("OAuth initiation failed:", error);
-        alert(`Failed to initiate ${provider} login. Please try again.`);
-      }
+      const redirectTo = new URL(returnTo, window.location.origin).toString();
+      const response = await apiClient.post<{ url?: string }>(
+        "/api/auth/sign-in/social",
+        { provider, callbackURL: redirectTo },
+      );
+      const url = response.data.url ?? response.headers.location;
+      if (!url)
+        throw new Error(
+          "The authentication provider returned no redirect URL.",
+        );
+      window.location.assign(url);
     } catch (err) {
-      console.error("OAuth error:", err);
-      alert(`Failed to connect to ${provider}. Please try again.`);
+      alert(
+        errorMessage(
+          err,
+          `Failed to connect to ${provider}. Please try again.`,
+        ),
+      );
     } finally {
       setIsLoading(false);
     }
@@ -132,7 +128,10 @@ function TextField({
 export default function WelcomePage() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { isAuthenticated, login, register } = useAuth();
+  const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
+  const login = useAuthStore((state) => state.login);
+  const register = useAuthStore((state) => state.register);
+  const returnTo = authReturnPath(location.state);
   const [step, setStep] = useState<Step>("oauth");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -143,12 +142,9 @@ export default function WelcomePage() {
   // Redirect to dashboard if already authenticated
   useEffect(() => {
     if (isAuthenticated) {
-      const from =
-        (location.state as { from?: { pathname?: string } })?.from?.pathname ||
-        "/dashboard/inbox";
-      navigate(from, { replace: true });
+      navigate(returnTo, { replace: true });
     }
-  }, [isAuthenticated, navigate, location.state]);
+  }, [isAuthenticated, navigate, returnTo]);
 
   const checkEmail = async () => {
     if (!/^\S+@\S+\.\S+$/.test(email.trim())) {
@@ -175,10 +171,7 @@ export default function WelcomePage() {
       }
 
       // After successful auth, redirect to dashboard
-      const from =
-        (location.state as { from?: { pathname?: string } })?.from?.pathname ||
-        "/dashboard/inbox";
-      navigate(from, { replace: true });
+      navigate(returnTo, { replace: true });
     } catch (err) {
       const errorMessage =
         err instanceof Error ? err.message : "Something went wrong.";
@@ -244,6 +237,7 @@ export default function WelcomePage() {
             <OAuthButton
               provider="google"
               label="Continue with Google"
+              returnTo={returnTo}
               icon={
                 <svg width="20" height="20" viewBox="0 0 24 24">
                   <path
@@ -268,6 +262,7 @@ export default function WelcomePage() {
             <OAuthButton
               provider="apple"
               label="Continue with Apple"
+              returnTo={returnTo}
               icon={
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="#000">
                   <path d="M17.05 20.28c-.98.95-2.05.88-3.08.4-1.09-.5-2.08-.48-3.24 0-1.44.62-2.2.44-3.06-.4C2.79 15.25 3.51 7.59 9.05 7.31c1.35.07 2.29.74 3.08.8 1.18-.24 2.31-.93 3.57-.84 1.51.12 2.65.72 3.4 1.8-3.12 1.87-2.56 5.98.51 7.14-.6 1.62-1.42 3.22-2.56 4.07zM12.03 7.25c-.15-2.23 1.66-4.07 3.74-4.25.29 2.58-2.34 4.5-3.74 4.25z" />
@@ -277,6 +272,7 @@ export default function WelcomePage() {
             <OAuthButton
               provider="microsoft"
               label="Continue with Microsoft"
+              returnTo={returnTo}
               icon={
                 <svg width="20" height="20" viewBox="0 0 24 24">
                   <rect x="2" y="2" width="9.5" height="9.5" fill="#F25022" />

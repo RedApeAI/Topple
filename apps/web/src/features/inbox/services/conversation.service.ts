@@ -1,16 +1,7 @@
 import conversationsFixture from "@mock/fixtures/conversations.json";
 import channelsFixture from "@mock/fixtures/channels.json";
-// Missing integration module: @/lib/api/client
-// import { isBackendUnreachable } from "@/lib/api/client";
-// Missing integration module: @/lib/api/channel-map
-// import { toApiChannel, toUiChannel } from "@/lib/api/channel-map";
-// Missing integration module: @/lib/api/orchestrator
-// import { listConversations } from "@/lib/api/orchestrator";
-// Missing integration module: @/lib/format-relative-time
-// import { formatRelativeTime } from "@/lib/format-relative-time";
-// Missing integration module: @/lib/api/orchestrator.types
-// import type { ApiConversation } from "@/lib/api/orchestrator.types";
 import { isBackendUnreachable } from "@/lib/api/client";
+import { apiClient } from "@/lib/api/client";
 import { toApiChannel, toUiChannel } from "@/lib/api/channel-map";
 import { listConversations } from "@/lib/mock/orchestrator";
 import { formatRelativeTime } from "@/lib/format-relative-time";
@@ -33,6 +24,7 @@ function toConversation(convo: ApiConversation): Conversation {
     id: convo._id,
     name: contactName(convo),
     channel: toUiChannel(convo.channel),
+    source: "mock",
     preview: convo.last_message?.text ?? "",
     timestamp: formatRelativeTime(
       convo.last_message?.created_at ?? convo.last_message_at,
@@ -42,9 +34,47 @@ function toConversation(convo: ApiConversation): Conversation {
   };
 }
 
+interface ZernioConversation {
+  id: string;
+  platform: string;
+  accountId: string;
+  participantId: string;
+  participantName?: string;
+  participantPicture?: string | null;
+  lastMessage?: string;
+  updatedTime?: string;
+  unreadCount?: number | null;
+}
+
+async function fetchWhatsAppConversations(): Promise<Conversation[]> {
+  const { data } = await apiClient.get<{
+    data: {
+      data: ZernioConversation[];
+      pagination: { hasMore: boolean; nextCursor: string | null };
+    };
+  }>("/api/v1/zernio/conversations", { params: { limit: 100 } });
+
+  return data.data.data.map((conversation) => ({
+    id: conversation.id,
+    name: conversation.participantName || conversation.participantId,
+    channel: "whatsapp",
+    source: "zernio",
+    accountId: conversation.accountId,
+    externalContactId: conversation.participantId,
+    preview: conversation.lastMessage ?? "",
+    timestamp: conversation.updatedTime
+      ? formatRelativeTime(conversation.updatedTime)
+      : "",
+    avatarUrl: conversation.participantPicture ?? undefined,
+    unread: (conversation.unreadCount ?? 0) > 0,
+  }));
+}
+
 export async function fetchConversations(
   scope: InboxScope = "all",
 ): Promise<Conversation[]> {
+  if (scope === "whatsapp") return fetchWhatsAppConversations();
+
   const channel = scope === "all" ? undefined : toApiChannel(scope);
   // UI-only channels (e.g. linkedin) have no orchestrator data yet.
   if (scope !== "all" && channel === null) return [];

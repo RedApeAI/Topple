@@ -246,6 +246,17 @@
     background-image: linear-gradient(180deg, #3a3a38 0%, #242422 100%);
   }
 
+  /* Keep the primary topbar action bright and readable on the dark canvas. */
+  .dark .topbar-task-button {
+    background-color: #f2f1ee;
+    background-image: none;
+    color: #171715;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+  }
+  .dark .topbar-task-button:hover {
+    background-color: #ffffff;
+  }
+
   /* The single, signature brand gradient — logo + FAB ring only */
   .surface-brand-gradient {
     background-image: linear-gradient(

@@ -1,5 +1,3 @@
-import * as XLSX from "xlsx";
-
 export interface ParsedSheet {
   headers: string[];
   rows: Record<string, string>[];
@@ -11,6 +9,9 @@ export interface ParsedSheet {
  * CSV/binary distinction itself from the buffer contents.
  */
 export async function parseLeadFile(file: File): Promise<ParsedSheet> {
+  // Spreadsheet parsing is only needed after a user selects a file. Keeping
+  // SheetJS out of the initial graph avoids shipping it with the inbox UI.
+  const XLSX = await import("xlsx");
   const buffer = await file.arrayBuffer();
   // `raw: true` stops SheetJS from number-sniffing CSV cells — without it,
   // a leading-"+" phone number like "+971555111222" parses as the *number*

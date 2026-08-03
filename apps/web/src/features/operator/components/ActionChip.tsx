@@ -1,7 +1,6 @@
 "use client";
 
 import { Check, CheckCircle2, Trash2, XCircle } from "lucide-react";
-// Missing integration module: @/lib/api/orchestrator.types
 // import type { ApiOperatorActionResult } from "@/lib/api/orchestrator.types";
 import type { ApiOperatorActionResult } from "@/lib/mock/orchestrator.types";
 

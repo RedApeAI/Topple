@@ -1,28 +1,29 @@
-import { useMutation, useQueryClient } from "@tanstack/react-query";
-// Missing integration module: @/lib/api/orchestrator
-// import { importLeads } from "@/lib/api/orchestrator";
-// Missing integration module: @/lib/api/orchestrator.types
-// import type { ApiLeadImportResponse, ApiLeadImportRow } from "@/lib/api/orchestrator.types";
-import { importLeads } from "@/lib/mock/orchestrator";
+import { useCrmStore } from "@/store/crm.store";
 import type {
   ApiLeadImportResponse,
   ApiLeadImportRow,
 } from "@/lib/mock/orchestrator.types";
 
+interface MutationOptions {
+  onSuccess?: (response: ApiLeadImportResponse) => void;
+  onError?: (error: unknown) => void;
+}
+
 export function useImportLeads() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (rows: ApiLeadImportRow[]) => importLeads(rows),
-    onSuccess: (response: ApiLeadImportResponse) => {
-      console.log(
-        `[leads] import: ${response.created} created, ${response.updated} updated, ${response.skipped} skipped`,
-      );
-      console.table(response.results);
-      queryClient.invalidateQueries({ queryKey: ["leads"] });
-      queryClient.invalidateQueries({ queryKey: ["channel-nav"] });
+  const importRows = useCrmStore((state) => state.importRows);
+  const isPending = useCrmStore((state) => state.importPending);
+  const error = useCrmStore((state) => state.importError);
+  const reset = useCrmStore((state) => state.resetImport);
+
+  return {
+    isPending,
+    isError: Boolean(error),
+    error,
+    reset,
+    mutate: (rows: ApiLeadImportRow[], options?: MutationOptions) => {
+      void importRows(rows)
+        .then((response) => options?.onSuccess?.(response))
+        .catch((error: unknown) => options?.onError?.(error));
     },
-    onError: (error) => {
-      console.error("[leads] import failed:", error);
-    },
-  });
+  };
 }

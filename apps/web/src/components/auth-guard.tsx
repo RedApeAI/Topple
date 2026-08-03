@@ -1,12 +1,13 @@
 import { Navigate, useLocation } from "react-router-dom";
-import { useAuth } from "@/lib/auth-context";
+import { useAuthStore } from "@/store/auth.store";
 
 interface AuthGuardProps {
   children: React.ReactNode;
 }
 
 export function AuthGuard({ children }: AuthGuardProps) {
-  const { isAuthenticated, isLoading } = useAuth();
+  const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
+  const isLoading = useAuthStore((state) => state.isLoading);
   const location = useLocation();
 
   if (isLoading) {

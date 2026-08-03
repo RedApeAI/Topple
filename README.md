@@ -5,7 +5,7 @@ This repo is wired as a pnpm + Turborepo workspace.
 ## Apps
 
 - `apps/api`: Hono + Better Auth primary API, runs on port `4000`.
-- `apps/web`: Next.js frontend for the application, runs on port `3000`.
+- `apps/web`: React + Vite frontend for the application, runs on port `3000`.
 - `apps/docs`: Next.js documentation site, runs on port `3001`.
 - `apps/worker`: FastAPI worker API, runs on port `8000`.
 - `apps/call`: Python call API, runs on port `8001`.

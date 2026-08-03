@@ -1,6 +1,6 @@
 import { Check, Circle, Loader2, X } from "lucide-react";
 import { cn } from "@/lib/utils";
-import type { WorkflowStep } from "@/services/operator";
+import type { WorkflowStep } from "../types/operator.types";
 
 const STEP_ICON: Record<
   WorkflowStep["status"],

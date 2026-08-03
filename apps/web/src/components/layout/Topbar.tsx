@@ -55,7 +55,7 @@ export function Topbar({ breadcrumb, className, onCreateTask }: TopbarProps) {
         <button
           type="button"
           onClick={onCreateTask}
-          className="surface-primary-gradient flex items-center gap-1 rounded-md py-2.5 pl-3 pr-4 text-[15px] font-medium text-primary-foreground"
+          className="surface-primary-gradient topbar-task-button flex items-center gap-1 rounded-md py-2.5 pl-3 pr-4 text-[15px] font-medium text-primary-foreground"
         >
           <Plus className="h-5 w-5" />
           Create Task

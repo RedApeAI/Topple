@@ -1,11 +1,13 @@
-import { useQuery } from "@tanstack/react-query";
-import { fetchChannelNav } from "@/features/inbox/services/conversation.service";
+import { useEffect } from "react";
+import { useInboxStore } from "@/store/inbox.store";
 
 export function useChannelNav() {
-  return useQuery({
-    queryKey: ["channel-nav"],
-    queryFn: fetchChannelNav,
-    // Unread counts are derived from live conversations — keep them fresh.
-    refetchInterval: 15_000,
-  });
+  const data = useInboxStore((state) => state.channelNav);
+  const load = useInboxStore((state) => state.loadChannelNav);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  return { data };
 }

@@ -1,13 +1,21 @@
 import type { ChannelKey } from "@/types/channel.types";
-// Missing integration module: @/lib/api/orchestrator.types
-// import type { ApiMessage } from "@/lib/api/orchestrator.types";
-import type { ApiMessage } from "@/lib/mock/orchestrator.types";
+
+export type ChatMessageStatus =
+  | "received"
+  | "sent"
+  | "delivered"
+  | "read"
+  | "failed"
+  | "draft"
+  | "approved"
+  | "discarded"
+  | "suppressed";
 
 export interface ChatMessage {
   id: string;
   direction: "inbound" | "outbound";
   text: string;
-  status: ApiMessage["status"];
+  status: ChatMessageStatus;
   time: string;
 }
 
@@ -15,6 +23,8 @@ export interface ChatMessage {
 export interface ChatDetail {
   id: string;
   channel: ChannelKey;
+  source: "mock" | "zernio";
+  accountId?: string;
   stage: string;
   status: "active" | "handed_off" | "closed";
   mode: "autopilot" | "copilot";
