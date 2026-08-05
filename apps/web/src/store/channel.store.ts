@@ -1,10 +1,10 @@
 import { create } from "zustand";
 import {
-  connectWhatsAppCredentials,
   disconnectChannel,
   fetchChannelStatus,
   fetchConnectUrl,
-  type WhatsAppCredentialsInput,
+  listWhatsAppPhoneNumbers,
+  selectWhatsAppPhoneNumber,
 } from "@/features/channels/services/zernio.service";
 import {
   isZernioOAuthResult,
@@ -16,6 +16,7 @@ import type {
   ChannelStatus,
   ConnectablePlatform,
   ConnectedChannelAccount,
+  WhatsAppPhoneNumber,
 } from "@/features/channels/types/zernio.types";
 
 interface ChannelStore {
@@ -25,10 +26,13 @@ interface ChannelStore {
   disconnecting?: ConnectablePlatform;
   error?: unknown;
   load: (force?: boolean) => Promise<void>;
-  connect: (platform: "linkedin") => Promise<void>;
-  connectWhatsAppWithCredentials: (
-    input: WhatsAppCredentialsInput,
-  ) => Promise<void>;
+  connect: (platform: ConnectablePlatform) => Promise<void>;
+  fetchPhoneNumbers: (tempToken: string) => Promise<WhatsAppPhoneNumber[]>;
+  selectPhoneNumber: (input: {
+    tempToken: string;
+    phoneNumberId: string;
+    wabaId: string;
+  }) => Promise<void>;
   disconnect: (
     platform: ConnectablePlatform,
     accountId: string,
@@ -167,14 +171,17 @@ export const useChannelStore = create<ChannelStore>((set, get) => ({
     }
   },
 
-  connectWhatsAppWithCredentials: async (input) => {
-    set({ connecting: "whatsapp", error: undefined });
+  fetchPhoneNumbers: async (tempToken) => {
+    return listWhatsAppPhoneNumbers(tempToken);
+  },
+
+  selectPhoneNumber: async (input) => {
+    set({ error: undefined });
     try {
-      await connectWhatsAppCredentials(input);
+      await selectWhatsAppPhoneNumber(input);
       await get().load(true);
-      set({ connecting: undefined });
     } catch (error) {
-      set({ error, connecting: undefined });
+      set({ error });
       throw error;
     }
   },

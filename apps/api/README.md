@@ -87,6 +87,9 @@ the API forwards it to Zernio without persisting or logging it.
 | -------- | ------------------------------------------------------- | -------------------------------------------------- |
 | `GET`    | `/api/v1/zernio/channels`                               | Sync and return connected account status           |
 | `POST`   | `/api/v1/zernio/channels/linkedin/connect`              | Start hosted LinkedIn OAuth                        |
+| `POST`   | `/api/v1/zernio/channels/whatsapp/connect`              | Start headless WhatsApp Embedded Signup            |
+| `GET`    | `/api/v1/zernio/channels/whatsapp/phone-numbers`        | List numbers to pick after Embedded Signup         |
+| `POST`   | `/api/v1/zernio/channels/whatsapp/phone-numbers/select` | Bind the phone number the user picked              |
 | `POST`   | `/api/v1/zernio/channels/whatsapp/credentials`          | Connect WhatsApp with server-side Meta credentials |
 | `DELETE` | `/api/v1/zernio/channels/:platform/:accountId`          | Disconnect a tenant-owned account                  |
 | `GET`    | `/api/v1/zernio/conversations`                          | List authenticated tenant WhatsApp threads         |
@@ -111,14 +114,28 @@ Required production configuration:
   platforms such as LinkedIn; defaults to `/dashboard/zernio/callback` on the
   first configured frontend origin.
 
-WhatsApp uses the headless credentials route with a permanent
-Meta System User token, WABA ID, Phone Number ID, and optional six-digit PIN.
-The API derives the tenant's Zernio profile, forwards those values without
-persisting or logging them, and returns `Cache-Control: no-store`. This flow
-does not use the Facebook JS SDK, browser redirects, or domain allowlisting.
-The Meta token must include `whatsapp_business_management` and
-`whatsapp_business_messaging`. These Meta credentials are entered in the
-WhatsApp dashboard connection form; they do not belong in either `.env` file.
+WhatsApp connects through Meta's Embedded Signup in headless mode. The web app
+calls `POST /channels/whatsapp/connect`, opens the returned Zernio `authUrl`,
+and the user authorizes inside Meta's signup page without entering a System
+User token, WABA ID, or Phone Number ID. When the connected WABA has a single
+phone number, Zernio auto-completes the connection and redirects the browser to
+the Plucia callback with an `accountId`. When it has two or more numbers,
+Zernio redirects with `step=select_phone_number` and a single-use `tempToken`;
+the Plucia UI calls `GET /channels/whatsapp/phone-numbers?tempToken=…` and then
+`POST /channels/whatsapp/phone-numbers/select` with the picked `phoneNumberId`
+and `wabaId`. These endpoints derive the tenant's Zernio profile server-side,
+so the browser never supplies or receives a `profileId` and the one-time token
+is never persisted or logged.
+
+The older headless credentials route remains available for server-to-server
+setups that already hold a permanent Meta System User token, WABA ID, Phone
+Number ID, and optional six-digit PIN. The API derives the tenant's Zernio
+profile, forwards those values without persisting or logging them, and returns
+`Cache-Control: no-store`. This flow does not use the Facebook JS SDK, browser
+redirects, or domain allowlisting. The Meta token must include
+`whatsapp_business_management` and `whatsapp_business_messaging`. These Meta
+credentials are entered programmatically; they do not belong in either `.env`
+file.
 
 When the WhatsApp inbox opens, the web app idempotently calls the configure
 route. The API creates or updates the `Plucia WhatsApp Inbox` webhook in

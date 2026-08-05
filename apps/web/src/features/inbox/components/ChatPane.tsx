@@ -24,6 +24,9 @@ import {
   useDraftActions,
   useSendMessage,
 } from "../hooks/use-chat";
+import { useRealtimeMessages } from "../hooks/use-realtime-messages";
+import { useTypingIndicator } from "../hooks/use-typing";
+import { wsService } from "@/lib/websocket/service";
 import type { ChatMessage } from "../types/chat.types";
 import type { Conversation } from "../types/conversation.types";
 
@@ -61,6 +64,12 @@ export function ChatPane({ conversation, onClose }: ChatPaneProps) {
   const { data: chat, isLoading, isError } = useChatDetail(conversation);
   const send = useSendMessage(chat);
   const { approve, discard } = useDraftActions(conversation.id);
+
+  useRealtimeMessages(conversation.channel === "whatsapp", conversation);
+  // Typing presence only makes sense on realtime (WhatsApp) threads.
+  const typing = useTypingIndicator(
+    conversation.channel === "whatsapp" ? conversation.id : undefined,
+  );
 
   return (
     <section
@@ -153,8 +162,6 @@ export function ChatPane({ conversation, onClose }: ChatPaneProps) {
         >
           <MessageList
             messages={chat.messages}
-            pendingText={send.isPending ? send.variables : undefined}
-            pendingOutbound={chat.source === "zernio"}
             onApprove={(id) => approve.mutate(id)}
             onDiscard={(id) => discard.mutate(id)}
             draftBusy={approve.isPending || discard.isPending}
@@ -164,8 +171,24 @@ export function ChatPane({ conversation, onClose }: ChatPaneProps) {
               {errorMessage(send.error, "Message could not be sent")}
             </p>
           ) : null}
+          {typing ? (
+            <p
+              className="flex items-center gap-1.5 px-4 pb-1 text-[12px] text-muted-foreground"
+              aria-live="polite"
+            >
+              <span className="flex items-center gap-0.5">
+                <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-muted-foreground" />
+                <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-muted-foreground [animation-delay:120ms]" />
+                <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-muted-foreground [animation-delay:240ms]" />
+              </span>
+              typing…
+            </p>
+          ) : null}
           <Composer
             disabled={send.isPending}
+            conversationId={
+              conversation.channel === "whatsapp" ? conversation.id : undefined
+            }
             onSend={(text) => send.mutate(text)}
           />
         </div>
@@ -186,9 +209,6 @@ function MessagesSkeleton() {
 
 interface MessageListProps {
   messages: ChatMessage[];
-  /** Optimistic echo of the message currently being sent. */
-  pendingText?: string;
-  pendingOutbound: boolean;
   onApprove: (messageId: string) => void;
   onDiscard: (messageId: string) => void;
   draftBusy: boolean;
@@ -196,8 +216,6 @@ interface MessageListProps {
 
 function MessageList({
   messages,
-  pendingText,
-  pendingOutbound,
   onApprove,
   onDiscard,
   draftBusy,
@@ -207,15 +225,15 @@ function MessageList({
 
   React.useEffect(() => {
     bottomRef.current?.scrollIntoView({ block: "end" });
-  }, [visible.length, pendingText]);
+  }, [visible.length, messages.length]);
 
   return (
     <div className="scrollbar-none flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-4 py-4">
-      {visible.length === 0 && !pendingText && (
+      {visible.length === 0 ? (
         <p className="m-auto text-[13px] text-muted-foreground">
           No messages in this conversation yet.
         </p>
-      )}
+      ) : null}
       {visible.map((message) => (
         <MessageBubble
           key={message.id}
@@ -225,29 +243,6 @@ function MessageList({
           draftBusy={draftBusy}
         />
       ))}
-      {pendingText && (
-        <div
-          className={cn(
-            "flex max-w-[75%] flex-col gap-1",
-            pendingOutbound ? "items-end self-end" : "items-start self-start",
-          )}
-        >
-          <div
-            className={cn(
-              "rounded-[12px] px-3.5 py-2.5 text-[14px] leading-[1.4] text-foreground opacity-70",
-              pendingOutbound
-                ? "rounded-br-[4px] bg-bubble-outgoing"
-                : "rounded-bl-[4px] border border-border/60 bg-bubble-incoming",
-            )}
-          >
-            {pendingText}
-          </div>
-          <span className="flex items-center gap-1 px-1 text-[12px] text-muted-foreground">
-            <Loader2 className="h-3 w-3 animate-spin" />
-            {pendingOutbound ? "Sending…" : "Waiting for the agent…"}
-          </span>
-        </div>
-      )}
       <div ref={bottomRef} />
     </div>
   );
@@ -326,17 +321,50 @@ function MessageBubble({
 
 interface ComposerProps {
   disabled: boolean;
+  conversationId?: string;
   onSend: (text: string) => void;
 }
 
-function Composer({ disabled, onSend }: ComposerProps) {
+const TYPING_EMIT_INTERVAL_MS = 3000;
+
+function Composer({ disabled, conversationId, onSend }: ComposerProps) {
   const [value, setValue] = React.useState("");
+  const lastTypingSentAt = React.useRef(0);
+
+  React.useEffect(
+    () => () => {
+      if (conversationId) wsService.stopTyping(conversationId);
+    },
+    [conversationId],
+  );
+
+  const emitTyping = () => {
+    if (!conversationId) return;
+    const now = Date.now();
+    if (now - lastTypingSentAt.current >= TYPING_EMIT_INTERVAL_MS) {
+      lastTypingSentAt.current = now;
+      wsService.startTyping(conversationId);
+    }
+  };
 
   const submit = () => {
     const text = value.trim();
     if (!text || disabled) return;
     onSend(text);
     setValue("");
+    lastTypingSentAt.current = 0;
+    if (conversationId) wsService.stopTyping(conversationId);
+  };
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const next = e.target.value;
+    setValue(next);
+    if (next.trim()) {
+      emitTyping();
+    } else {
+      lastTypingSentAt.current = 0;
+      if (conversationId) wsService.stopTyping(conversationId);
+    }
   };
 
   return (
@@ -358,7 +386,7 @@ function Composer({ disabled, onSend }: ComposerProps) {
         </IconButton>
         <input
           value={value}
-          onChange={(e) => setValue(e.target.value)}
+          onChange={handleChange}
           onKeyDown={(e) => {
             if (e.key === "Enter") {
               e.preventDefault();

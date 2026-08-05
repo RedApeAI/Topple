@@ -108,15 +108,20 @@ authRoutes.post("/logout", async (context) => {
 });
 
 authRoutes.get("/session", async (context) => {
-  const result = await getSession(context.req.raw.headers);
-  if (!result.ok) {
+  try {
+    const result = await getSession(context.req.raw.headers);
+    if (!result.ok) {
+      return context.json({ data: null, authenticated: false }, 200);
+    }
+    applyCookies(context, result);
+    return context.json({
+      data: result.data,
+      authenticated: true,
+    });
+  } catch (error) {
+    console.error("GET /auth/session error:", error);
     return context.json({ data: null, authenticated: false }, 200);
   }
-  applyCookies(context, result);
-  return context.json({
-    data: result.data,
-    authenticated: true,
-  });
 });
 
 authRoutes.get("/me", requireAuth, async (context) => {

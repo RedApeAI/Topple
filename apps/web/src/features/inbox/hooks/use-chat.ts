@@ -40,11 +40,9 @@ export function useChatDetail(conversation: Conversation | undefined) {
 export function useSendMessage(chat: ChatDetail | undefined) {
   const sendMessage = useInboxStore((state) => state.sendMessage);
   const isPending = useInboxStore((state) => state.sendPending);
-  const variables = useInboxStore((state) => state.sendVariables);
   const error = useInboxStore((state) => state.sendError);
   return {
     isPending,
-    variables,
     isError: Boolean(error),
     error,
     mutate: (text: string) => {

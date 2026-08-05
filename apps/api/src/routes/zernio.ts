@@ -12,11 +12,13 @@ import {
   getChannelStatus,
   ingestZernioWebhook,
   listConversationMessages,
+  listWhatsAppPhoneNumbers,
   listWhatsAppTemplates,
   listWhatsAppConversations,
   listZernioWebhookEvents,
   markWhatsAppConversationRead,
   resolveTenant,
+  selectWhatsAppPhoneNumber,
   sendConversationMessage,
   startConnection,
   verifyZernioWebhookSignature,
@@ -26,7 +28,6 @@ import { env } from "../lib/env.js";
 import type { AppEnv } from "../types.js";
 
 const platformSchema = z.enum(["whatsapp", "linkedin"]);
-const hostedConnectPlatformSchema = z.literal("linkedin");
 const conversationIdSchema = z.string().trim().min(1).max(512);
 const accountIdSchema = z.string().trim().min(1).max(128);
 const sendMessageSchema = z.strictObject({
@@ -177,9 +178,7 @@ zernioRoutes.post(
   "/channels/:platform/connect",
   rateLimit({ windowMs: 60_000, max: 10, keyPrefix: "zernio-connect" }),
   async (context) => {
-    const platform = hostedConnectPlatformSchema.safeParse(
-      context.req.param("platform"),
-    );
+    const platform = platformSchema.safeParse(context.req.param("platform"));
     if (!platform.success) {
       return context.json(
         {
@@ -193,6 +192,55 @@ zernioRoutes.post(
     }
     const tenant = await tenantFor(context);
     return context.json({ data: await startConnection(tenant, platform.data) });
+  },
+);
+
+const whatsappTempTokenSchema = z.string().trim().min(1).max(4096);
+const selectWhatsAppPhoneNumberSchema = z.strictObject({
+  tempToken: whatsappTempTokenSchema,
+  phoneNumberId: z.string().trim().min(1).max(128),
+  wabaId: z.string().trim().min(1).max(128),
+});
+
+// List available numbers after a headless Embedded Signup redirect
+// (`step=select_phone_number`). The tempToken is one-time and short-lived.
+zernioRoutes.get("/channels/whatsapp/phone-numbers", async (context) => {
+  const tempToken = whatsappTempTokenSchema.safeParse(
+    context.req.query("tempToken"),
+  );
+  if (!tempToken.success) {
+    return context.json(
+      {
+        error: {
+          code: "INVALID_QUERY",
+          message: "tempToken is required",
+        },
+      },
+      400,
+    );
+  }
+  context.header("Cache-Control", "no-store");
+  const tenant = await tenantFor(context);
+  return context.json({
+    data: await listWhatsAppPhoneNumbers(tenant, tempToken.data),
+  });
+});
+
+// Bind the phone number the user picked on Plucia, completing the connection.
+zernioRoutes.post(
+  "/channels/whatsapp/phone-numbers/select",
+  rateLimit({
+    windowMs: 60_000,
+    max: 20,
+    keyPrefix: "whatsapp-phone-select",
+  }),
+  jsonValidator(selectWhatsAppPhoneNumberSchema),
+  async (context) => {
+    context.header("Cache-Control", "no-store");
+    const tenant = await tenantFor(context);
+    return context.json({
+      data: await selectWhatsAppPhoneNumber(tenant, context.req.valid("json")),
+    });
   },
 );
 

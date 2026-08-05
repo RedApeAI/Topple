@@ -2,6 +2,7 @@ import { apiClient } from "@/lib/api/client";
 import type {
   ChannelStatus,
   ConnectablePlatform,
+  WhatsAppPhoneNumber,
   WhatsAppTemplate,
   ZernioRealtimeEvent,
 } from "../types/zernio.types";
@@ -13,24 +14,35 @@ export async function fetchChannelStatus(): Promise<ChannelStatus> {
   return data.data;
 }
 
-export async function fetchConnectUrl(platform: "linkedin"): Promise<string> {
+export async function fetchConnectUrl(
+  platform: ConnectablePlatform,
+): Promise<string> {
   const { data } = await apiClient.post<{
     data: { authUrl: string; state: string };
   }>(`/api/v1/zernio/channels/${platform}/connect`);
   return data.data.authUrl;
 }
 
-export interface WhatsAppCredentialsInput {
-  accessToken: string;
-  wabaId: string;
-  phoneNumberId: string;
-  pin?: string;
+export async function listWhatsAppPhoneNumbers(
+  tempToken: string,
+): Promise<WhatsAppPhoneNumber[]> {
+  const { data } = await apiClient.get<{ data: WhatsAppPhoneNumber[] }>(
+    "/api/v1/zernio/channels/whatsapp/phone-numbers",
+    { params: { tempToken } },
+  );
+  return data.data;
 }
 
-export async function connectWhatsAppCredentials(
-  input: WhatsAppCredentialsInput,
-): Promise<void> {
-  await apiClient.post("/api/v1/zernio/channels/whatsapp/credentials", input);
+export async function selectWhatsAppPhoneNumber(input: {
+  tempToken: string;
+  phoneNumberId: string;
+  wabaId: string;
+}): Promise<void> {
+  await apiClient.post(
+    "/api/v1/zernio/channels/whatsapp/phone-numbers/select",
+    input,
+    { timeout: 60_000 },
+  );
 }
 
 export async function disconnectChannel(

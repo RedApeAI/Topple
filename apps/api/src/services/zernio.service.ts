@@ -2,24 +2,22 @@ import { createHmac, randomUUID, timingSafeEqual } from "node:crypto";
 
 import {
   getDb,
-  members,
-  organizations,
   zernioAccounts,
   zernioProfiles,
   zernioWebhooks,
 } from "@repo/db-sql";
 import { and, asc, eq, gt, or } from "drizzle-orm";
 
-import { auth, type AuthSession, type AuthUser } from "../lib/auth.js";
 import { AppError } from "../lib/errors.js";
 import { env } from "../lib/env.js";
+import { handleWebhookEvent } from "../events/handlers/webhook.js";
+import type { ProcessedEvent } from "../events/router.js";
+import type { Tenant } from "./tenant.service.js";
+
+export { resolveTenant } from "./tenant.service.js";
+export type { Tenant } from "./tenant.service.js";
 
 export type ZernioPlatform = "whatsapp" | "linkedin";
-
-interface Tenant {
-  id: string;
-  name: string;
-}
 
 interface ZernioProfileResponse {
   profile: { _id: string; name: string };
@@ -180,6 +178,37 @@ export interface ZernioWebhookPayload {
   [key: string]: unknown;
 }
 
+export interface ZernioRealtimeEvent {
+  id: string;
+  type: string;
+  platform: string | null;
+  conversationId: string | null;
+  createdAt: string;
+  data?: Record<string, unknown>;
+}
+
+function toRealtimeEvent(
+  eventId: string,
+  eventType: string,
+  payload: ZernioWebhookPayload,
+  createdAt: Date,
+): ZernioRealtimeEvent {
+  return {
+    id: eventId,
+    type: eventType,
+    platform:
+      payload.message?.platform ??
+      payload.conversation?.platform ??
+      payload.account?.platform ??
+      payload.platform ??
+      null,
+    conversationId:
+      payload.message?.conversationId ?? payload.conversation?.id ?? null,
+    createdAt: createdAt.toISOString(),
+    data: payload as Record<string, unknown>,
+  };
+}
+
 class ZernioRequestError extends Error {
   constructor(
     readonly status: number,
@@ -284,74 +313,6 @@ function throwMappedZernioError(error: unknown): never {
     );
   }
   throw error;
-}
-
-async function createPersonalOrganization(
-  user: AuthUser,
-  headers: Headers,
-): Promise<Tenant> {
-  const slug = `workspace-${user.id.toLowerCase()}`;
-  try {
-    const created = await auth.api.createOrganization({
-      headers,
-      body: { name: `${user.name}'s Workspace`, slug },
-    });
-    return { id: created.id, name: created.name };
-  } catch (error) {
-    const [membership] = await getDb()
-      .select({ id: organizations.id, name: organizations.name })
-      .from(members)
-      .innerJoin(organizations, eq(members.organizationId, organizations.id))
-      .where(eq(members.userId, user.id))
-      .limit(1);
-    if (membership) return membership;
-    throw error;
-  }
-}
-
-export async function resolveTenant(
-  user: AuthUser,
-  session: AuthSession,
-  headers: Headers,
-): Promise<Tenant> {
-  if (session.activeOrganizationId) {
-    const [tenant] = await getDb()
-      .select({ id: organizations.id, name: organizations.name })
-      .from(members)
-      .innerJoin(organizations, eq(members.organizationId, organizations.id))
-      .where(
-        and(
-          eq(members.userId, user.id),
-          eq(members.organizationId, session.activeOrganizationId),
-        ),
-      )
-      .limit(1);
-    if (!tenant) {
-      throw new AppError(
-        403,
-        "ORGANIZATION_ACCESS_DENIED",
-        "Organization access denied",
-      );
-    }
-    return tenant;
-  }
-
-  const memberships = await getDb()
-    .select({ id: organizations.id, name: organizations.name })
-    .from(members)
-    .innerJoin(organizations, eq(members.organizationId, organizations.id))
-    .where(eq(members.userId, user.id))
-    .limit(2);
-
-  if (memberships.length === 1 && memberships[0]) return memberships[0];
-  if (memberships.length > 1) {
-    throw new AppError(
-      409,
-      "ACTIVE_ORGANIZATION_REQUIRED",
-      "Select an organization before connecting a channel",
-    );
-  }
-  return createPersonalOrganization(user, headers);
 }
 
 async function ensureProfile(tenant: Tenant) {
@@ -578,7 +539,7 @@ export async function configureZernioWebhook(): Promise<{
 
 export async function startConnection(
   tenant: Tenant,
-  platform: "linkedin",
+  platform: ZernioPlatform,
 ): Promise<ConnectResponse> {
   const profile = await ensureProfile(tenant);
   const callbackUrl = new URL(
@@ -592,12 +553,96 @@ export async function startConnection(
       query: {
         profileId: profile.zernioProfileId,
         redirect_url: callbackUrl.toString(),
+        // Headless keeps the user on Plucia: Zernio returns the short-lived
+        // tempToken instead of hosting its own account-selection UI.
+        ...(platform === "whatsapp" ? { headless: "true" } : {}),
       },
       headers: { "X-Request-Id": randomUUID() },
     });
   } catch (error) {
     throwMappedZernioError(error);
   }
+}
+
+export interface WhatsAppPhoneNumber {
+  id: string;
+  display_phone_number: string;
+  verified_name: string;
+  quality_rating: string;
+  name_status: string;
+  messaging_limit_tier: string;
+  wabaId: string;
+  wabaName: string;
+}
+
+interface WhatsAppPhoneNumbersResponse {
+  phoneNumbers: WhatsAppPhoneNumber[];
+}
+
+/**
+ * List the WhatsApp phone numbers available across the user's WABAs after the
+ * headless Embedded Signup redirect. Only reached when the callback carries
+ * `step=select_phone_number` (a WABA with 2+ numbers). Single-number WABAs
+ * auto-complete and never need this call.
+ */
+export async function listWhatsAppPhoneNumbers(
+  tenant: Tenant,
+  tempToken: string,
+): Promise<WhatsAppPhoneNumber[]> {
+  const profile = await ensureProfile(tenant);
+  try {
+    const response = await zernioRequest<WhatsAppPhoneNumbersResponse>(
+      "/connect/whatsapp/select-phone-number",
+      {
+        query: {
+          profileId: profile.zernioProfileId,
+          tempToken,
+        },
+      },
+    );
+    return response.phoneNumbers;
+  } catch (error) {
+    throwMappedZernioError(error);
+  }
+}
+
+export interface SelectWhatsAppPhoneNumberInput {
+  tempToken: string;
+  phoneNumberId: string;
+  wabaId: string;
+}
+
+/**
+ * Bind a specific WhatsApp phone number after the user picks one. Exchanges
+ * the short-lived token for a long-lived one, subscribes the WABA to webhooks,
+ * and creates the Zernio SocialAccount, then syncs the local tenant mapping.
+ */
+export async function selectWhatsAppPhoneNumber(
+  tenant: Tenant,
+  input: SelectWhatsAppPhoneNumberInput,
+): Promise<WhatsAppConnectResponse> {
+  const profile = await ensureProfile(tenant);
+  let response: WhatsAppConnectResponse;
+  try {
+    response = await zernioRequest<WhatsAppConnectResponse>(
+      "/connect/whatsapp/select-phone-number",
+      {
+        method: "POST",
+        headers: { "X-Request-Id": randomUUID() },
+        body: {
+          profileId: profile.zernioProfileId,
+          tempToken: input.tempToken,
+          phoneNumberId: input.phoneNumberId,
+          wabaId: input.wabaId,
+        },
+      },
+    );
+  } catch (error) {
+    throwMappedZernioError(error);
+  }
+
+  await syncAccounts(tenant);
+  return response;
 }
 
 export async function connectWhatsAppCredentials(
@@ -910,6 +955,8 @@ export async function ingestZernioWebhook(
   const eventType =
     payload.type ?? payload.eventType ?? payload.event ?? "unknown";
 
+  const processedAt = new Date();
+
   const inserted = await getDb()
     .insert(zernioWebhooks)
     .values({
@@ -918,10 +965,35 @@ export async function ingestZernioWebhook(
       organizationId,
       payload,
       processed: true,
-      processedAt: new Date(),
+      processedAt,
     })
     .onConflictDoNothing({ target: zernioWebhooks.eventId })
     .returning({ id: zernioWebhooks.id });
+
+  if (inserted.length > 0) {
+    console.info(
+      JSON.stringify({
+        level: "info",
+        event: "zernio.webhook.received",
+        eventId,
+        eventType,
+        organizationId: organizationId ?? null,
+      }),
+    );
+  }
+
+  if (inserted.length > 0 && organizationId) {
+    const processedEvent: ProcessedEvent = {
+      id: eventId,
+      type: eventType,
+      tenant: { id: organizationId, name: "" },
+      payload,
+      timestamp: processedAt.toISOString(),
+    };
+    void handleWebhookEvent(processedEvent).catch((error) => {
+      console.error(`Failed to process webhook event ${eventId}:`, error);
+    });
+  }
 
   if (
     inserted.length > 0 &&
@@ -948,13 +1020,7 @@ export async function listZernioWebhookEvents(
   after?: Date,
 ): Promise<{
   cursor: string;
-  events: Array<{
-    id: string;
-    type: string;
-    platform: string | null;
-    conversationId: string | null;
-    createdAt: string;
-  }>;
+  events: ZernioRealtimeEvent[];
 }> {
   if (!after) return { cursor: new Date().toISOString(), events: [] };
 
@@ -975,22 +1041,14 @@ export async function listZernioWebhookEvents(
     .orderBy(asc(zernioWebhooks.createdAt))
     .limit(100);
 
-  const events = rows.map((row) => {
-    const payload = row.payload as ZernioWebhookPayload;
-    return {
-      id: row.eventId,
-      type: row.eventType,
-      platform:
-        payload.message?.platform ??
-        payload.conversation?.platform ??
-        payload.account?.platform ??
-        payload.platform ??
-        null,
-      conversationId:
-        payload.message?.conversationId ?? payload.conversation?.id ?? null,
-      createdAt: row.createdAt.toISOString(),
-    };
-  });
+  const events = rows.map((row) =>
+    toRealtimeEvent(
+      row.eventId,
+      row.eventType,
+      row.payload as ZernioWebhookPayload,
+      row.createdAt,
+    ),
+  );
   return {
     cursor: events.at(-1)?.createdAt ?? after.toISOString(),
     events,
