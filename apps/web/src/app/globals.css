@@ -15,6 +15,7 @@
   --color-foreground: var(--foreground);
   --font-sans: var(--font-inter);
   --font-heading: var(--font-poppins);
+  --font-badge: var(--font-manrope);
   --font-mono: var(--font-geist-mono);
 
   --color-card: var(--card);
@@ -51,6 +52,31 @@
   --color-channel-instagram-via: var(--channel-instagram-via);
   --color-channel-instagram-to: var(--channel-instagram-to);
 
+  /* Mail client surface — the Gmail-style screen keeps its own neutral ramp
+     so it reads as a real mail client inside the Plucia canvas. */
+  --color-mail-surface: var(--mail-surface);
+  --color-mail-rail: var(--mail-rail);
+  --color-mail-rail-active: var(--mail-rail-active);
+  --color-mail-line: var(--mail-line);
+  --color-mail-row-hover: var(--mail-row-hover);
+  --color-mail-row-selected: var(--mail-row-selected);
+  --color-mail-strong: var(--mail-strong);
+  --color-mail-muted: var(--mail-muted);
+  --color-mail-unread: var(--mail-unread);
+  --color-mail-draft: var(--mail-draft);
+  --color-mail-connected: var(--mail-connected);
+  --color-mail-chip: var(--mail-chip);
+  --color-mail-chip-foreground: var(--mail-chip-foreground);
+  --color-mail-tag-important: var(--mail-tag-important);
+  --color-mail-tag-important-foreground: var(--mail-tag-important-foreground);
+  --color-mail-tag-newsletter: var(--mail-tag-newsletter);
+  --color-mail-tag-newsletter-foreground: var(--mail-tag-newsletter-foreground);
+  --color-mail-tag-calendar: var(--mail-tag-calendar);
+  --color-mail-tag-calendar-foreground: var(--mail-tag-calendar-foreground);
+  --color-mail-recipient: var(--mail-recipient);
+  --color-mail-recipient-surface: var(--mail-recipient-surface);
+  --color-mail-compose-chrome: var(--mail-compose-chrome);
+
   /* Brand gradient stops (logo + FAB ring ONLY — never a general accent) */
   --color-brand-1: var(--brand-1);
   --color-brand-2: var(--brand-2);
@@ -83,6 +109,7 @@
 :root {
   --font-inter: "Inter", ui-sans-serif, system-ui, sans-serif;
   --font-poppins: "Poppins", ui-sans-serif, system-ui, sans-serif;
+  --font-manrope: "Manrope", ui-sans-serif, system-ui, sans-serif;
   --font-geist-mono: "Geist Mono", ui-monospace, SFMono-Regular, monospace;
   --radius: 10px;
 
@@ -127,6 +154,30 @@
   --channel-instagram-from: #5342d6;
   --channel-instagram-via: #ef2044;
   --channel-instagram-to: #fec053;
+
+  /* Mail client (Figma node 3049:10004) */
+  --mail-surface: #ffffff;
+  --mail-rail: #f9f9f9;
+  --mail-rail-active: #eeeeee;
+  --mail-line: #f1f3f4;
+  --mail-row-hover: #f7f8f8;
+  --mail-row-selected: #f3f4f6;
+  --mail-strong: #202124;
+  --mail-muted: #5f6368;
+  --mail-unread: #1a73e8;
+  --mail-draft: #d93025;
+  --mail-connected: #1faf38;
+  --mail-chip: #f1f3f4;
+  --mail-chip-foreground: #5f6368;
+  --mail-tag-important: #fce8e6;
+  --mail-tag-important-foreground: #c5221f;
+  --mail-tag-newsletter: #fef3d6;
+  --mail-tag-newsletter-foreground: #b06000;
+  --mail-tag-calendar: #f3e8fd;
+  --mail-tag-calendar-foreground: #7627bb;
+  --mail-recipient: #0070da;
+  --mail-recipient-surface: rgba(0, 112, 218, 0.1);
+  --mail-compose-chrome: #f2f2f2;
 
   /* Brand gradient */
   --brand-1: #ff2f2f;
@@ -192,6 +243,30 @@
   --channel-instagram-via: #f04568;
   --channel-instagram-to: #fec053;
 
+  /* Mail client — same roles, re-anchored on the dark canvas */
+  --mail-surface: #1f1f1d;
+  --mail-rail: #1c1c1a;
+  --mail-rail-active: #2f2f2c;
+  --mail-line: #302f2b;
+  --mail-row-hover: #262624;
+  --mail-row-selected: #2a2a27;
+  --mail-strong: #f2f1ee;
+  --mail-muted: #a3a19c;
+  --mail-unread: #8ab4f8;
+  --mail-draft: #f28b82;
+  --mail-connected: #3ec46d;
+  --mail-chip: #2a2a27;
+  --mail-chip-foreground: #c6c4bf;
+  --mail-tag-important: #4a2320;
+  --mail-tag-important-foreground: #f6aea9;
+  --mail-tag-newsletter: #46330f;
+  --mail-tag-newsletter-foreground: #fdd663;
+  --mail-tag-calendar: #38254c;
+  --mail-tag-calendar-foreground: #d7aefb;
+  --mail-recipient: #8ab4f8;
+  --mail-recipient-surface: rgba(138, 180, 248, 0.14);
+  --mail-compose-chrome: #262624;
+
   --brand-1: #ff4d4d;
   --brand-2: #f28c3a;
   --brand-3: #9c5cf0;
@@ -246,15 +321,16 @@
     background-image: linear-gradient(180deg, #3a3a38 0%, #242422 100%);
   }
 
-  /* Keep the primary topbar action bright and readable on the dark canvas. */
-  .dark .topbar-task-button {
-    background-color: #f2f1ee;
-    background-image: none;
-    color: #171715;
-    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
-  }
-  .dark .topbar-task-button:hover {
-    background-color: #ffffff;
+  /* AI-authored affordance (compose "Approve & Send" + drafted-body frame).
+     A distinct ramp from the brand gradient on purpose — it marks machine-
+     written content, it is not a brand accent. */
+  .surface-ai-gradient {
+    background-image: linear-gradient(
+      96.48deg,
+      #ff5e00 13.99%,
+      #8a43e1 66.66%,
+      #1800e7 133.16%
+    );
   }
 
   /* The single, signature brand gradient — logo + FAB ring only */

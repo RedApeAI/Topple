@@ -23,6 +23,9 @@ from datetime import datetime, timezone
 from bson import ObjectId
 from bson.errors import InvalidId
 
+from ..engine import contacts as contacts_engine
+from ..engine import recipients as recipients_engine
+from ..engine.identity import channel_for_address, normalize
 from ..llm import gateway
 from ..llm.gateway import _parse_json_block
 from ..outbound import dispatcher
@@ -37,7 +40,9 @@ from .sanitize import (
 
 logger = logging.getLogger(__name__)
 
-MAX_STEPS = 6
+# Resolve -> get_conversation -> send -> report already costs 4; a
+# disambiguation round trip used to overrun the old budget of 6.
+MAX_STEPS = 8
 HISTORY_WINDOW = 12
 ACTION_CHANNELS = ("whatsapp", "email", "voice", "instagram")
 
@@ -58,22 +63,32 @@ Respond with ONLY one JSON object per turn, in exactly one of these shapes:
    {{"thought": "<what you decided>", "operator_output": "<one short question, or a brief report of what you did>"}}
 
 Tools:
-- find_contact — args {{"query": "<name, phone, or handle>"}} → CRM contacts matching, with their channels
+- find_recipient — args {{"query": "<name, email, phone, or handle>"}} → ranked \
+candidates from the CRM and from people the salesperson has emailed before, \
+best match first, then most recently contacted. Each carries a "source" of \
+"crm" or "gmail"; only "crm" ones have a contact_id.
 - get_conversation — args {{"contact_id": "...", "channel": "<optional>"}} → that contact's conversation: stage, recent messages, lead profile
-- send_message — args {{"contact_id": "<id from find_contact>", "channel": "whatsapp|email|voice|instagram", "text": "<the message the customer will receive>"}} → in copilot mode creates a DRAFT for the salesperson to approve; in autopilot mode sends it immediately. Returns the result.
+- send_message — args {{"contact_id": "<id from find_recipient>" OR "to": "<email address or phone number>", "channel": "whatsapp|email|voice|instagram", "text": "<the message the customer will receive>", "subject": "<optional, email only>"}} → in copilot mode creates a DRAFT for the salesperson to approve; in autopilot mode sends it immediately. Returns the result.
 
 How to act:
 - To contact someone you MUST call the send_message tool — a draft (copilot) or \
 a real send (autopilot) only happens THROUGH send_message. Writing the message \
 in your thought is NOT drafting it; never claim you drafted or sent anything \
 unless send_message has already returned. Do NOT ask permission to send — \
-sending IS your job; just call send_message (find_contact first to get the id). \
-Only after it returns do you give your final report.
-- Never invent a contact_id — always find_contact first.
-- If several contacts match, or the contact is on several channels and neither \
-the command nor the default names one, ask ONE clarifying question instead of \
-guessing. The salesperson's channel picker is currently "{preferred_channel}" — \
-treat it as the default when the contact has that channel.
+sending IS your job. Only after it returns do you give your final report.
+- An email address or phone number IS a valid recipient. If the command \
+contains one, pass it straight to send_message as "to" — do not look it up \
+first and do not refuse because it is not in the CRM. Someone you message this \
+way is added to the CRM automatically.
+- Otherwise call find_recipient first. Never invent a contact_id.
+- If find_recipient returns exactly one candidate, use it. If it returns \
+several, do NOT guess and do NOT ask an open question — list them for the \
+salesperson in the order given (most recently contacted first) as a short \
+numbered list with each person's name and address, and ask which one. The \
+candidates you were shown stay available on the next turn, so "the first one" \
+is enough for you to act on.
+- If find_recipient returns nothing and the command has no address in it, ask \
+the salesperson for the address — once, briefly.
 - Before messaging a contact who has an existing conversation, call \
 get_conversation so your message fits what was already said.
 - The customer-facing "text" must read like a warm, brief human sales rep on \
@@ -82,7 +97,9 @@ couple of sentences.
 - "operator_output" speaks to the salesperson: short and factual — what you \
 did or found, or the one question you need answered.
 - Mode is "{mode}": in copilot your send_message becomes a DRAFT awaiting \
-approval (report it that way); in autopilot it is sent immediately.
+approval (report it that way); in autopilot it is sent immediately. The \
+salesperson's channel picker is currently "{preferred_channel}" — treat it as \
+the default when the recipient has that channel.
 """
 
 
@@ -105,33 +122,28 @@ def _resolve_agent_model(runtime: RuntimeConfig | None) -> str:
 # --------------------------------------------------------------------------- #
 # Tools
 # --------------------------------------------------------------------------- #
-async def _tool_find_contact(db, tenant_id: str, args: dict) -> dict:
+async def _tool_find_recipient(db, tenant_id: str, args: dict, user_id=None) -> dict:
+    """Ranked candidates from the CRM and the user's mailbox, best first.
+
+    Never an error when nothing matches: an empty list plus a note telling the
+    model it may address a raw destination directly is more useful than a
+    failure, because the command itself often contains the address.
+    """
     query = str(args.get("query", "")).strip()
     if not query:
         return {"error": "args.query is required"}
-    regex = {"$regex": re.escape(query), "$options": "i"}
-    docs = await (
-        db.contacts.find(
-            {
-                "tenant_id": tenant_id,
-                "$or": [{"profile.name": regex}, {"identities.external_id": regex}],
-            }
-        ).to_list(length=5)
-    )
-    return {
-        "matches": [
-            {
-                "contact_id": str(d["_id"]),
-                "name": (d.get("profile") or {}).get("name"),
-                "channels": [
-                    {"channel": i["channel"], "id": i["external_id"]}
-                    for i in d.get("identities", [])
-                ],
-                "qualification_score": (d.get("lead") or {}).get("qualification_score", 0),
-            }
-            for d in docs
-        ]
-    }
+
+    found = await recipients_engine.find_recipients(db, tenant_id, user_id, query)
+    matches = [recipients_engine.public_candidate(c) for c in found]
+    if matches:
+        return {"matches": matches}
+
+    note = "no contact or past correspondent matches that."
+    if channel_for_address(query):
+        note += " That looks like an address — you can pass it to send_message as \"to\"."
+    else:
+        note += " If the command contains an email address or phone number, pass it to send_message as \"to\"; otherwise ask which address to use."
+    return {"matches": [], "note": note}
 
 
 async def _tool_get_conversation(db, tenant_id: str, args: dict) -> dict:
@@ -172,7 +184,6 @@ async def _tool_get_conversation(db, tenant_id: str, args: dict) -> dict:
 
 
 TOOLS = {
-    "find_contact": _tool_find_contact,
     "get_conversation": _tool_get_conversation,
 }
 
@@ -185,20 +196,29 @@ async def _run_tool(
     name: str,
     args: dict,
     sent_keys: set[tuple],
+    user_id: str | None = None,
 ) -> dict:
     """Dispatch one tool call. `send_message` acts (mode-gated) and is deduped
     so a re-issued identical send returns the prior result instead of firing
     twice; the read tools go through the plain TOOLS map."""
+    # "find_contact" is the pre-rename name. The protocol is prompt-engineered
+    # rather than schema-enforced, so a model can still emit it from an older
+    # thread's context — accept both rather than failing the whole command.
+    if name in ("find_recipient", "find_contact"):
+        return await _tool_find_recipient(db, tenant_id, args, user_id)
+
     if name == "send_message":
         key = (
-            str(args.get("contact_id", "")),
+            str(args.get("contact_id", "") or args.get("to", "")).strip().lower(),
             str(args.get("channel", "")),
             (args.get("text") or "").strip(),
         )
         if key in sent_keys:
             return {"type": "send_message", "status": "duplicate",
                     "note": "already sent this in the current command"}
-        result = await _execute_send_message(db, tenant_id, mode, runtime, args)
+        result = await _execute_send_message(
+            db, tenant_id, mode, runtime, args, user_id
+        )
         if result.get("status") in ("draft", "sent"):
             sent_keys.add(key)
         return result
@@ -221,8 +241,26 @@ def _initial_stage(runtime: RuntimeConfig | None) -> str:
     return "GREETING"
 
 
+def _subject_for(action: dict, contact: dict) -> str | None:
+    """Subject for an email dispatch.
+
+    The agent may supply one; otherwise fall back to the contact's name so the
+    recipient sees something meaningful rather than "(no subject)".
+    """
+    supplied = str(action.get("subject", "") or "").strip()
+    if supplied:
+        return supplied
+    name = (contact.get("profile") or {}).get("name")
+    return f"Message from Plucia{f' for {name}' if name else ''}"
+
+
 async def _execute_send_message(
-    db, tenant_id: str, mode: str, runtime: RuntimeConfig | None, action: dict
+    db,
+    tenant_id: str,
+    mode: str,
+    runtime: RuntimeConfig | None,
+    action: dict,
+    user_id: str | None = None,
 ) -> dict:
     channel = action.get("channel")
     if channel not in ACTION_CHANNELS:
@@ -231,22 +269,65 @@ async def _execute_send_message(
     text = sanitize_customer_text(action.get("text") or "")
     if not text:
         return {"type": "send_message", "status": "failed", "reason": "empty message text"}
-    try:
-        contact_id = ObjectId(str(action.get("contact_id", "")))
-    except (InvalidId, TypeError):
-        return {"type": "send_message", "status": "failed", "reason": "invalid contact_id"}
+    # Two ways to name a recipient. `contact_id` addresses someone already in
+    # the CRM; `to` addresses a destination directly — an email address is a
+    # complete identity on its own, and requiring a CRM row first is what used
+    # to make anyone outside the CRM unreachable.
+    raw_contact_id = str(action.get("contact_id", "") or "").strip()
+    raw_to = str(action.get("to", "") or "").strip()
 
-    contact = await db.contacts.find_one({"_id": contact_id, "tenant_id": tenant_id})
-    if contact is None:
-        return {"type": "send_message", "status": "failed", "reason": "contact not found"}
-    identity = next(
-        (i for i in contact.get("identities", []) if i["channel"] == channel), None
-    )
-    if identity is None:
+    if raw_contact_id:
+        try:
+            contact_id = ObjectId(raw_contact_id)
+        except (InvalidId, TypeError):
+            return {"type": "send_message", "status": "failed", "reason": "invalid contact_id"}
+        contact = await db.contacts.find_one({"_id": contact_id, "tenant_id": tenant_id})
+        if contact is None:
+            return {"type": "send_message", "status": "failed", "reason": "contact not found"}
+        identity = next(
+            (i for i in contact.get("identities", []) if i["channel"] == channel), None
+        )
+        if identity is None:
+            return {
+                "type": "send_message",
+                "status": "failed",
+                "reason": f"contact has no {channel} identity",
+            }
+    elif raw_to:
+        external_id, resolved_name = await recipients_engine.resolve_destination(
+            db, tenant_id, user_id, raw_to, channel
+        )
+        if not external_id:
+            return {
+                "type": "send_message",
+                "status": "failed",
+                "reason": f"couldn't work out a {channel} address for {raw_to!r}",
+            }
+        # Creating the contact here is what puts them in the CRM: the
+        # conversation needs a contact_id, and a person we just messaged
+        # belongs in the CRM by definition.
+        try:
+            contact = await contacts_engine.resolve_or_create(
+                db,
+                tenant_id,
+                channel,
+                external_id,
+                name=resolved_name,
+                user_id=user_id,
+                source="agent",
+            )
+        except contacts_engine.ContactRaceLost as exc:
+            return {"type": "send_message", "status": "failed", "reason": str(exc)}
+        contact_id = contact["_id"]
+        identity = next(
+            (i for i in contact.get("identities", []) if i["channel"] == channel),
+            {"channel": channel, "external_id": external_id},
+        )
+    else:
         return {
             "type": "send_message",
             "status": "failed",
-            "reason": f"contact has no {channel} identity",
+            "reason": "no recipient — pass contact_id or to",
         }
 
     convos = await (
@@ -266,6 +347,7 @@ async def _execute_send_message(
     else:
         convo = {
             "tenant_id": tenant_id,
+            "user_id": user_id,
             "contact_id": contact_id,
             "channel": channel,
             "stage": _initial_stage(runtime),
@@ -283,6 +365,7 @@ async def _execute_send_message(
     status = "draft" if mode == "copilot" else "sent"
     message = {
         "tenant_id": tenant_id,
+        "user_id": user_id,
         "conversation_id": convo["_id"],
         "direction": "outbound",
         "text": text,
@@ -293,13 +376,16 @@ async def _execute_send_message(
     await db.conversations.update_one(
         {"_id": convo["_id"]}, {"$set": {"last_message_at": _now()}}
     )
+    await contacts_engine.touch_contacted(db, contact_id)
     if status == "sent":
         await dispatcher.dispatch(
             tenant_id=tenant_id,
+            user_id=user_id,
             channel=channel,
             to=identity["external_id"],
             conversation_id=str(convo["_id"]),
             messages=[text],
+            subject=_subject_for(action, contact),
         )
     return {
         "type": "send_message",
@@ -337,6 +423,41 @@ def _fallback_report(action_result: dict | None) -> str:
     return "Done."
 
 
+async def _last_candidates(db, thread_id: ObjectId) -> list[dict]:
+    """The candidate list this thread was last shown.
+
+    Without this, offering a numbered pick-list is a dead end: `_thread_history`
+    carries only `text`, and `sanitize_operator_output` strips every 24-hex
+    ObjectId out of that text — so a candidate's id can never survive a round
+    trip through the visible conversation. Answering "the first one" would force
+    a fresh search that may rank differently.
+    """
+    doc = await db.operator_messages.find_one(
+        {"thread_id": thread_id, "role": "operator", "candidates": {"$ne": None}},
+        sort=[("created_at", -1), ("_id", -1)],
+    )
+    return (doc or {}).get("candidates") or []
+
+
+def _candidates_block(candidates: list[dict]) -> str:
+    """Compact rendering of the last pick-list, injected as a system message."""
+    lines = []
+    for index, candidate in enumerate(candidates, start=1):
+        addresses = ", ".join(
+            f"{c['channel']}:{c['id']}" for c in candidate.get("channels", [])
+        )
+        contact_id = candidate.get("contact_id")
+        lines.append(
+            f"{index}. {candidate.get('name') or 'unknown'} — {addresses}"
+            + (f" (contact_id {contact_id})" if contact_id else "")
+        )
+    return (
+        "Candidates you offered the salesperson last turn, in the order shown. "
+        "If they answer with a position (\"the first one\", \"#2\") or a name from "
+        "this list, act on it directly — do not search again.\n" + "\n".join(lines)
+    )
+
+
 async def _thread_history(db, thread_id: ObjectId) -> list[dict]:
     docs = await (
         db.operator_messages.find({"thread_id": thread_id})
@@ -359,6 +480,8 @@ async def run_command(
     preferred_channel: str | None = None,
     runtime: RuntimeConfig | None = None,
     client_ref: str | None = None,
+    user_id: str | None = None,
+    session_id: str | None = None,
 ) -> dict:
     """One salesperson command through the full loop. Returns the persisted
     operator reply (with steps + action result) and the thread id.
@@ -378,6 +501,8 @@ async def run_command(
         res = await db.operator_threads.insert_one(
             {
                 "tenant_id": tenant_id,
+                "user_id": user_id,
+                "session_id": session_id,
                 "title": text[:60],
                 "created_at": _now(),
                 "last_message_at": _now(),
@@ -386,9 +511,12 @@ async def run_command(
         tid = res.inserted_id
 
     history = await _thread_history(db, tid)
+    prior_candidates = await _last_candidates(db, tid)
     await db.operator_messages.insert_one(
         {
             "tenant_id": tenant_id,
+            "user_id": user_id,
+            "session_id": session_id,
             "thread_id": tid,
             "role": "user",
             "text": text,
@@ -400,9 +528,14 @@ async def run_command(
     system = SYSTEM_PROMPT.format(
         mode=mode, preferred_channel=preferred_channel or "whatsapp"
     )
-    convo: list[dict] = [{"role": "system", "content": system}, *history,
-                         {"role": "user", "content": text}]
+    convo: list[dict] = [{"role": "system", "content": system}]
+    if prior_candidates:
+        convo.append({"role": "system", "content": _candidates_block(prior_candidates)})
+    convo += [*history, {"role": "user", "content": text}]
     steps: list[dict] = []
+    # The most recent find_recipient result, carried onto the reply so the next
+    # turn can resolve "the first one" without re-searching.
+    offered_candidates: list[dict] | None = None
     operator_output = ""
     action_result: dict | None = None  # last send_message result — drives the UI
     sent_keys: set[tuple] = set()  # dedupe identical sends within one run
@@ -447,9 +580,12 @@ async def run_command(
         if tool_name:
             args = data.get("args") or {}
             observation = await _run_tool(
-                db, tenant_id, mode, runtime, str(tool_name), args, sent_keys
+                db, tenant_id, mode, runtime, str(tool_name), args, sent_keys, user_id
             )
             # send_message is the acting tool — its result drives the UI action
+            if str(tool_name) == "find_recipient" and observation.get("matches"):
+                offered_candidates = observation["matches"]
+
             if str(tool_name) == "send_message" and observation.get("type") == "send_message":
                 action_result = observation
                 log = logger.warning if observation["status"] == "failed" else logger.info
@@ -494,11 +630,16 @@ async def run_command(
     # -- persist reply --------------------------------------------------------
     reply = {
         "tenant_id": tenant_id,
+        "user_id": user_id,
+        "session_id": session_id,
         "thread_id": tid,
         "role": "operator",
         "text": operator_output,
         "steps": steps,
         "action": action_result,
+        # Only meaningful when the agent stopped to ask; a completed send needs
+        # no pick-list, and keeping a stale one would misdirect the next turn.
+        "candidates": offered_candidates if action_result is None else None,
         "created_at": _now(),
     }
     ins = await db.operator_messages.insert_one(reply)

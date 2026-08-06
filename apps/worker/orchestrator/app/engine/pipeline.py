@@ -67,6 +67,7 @@ async def _resolve_conversation(db, envelope: OrchestratorInput, contact_id, ini
         return convo
     doc = {
         **query,
+        "user_id": envelope.user_id,
         "stage": initial_stage,
         "previous_stage": None,
         "return_stage": None,
@@ -110,6 +111,8 @@ async def run_turn(envelope: OrchestratorInput) -> OrchestratorResult:
     stub = {
         "request_id": envelope.request_id,
         "tenant_id": envelope.tenant_id,
+        "user_id": envelope.user_id,
+        "session_id": envelope.session_id,
         "channel": envelope.channel.value,
         "status": "in_progress",
         "ts_start": _now(),
@@ -160,6 +163,7 @@ async def run_turn(envelope: OrchestratorInput) -> OrchestratorResult:
         trace.set_ids(convo["_id"], contact["_id"])
         inbound = {
             "tenant_id": envelope.tenant_id,
+            "user_id": envelope.user_id,
             "conversation_id": convo["_id"],
             "direction": "inbound",
             "text": envelope.message.text,
@@ -168,6 +172,7 @@ async def run_turn(envelope: OrchestratorInput) -> OrchestratorResult:
         }
         ins = await db.messages.insert_one(inbound)
         inbound["_id"] = ins.inserted_id
+        await contacts.touch_contacted(db, contact["_id"])
         # announce the inbound immediately — the reply takes an LLM round-trip
         await events.publish(
             envelope.tenant_id,
@@ -313,6 +318,7 @@ async def run_turn(envelope: OrchestratorInput) -> OrchestratorResult:
             await db.messages.insert_one(
                 {
                     "tenant_id": envelope.tenant_id,
+                    "user_id": envelope.user_id,
                     "conversation_id": convo["_id"],
                     "direction": "outbound",
                     "text": text,
@@ -323,6 +329,7 @@ async def run_turn(envelope: OrchestratorInput) -> OrchestratorResult:
         if reply.status == "sent":
             await dispatcher.dispatch(
                 tenant_id=envelope.tenant_id,
+                user_id=envelope.user_id,
                 channel=envelope.channel.value,
                 to=envelope.message.external_contact_id,
                 conversation_id=str(convo["_id"]),

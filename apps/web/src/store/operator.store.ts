@@ -1,5 +1,9 @@
 import { create } from "zustand";
-import { postOperatorCommand } from "@/lib/mock/operator-agent";
+import {
+  listOperatorMessages,
+  listOperatorThreads,
+  postOperatorCommand,
+} from "@/lib/mock/operator-agent";
 import { approveDraft, discardDraft } from "@/lib/mock/orchestrator";
 import type {
   ApiOperatorActionResult,
@@ -14,6 +18,7 @@ import type {
   OperatorMessage,
   OperatorThread,
 } from "@/features/operator/types/operator.types";
+import type { ApiOperatorThread } from "@/lib/mock/orchestrator.types";
 import type { ChannelKey } from "@/types/channel.types";
 import { useInboxStore } from "./inbox.store";
 import { useUIStore } from "./ui.store";
@@ -38,9 +43,17 @@ interface OperatorStore {
   transcriptLoading: Record<string, boolean>;
   agentMessages: OperatorMessage[];
   agentThreadId?: string;
+  agentLoading: boolean;
+  /** Past Operator chats for the signed-in user, most recently used first. */
+  chats?: ApiOperatorThread[];
+  chatsLoading: boolean;
   sendPending: boolean;
   sendError?: unknown;
   draftPending: boolean;
+  loadAgentThread: (force?: boolean) => Promise<void>;
+  openChat: (threadId: string) => Promise<void>;
+  loadChats: (force?: boolean) => Promise<void>;
+  startNewChat: () => void;
   loadThreads: (force?: boolean) => Promise<void>;
   loadHistory: (force?: boolean) => Promise<void>;
   loadTranscript: (conversationId: string, force?: boolean) => Promise<void>;
@@ -55,6 +68,8 @@ interface OperatorStore {
 
 let threadsRequest: Promise<void> | undefined;
 let historyRequest: Promise<void> | undefined;
+let agentRequest: Promise<void> | undefined;
+let chatsRequest: Promise<void> | undefined;
 const transcriptRequests = new Map<string, Promise<void>>();
 
 export const useOperatorStore = create<OperatorStore>((set, get) => ({
@@ -63,8 +78,90 @@ export const useOperatorStore = create<OperatorStore>((set, get) => ({
   transcripts: {},
   transcriptLoading: {},
   agentMessages: [],
+  agentLoading: false,
+  chatsLoading: false,
   sendPending: false,
   draftPending: false,
+
+  /**
+   * Reopen the salesperson's most recent Operator conversation.
+   *
+   * The chat is server state — the orchestrator persists every exchange to
+   * `operator_messages` — but the store is in-memory, so without this a refresh
+   * loses it. Restoring `agentThreadId` matters as much as the transcript: the
+   * next command posts that id, so the agent keeps the thread history it
+   * reasons over instead of starting cold on a brand-new thread.
+   */
+  loadAgentThread: async (force = false) => {
+    if (!force && (get().agentThreadId || get().agentMessages.length > 0))
+      return;
+    if (agentRequest) return agentRequest;
+
+    agentRequest = (async () => {
+      set({ agentLoading: true });
+      try {
+        const [latest] = await listOperatorThreads(1);
+        if (!latest) return;
+        const messages = await listOperatorMessages(latest._id);
+        set({
+          agentThreadId: latest._id,
+          agentMessages: messages.map(toOperatorMessage),
+        });
+      } catch {
+        // The orchestrator may be unreachable. An empty chat is a reasonable
+        // resting state — never block opening the panel on this.
+      } finally {
+        set({ agentLoading: false });
+        agentRequest = undefined;
+      }
+    })();
+    return agentRequest;
+  },
+
+  /**
+   * The list of past chats. Server-scoped to this user, so it is safe to show
+   * every thread it returns.
+   */
+  loadChats: async (force = false) => {
+    if (!force && get().chats) return;
+    if (chatsRequest) return chatsRequest;
+
+    chatsRequest = (async () => {
+      set({ chatsLoading: true });
+      try {
+        set({ chats: await listOperatorThreads(30) });
+      } catch {
+        set({ chats: [] });
+      } finally {
+        set({ chatsLoading: false });
+        chatsRequest = undefined;
+      }
+    })();
+    return chatsRequest;
+  },
+
+  /** Reopen a specific past chat, replacing whatever is on screen. */
+  openChat: async (threadId) => {
+    if (get().agentThreadId === threadId && get().agentMessages.length > 0) {
+      return;
+    }
+    set({ agentLoading: true, sendError: undefined });
+    try {
+      const messages = await listOperatorMessages(threadId);
+      set({
+        agentThreadId: threadId,
+        agentMessages: messages.map(toOperatorMessage),
+      });
+    } catch (error) {
+      set({ sendError: error });
+    } finally {
+      set({ agentLoading: false });
+    }
+  },
+
+  /** Drop the restored thread so the next command opens a fresh one. */
+  startNewChat: () =>
+    set({ agentMessages: [], agentThreadId: undefined, sendError: undefined }),
 
   loadThreads: async (force = false) => {
     if (!force && get().threads) return;
@@ -154,6 +251,7 @@ export const useOperatorStore = create<OperatorStore>((set, get) => ({
       }));
       await Promise.all([
         get().loadThreads(true),
+        get().loadChats(true),
         useInboxStore.getState().refreshInbox(),
       ]);
     } catch (error) {

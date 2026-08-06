@@ -27,9 +27,15 @@ const rawEnvSchema = z
     COOKIE_SECURE: z
       .enum(["true", "false"])
       .optional()
-      .transform((value) => (value === undefined ? undefined : value === "true")),
+      .transform((value) =>
+        value === undefined ? undefined : value === "true",
+      ),
     // Session lifetime in seconds (Better Auth default is 7 days).
-    SESSION_EXPIRES_IN: z.coerce.number().int().min(60).default(60 * 60 * 24 * 7),
+    SESSION_EXPIRES_IN: z.coerce
+      .number()
+      .int()
+      .min(60)
+      .default(60 * 60 * 24 * 7),
     // Auth rate limiting (sliding window).
     RATE_LIMIT_WINDOW_MS: z.coerce.number().int().min(1000).default(60_000),
     RATE_LIMIT_MAX: z.coerce.number().int().min(1).default(10),
@@ -38,12 +44,27 @@ const rawEnvSchema = z
     PASSWORD_MAX_LENGTH: z.coerce.number().int().min(16).max(256).default(128),
     // Optional per-account lockout after N failed sign-ins.
     AUTH_LOCKOUT_THRESHOLD: z.coerce.number().int().min(3).default(5),
-    AUTH_LOCKOUT_WINDOW_MS: z.coerce.number().int().min(60_000).default(15 * 60_000),
-    AUTH_LOCKOUT_DURATION_MS: z.coerce.number().int().min(60_000).default(15 * 60_000),
+    AUTH_LOCKOUT_WINDOW_MS: z.coerce
+      .number()
+      .int()
+      .min(60_000)
+      .default(15 * 60_000),
+    AUTH_LOCKOUT_DURATION_MS: z.coerce
+      .number()
+      .int()
+      .min(60_000)
+      .default(15 * 60_000),
     GOOGLE_CLIENT_ID: optionalCredential,
     GOOGLE_CLIENT_SECRET: optionalCredential,
     APPLE_CLIENT_ID: optionalCredential,
     APPLE_CLIENT_SECRET: optionalCredential,
+    // The orchestrator. All browser traffic to it is proxied through this
+    // service so tenant/user identity comes from the session, never the client.
+    ORCHESTRATOR_URL: z.url().default("http://localhost:8000"),
+    // Shared secret the orchestrator presents on /api/v1/mail/outbound. That
+    // endpoint sends mail as an arbitrary user_id and has no session cookie to
+    // check, so without this configured it refuses every request.
+    OUTBOUND_WEBHOOK_SECRET: optionalCredential,
     ZERNIO_API_KEY: optionalCredential,
     ZERNIO_WEBHOOK_SECRET: optionalCredential,
     ZERNIO_WEBHOOK_PUBLIC_URL: z.preprocess(
@@ -69,7 +90,6 @@ const rawEnvSchema = z
         });
       }
     }
-
   });
 
 function parseOrigins(value: string): string[] {

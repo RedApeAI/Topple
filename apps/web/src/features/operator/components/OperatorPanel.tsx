@@ -12,6 +12,7 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { IconButton } from "@/components/shared/IconButton";
 import { LogoSmall } from "@/components/shared/Logo";
 import { useUIStore } from "@/store/ui.store";
+import { useOperatorStore } from "@/store/operator.store";
 import { useOperatorThreads } from "../hooks/use-operator-threads";
 import { useOperatorTranscript } from "../hooks/use-operator-transcript";
 import { useOperatorAgent } from "../hooks/use-operator-agent";
@@ -31,6 +32,15 @@ export function OperatorPanel() {
   const closeOperator = useUIStore((s) => s.closeOperator);
   const [tab, setTab] = React.useState<PanelTab>("threads");
   const [view, setView] = React.useState<PanelView>({ mode: "list" });
+  const loadAgentThread = useOperatorStore((s) => s.loadAgentThread);
+  const startNewChat = useOperatorStore((s) => s.startNewChat);
+  const hasAgentChat = useOperatorStore((s) => s.agentMessages.length > 0);
+
+  // The chat lives on the server but the store is in-memory, so a refresh
+  // empties it. Pull the most recent thread back whenever the panel opens.
+  React.useEffect(() => {
+    if (operatorOpen) void loadAgentThread();
+  }, [operatorOpen, loadAgentThread]);
 
   // Selecting a tab always returns to the corresponding list.
   const selectTab = (next: PanelTab) => {
@@ -53,17 +63,36 @@ export function OperatorPanel() {
 
           {view.mode === "list" ? (
             <div className="flex min-h-0 flex-1 flex-col">
-              <button
-                type="button"
-                onClick={() => setView({ mode: "chat" })}
-                className="flex items-center gap-2 border-b border-border px-4 py-3 text-[13px] font-medium text-foreground hover:bg-accent"
-              >
-                <ArrowRight className="h-4 w-4" />
-                New Chat
-              </button>
+              {/* Opening the restored conversation and starting a fresh one
+                  are different intents — one button each, so continuing never
+                  silently discards the thread the agent still has context on. */}
+              <div className="flex items-center border-b border-border">
+                <button
+                  type="button"
+                  onClick={() => setView({ mode: "chat" })}
+                  className="flex flex-1 items-center gap-2 px-4 py-3 text-[13px] font-medium text-foreground hover:bg-accent"
+                >
+                  <ArrowRight className="h-4 w-4" />
+                  {hasAgentChat ? "Continue Chat" : "New Chat"}
+                </button>
+                {hasAgentChat && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      startNewChat();
+                      setView({ mode: "chat" });
+                    }}
+                    className="px-4 py-3 text-[13px] font-medium text-muted-foreground hover:text-foreground"
+                  >
+                    New
+                  </button>
+                )}
+              </div>
               <div
                 role="tabpanel"
-                aria-label={tab === "threads" ? "Threads Running" : "History"}
+                aria-label={
+                  tab === "threads" ? "Threads Running" : "Past chats"
+                }
                 className="scrollbar-none min-h-0 flex-1 overflow-y-auto px-2 py-2"
               >
                 {tab === "threads" ? (
@@ -73,11 +102,7 @@ export function OperatorPanel() {
                     }
                   />
                 ) : (
-                  <History
-                    onSelectThread={(thread) =>
-                      setView({ mode: "chat", thread })
-                    }
-                  />
+                  <History onOpenChat={() => setView({ mode: "chat" })} />
                 )}
               </div>
             </div>

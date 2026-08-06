@@ -16,12 +16,12 @@ import {
   listWhatsAppConversations,
   listZernioWebhookEvents,
   markWhatsAppConversationRead,
-  resolveTenant,
   sendConversationMessage,
   startConnection,
   verifyZernioWebhookSignature,
   type ZernioWebhookPayload,
 } from "../services/zernio.service.js";
+import { resolveTenant } from "../services/tenant.service.js";
 import { env } from "../lib/env.js";
 import type { AppEnv } from "../types.js";
 

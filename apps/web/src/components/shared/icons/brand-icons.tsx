@@ -30,6 +30,7 @@ function createIcon(
 ) {
   function Icon({ className }: FigmaIconProps) {
     return (
+      // eslint-disable-next-line @next/next/no-img-element
       <img
         src={asset}
         alt=""

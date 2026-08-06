@@ -27,7 +27,7 @@ from .llm.gateway import LLMUnavailable
 from .operator import agent as operator_agent
 from .outbound import dispatcher
 from .schemas.envelope import OrchestratorInput, OrchestratorResult, RuntimeConfig
-from .stores import events, mongo, qdrant
+from .stores import directory, events, mongo, qdrant
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -133,11 +133,24 @@ async def get_turn(request_id: str):
 
 
 @app.get("/v1/turns")
-async def list_turns(tenant_id: str = Query(...), limit: int = Query(30, le=200)):
-    """Recent turns for a tenant, newest first — a summary per invocation."""
+async def list_turns(
+    tenant_id: str = Query(...),
+    user_id: str | None = Query(None),
+    session_id: str | None = Query(None),
+    limit: int = Query(30, le=200),
+):
+    """Recent turns for a tenant, newest first — a summary per invocation.
+
+    `user_id` and `session_id` narrow the list to one person or one evaluated
+    session; both are optional so an unfiltered call behaves as before."""
+    query: dict = {"tenant_id": tenant_id}
+    if user_id:
+        query["user_id"] = user_id
+    if session_id:
+        query["session_id"] = session_id
     docs = await (
         mongo.get_db()
-        .turns.find({"tenant_id": tenant_id})
+        .turns.find(query)
         .sort([("ts_start", -1), ("_id", -1)])
         .to_list(length=limit)
     )
@@ -145,6 +158,8 @@ async def list_turns(tenant_id: str = Query(...), limit: int = Query(30, le=200)
         [
             {
                 "request_id": d.get("request_id"),
+                "user_id": d.get("user_id"),
+                "session_id": d.get("session_id"),
                 "ts_start": d.get("ts_start"),
                 "status": d.get("status"),
                 "conversation_id": d.get("conversation_id"),
@@ -168,6 +183,7 @@ async def list_turns(tenant_id: str = Query(...), limit: int = Query(30, le=200)
 async def list_conversations(
     tenant_id: str = Query(...),
     channel: str | None = Query(None),
+    user_id: str | None = Query(None),
     limit: int = Query(50, le=200),
 ):
     """Conversations for a tenant enriched with contact + last message —
@@ -176,6 +192,8 @@ async def list_conversations(
     query: dict = {"tenant_id": tenant_id}
     if channel:
         query["channel"] = channel
+    if user_id:
+        query["user_id"] = user_id
     convos = await (
         db.conversations.find(query)
         .sort([("last_message_at", -1), ("_id", -1)])
@@ -256,6 +274,7 @@ class LeadImportRow(BaseModel):
 
 class LeadImportRequest(BaseModel):
     tenant_id: str
+    user_id: str | None = None
     rows: list[LeadImportRow]
 
 
@@ -287,7 +306,7 @@ async def import_contacts(body: LeadImportRequest):
         ]
         name = (row.name or "").strip() or None
         contact, status, reason = await contacts_engine.import_lead(
-            db, body.tenant_id, name, identities
+            db, body.tenant_id, name, identities, body.user_id
         )
         if status == "created":
             created += 1
@@ -337,10 +356,35 @@ async def merge_contacts(body: MergeRequest):
 
 
 # --------------------------------------------------------------------------- #
+# Correspondent directory
+# --------------------------------------------------------------------------- #
+class DirectorySyncRequest(BaseModel):
+    tenant_id: str
+    user_id: str
+    limit: int | None = None
+
+
+@app.post("/v1/directory/sync")
+async def sync_directory(body: DirectorySyncRequest):
+    """Harvest the user's mailbox into the recipient directory.
+
+    Called by the dashboard after a Google sign-in. A cold harvest is hundreds
+    of Gmail round trips, so callers should not block a person on it — the
+    agent also warms the cache lazily on its first miss.
+    """
+    count = await directory.sync(body.tenant_id, body.user_id, body.limit)
+    return {"tenant_id": body.tenant_id, "user_id": body.user_id, "correspondents": count}
+
+
+# --------------------------------------------------------------------------- #
 # Operator agent — the salesperson's command chat
 # --------------------------------------------------------------------------- #
 class OperatorCommandRequest(BaseModel):
     tenant_id: str
+    # Relational key for everything this command writes; see OrchestratorInput.
+    user_id: str | None = None
+    # Eval grouping key, carried onto the thread and reply.
+    session_id: str | None = None
     text: str
     mode: Literal["copilot", "autopilot"] = "copilot"
     thread_id: str | None = None
@@ -366,6 +410,8 @@ async def post_operator_command(body: OperatorCommandRequest):
             preferred_channel=body.preferred_channel,
             runtime=body.runtime,
             client_ref=body.client_ref,
+            user_id=body.user_id,
+            session_id=body.session_id,
         )
     except operator_agent.ThreadNotFound:
         raise HTTPException(status_code=404, detail="operator thread not found") from None
@@ -375,10 +421,23 @@ async def post_operator_command(body: OperatorCommandRequest):
 
 
 @app.get("/v1/operator/threads")
-async def list_operator_threads(tenant_id: str = Query(...), limit: int = Query(30, le=100)):
+async def list_operator_threads(
+    tenant_id: str = Query(...),
+    user_id: str | None = Query(None),
+    limit: int = Query(30, le=100),
+):
+    """Operator chat threads, newest first.
+
+    A tenant is an organisation, so `user_id` matters here: the dashboard
+    reopens the most recent thread on load, and without it one colleague would
+    resume another's conversation.
+    """
+    query: dict = {"tenant_id": tenant_id}
+    if user_id:
+        query["user_id"] = user_id
     docs = await (
         mongo.get_db()
-        .operator_threads.find({"tenant_id": tenant_id})
+        .operator_threads.find(query)
         .sort([("last_message_at", -1), ("_id", -1)])
         .to_list(length=limit)
     )
@@ -386,10 +445,25 @@ async def list_operator_threads(tenant_id: str = Query(...), limit: int = Query(
 
 
 @app.get("/v1/operator/threads/{thread_id}/messages")
-async def list_operator_messages(thread_id: str):
+async def list_operator_messages(
+    thread_id: str,
+    tenant_id: str | None = Query(None),
+    user_id: str | None = Query(None),
+):
+    """One thread's messages.
+
+    Scoped by `tenant_id`/`user_id` when the caller supplies them: a thread id
+    on its own must not be enough to read someone else's conversation. The BFF
+    always sends both, taken from the verified session.
+    """
+    query: dict = {"thread_id": _oid(thread_id, "thread")}
+    if tenant_id:
+        query["tenant_id"] = tenant_id
+    if user_id:
+        query["user_id"] = user_id
     docs = await (
         mongo.get_db()
-        .operator_messages.find({"thread_id": _oid(thread_id, "thread")})
+        .operator_messages.find(query)
         .sort([("created_at", 1), ("_id", 1)])
         .to_list(length=500)
     )
@@ -455,6 +529,9 @@ async def approve_draft(message_id: str, body: DraftApprove | None = None):
                 break
     await dispatcher.dispatch(
         tenant_id=msg["tenant_id"],
+        # The draft carries the user it was raised for; approving it must send
+        # under that same grant, not under whoever clicked approve.
+        user_id=msg.get("user_id") or (convo or {}).get("user_id"),
         channel=convo["channel"] if convo else "unknown",
         to=to,
         conversation_id=str(msg["conversation_id"]),
@@ -508,10 +585,21 @@ def _percentile(sorted_values: list, pct: float) -> int:
 @app.get("/v1/metrics/summary")
 async def metrics_summary(
     tenant_id: str = Query(...),
+    user_id: str | None = Query(None),
+    session_id: str | None = Query(None),
     from_: datetime | None = Query(None, alias="from"),
     to: datetime | None = Query(None),
 ):
+    """Per-adapter and per-session rollup.
+
+    `session_id` is the eval grouping key stamped by the dashboard: filter to
+    one session to score a single run, or omit it and read `by_session` to
+    compare runs against each other."""
     match: dict = {"tenant_id": tenant_id, "status": {"$ne": "in_progress"}}
+    if user_id:
+        match["user_id"] = user_id
+    if session_id:
+        match["session_id"] = session_id
     if from_ or to:
         ts: dict = {}
         if from_:
@@ -520,11 +608,10 @@ async def metrics_summary(
             ts["$lte"] = to
         match["ts_start"] = ts
 
-    agg = [
-        {"$match": match},
-        {
+    def _group_stage(key: str) -> dict:
+        return {
             "$group": {
-                "_id": "$adapter_id",
+                "_id": key,
                 "turns": {"$sum": 1},
                 "errors": {"$sum": {"$cond": [{"$ne": ["$error", None]}, 1, 0]}},
                 "latencies": {"$push": "$totals.latency_ms"},
@@ -554,32 +641,42 @@ async def metrics_summary(
                     }
                 },
             }
-        },
-    ]
-    groups = await mongo.get_db().turns.aggregate(agg).to_list(length=100)
+        }
 
-    by_adapter = []
-    for g in groups:
+    def _rollup(g: dict, key_name: str) -> dict:
         latencies = sorted(v for v in g["latencies"] if v is not None)
         turns = g["turns"]
-        by_adapter.append(
-            {
-                "adapter_id": g["_id"],
-                "turns": turns,
-                "errors": g["errors"],
-                "latency_ms_p50": _percentile(latencies, 0.50),
-                "latency_ms_p95": _percentile(latencies, 0.95),
-                "prompt_tokens": g["prompt_tokens"],
-                "completion_tokens": g["completion_tokens"],
-                "guardrail_violation_rate": round(g["guardrail_violations"] / turns, 4) if turns else 0,
-                "handoff_rate": round(g["handoffs"] / turns, 4) if turns else 0,
-            }
-        )
+        return {
+            key_name: g["_id"],
+            "turns": turns,
+            "errors": g["errors"],
+            "latency_ms_p50": _percentile(latencies, 0.50),
+            "latency_ms_p95": _percentile(latencies, 0.95),
+            "prompt_tokens": g["prompt_tokens"],
+            "completion_tokens": g["completion_tokens"],
+            "guardrail_violation_rate": round(g["guardrail_violations"] / turns, 4) if turns else 0,
+            "handoff_rate": round(g["handoffs"] / turns, 4) if turns else 0,
+        }
+
+    db = mongo.get_db()
+    adapter_groups = await db.turns.aggregate(
+        [{"$match": match}, _group_stage("$adapter_id")]
+    ).to_list(length=100)
+    session_groups = await db.turns.aggregate(
+        [{"$match": {**match, "session_id": {"$ne": None}}}, _group_stage("$session_id")]
+    ).to_list(length=200)
+
+    by_adapter = [_rollup(g, "adapter_id") for g in adapter_groups]
+    by_session = [_rollup(g, "session_id") for g in session_groups]
+
     return {
         "tenant_id": tenant_id,
+        "user_id": user_id,
+        "session_id": session_id,
         "from": from_.isoformat() if from_ else None,
         "to": to.isoformat() if to else None,
         "by_adapter": sorted(by_adapter, key=lambda x: (x["adapter_id"] or "")),
+        "by_session": sorted(by_session, key=lambda x: (x["session_id"] or "")),
     }
 
 

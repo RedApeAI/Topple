@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { DashboardPage } from "@/components/layout/DashboardPage";
-import { InboxScreen } from "@/features/inbox/components/InboxScreen";
+import { MailScreen } from "@/features/mail/components/MailScreen";
 
 export function MailPage() {
   useEffect(() => {
@@ -8,8 +8,8 @@ export function MailPage() {
   }, []);
 
   return (
-    <DashboardPage breadcrumb={["Dashboard", "Mail"]}>
-      <InboxScreen lockedScope="mail" title="Mail" />
+    <DashboardPage breadcrumb={["Dashboard", "Gmail"]}>
+      <MailScreen />
     </DashboardPage>
   );
 }

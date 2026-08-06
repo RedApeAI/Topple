@@ -1,8 +1,6 @@
 import { Bell, Plus, Settings } from "lucide-react";
-import { AvatarStack } from "@/components/shared/AvatarStack";
 import { IconButton } from "@/components/shared/IconButton";
 import { ThemeToggle } from "@/components/shared/ThemeToggle";
-import { team } from "@/constants/team.constants";
 import { cn } from "@/lib/utils";
 
 interface TopbarProps {
@@ -39,8 +37,6 @@ export function Topbar({ breadcrumb, className, onCreateTask }: TopbarProps) {
       </nav>
 
       <div className="flex items-center gap-5">
-        <AvatarStack members={team} visibleCount={3} />
-
         <div className="flex items-center gap-2.5">
           <ThemeToggle />
           <IconButton aria-label="Settings">
@@ -55,7 +51,7 @@ export function Topbar({ breadcrumb, className, onCreateTask }: TopbarProps) {
         <button
           type="button"
           onClick={onCreateTask}
-          className="surface-primary-gradient topbar-task-button flex items-center gap-1 rounded-md py-2.5 pl-3 pr-4 text-[15px] font-medium text-primary-foreground"
+          className="surface-primary-gradient flex items-center gap-1 rounded-md py-2.5 pl-3 pr-4 text-[15px] font-medium text-primary-foreground"
         >
           <Plus className="h-5 w-5" />
           Create Task

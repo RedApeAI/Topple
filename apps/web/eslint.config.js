@@ -1,14 +1,17 @@
-import { config as reactConfig } from "@repo/eslint-config/react-internal";
+import { nextJsConfig } from "@repo/eslint-config/next-js";
 
 /** @type {import("eslint").Linter.Config[]} */
 export default [
-  ...reactConfig,
-  { ignores: [".next/**"] },
+  ...nextJsConfig,
   {
     rules: {
       "@typescript-eslint/no-unused-vars": [
         "warn",
-        { argsIgnorePattern: "^_", varsIgnorePattern: "^_" },
+        {
+          argsIgnorePattern: "^_",
+          varsIgnorePattern: "^_",
+          caughtErrorsIgnorePattern: "^_",
+        },
       ],
     },
   },

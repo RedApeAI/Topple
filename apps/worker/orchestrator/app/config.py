@@ -39,8 +39,17 @@ class Settings(BaseSettings):
     # --- CORS (the dashboard connects to /v1/events directly for SSE) ---
     cors_origins: list[str] = ["http://localhost:3000"]
 
+    # --- The BFF (apps/api) ---
+    # It owns the users' OAuth grants, so anything needing a mailbox goes
+    # through it. Same shared secret in both directions.
+    bff_base_url: str | None = None
+
     # --- Outbound (channel adapters live in another service) ---
     outbound_webhook_url: str | None = None
+    # Shared secret proving a dispatch really came from the orchestrator. The
+    # BFF's outbound endpoint has no session cookie to authenticate against, so
+    # without this it would send mail for any caller who knew a user_id.
+    outbound_webhook_secret: str | None = None
 
 
 settings = Settings()

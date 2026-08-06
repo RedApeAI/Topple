@@ -16,12 +16,31 @@ import { eq } from "drizzle-orm";
 import { env } from "./env.js";
 import { validatePassword } from "./security.js";
 
+/**
+ * Signing in with Google also grants Plucia the user's mailbox, so the mail
+ * feature is a real client rather than a fixture.
+ *
+ * `gmail.modify` is a Google *restricted* scope — it needs an app verification
+ * and a CASA security assessment before anyone outside the project's test
+ * users can grant it. `accessType: "offline"` plus `prompt: "consent"` are
+ * both required to receive a refresh token: Google returns one only on a fresh
+ * consent, so without the prompt the mailbox would go dark an hour after login
+ * and never recover.
+ */
+const GMAIL_SCOPES = [
+  "https://www.googleapis.com/auth/gmail.modify",
+  "https://www.googleapis.com/auth/gmail.send",
+];
+
 const socialProviders = {
   ...(env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET
     ? {
         google: {
           clientId: env.GOOGLE_CLIENT_ID,
           clientSecret: env.GOOGLE_CLIENT_SECRET,
+          scope: GMAIL_SCOPES,
+          accessType: "offline" as const,
+          prompt: "consent" as const,
         },
       }
     : {}),
