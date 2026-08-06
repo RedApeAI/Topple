@@ -22,14 +22,22 @@ export interface AuthSession {
   activeOrganizationId?: string | null;
 }
 
+/** The team the user acts within, derived server-side from their email. */
+export interface Organization {
+  id: string;
+  name: string;
+}
+
 interface SessionPayload {
   user: User;
   session: AuthSession;
+  organization: Organization | null;
 }
 
 interface AuthStore {
   user: User | null;
   session: AuthSession | null;
+  organization: Organization | null;
   isAuthenticated: boolean;
   isLoading: boolean;
   initialized: boolean;
@@ -67,6 +75,7 @@ async function ensureActiveOrganization(
 export const useAuthStore = create<AuthStore>((set, get) => ({
   user: null,
   session: null,
+  organization: null,
   isAuthenticated: false,
   isLoading: true,
   initialized: false,
@@ -89,12 +98,27 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
 
         if (data.authenticated && data.data) {
           const session = await ensureActiveOrganization(data.data.session);
-          set({ user: data.data.user, session, isAuthenticated: true });
+          set({
+            user: data.data.user,
+            session,
+            organization: data.data.organization ?? null,
+            isAuthenticated: true,
+          });
         } else {
-          set({ user: null, session: null, isAuthenticated: false });
+          set({
+            user: null,
+            session: null,
+            organization: null,
+            isAuthenticated: false,
+          });
         }
       } catch {
-        set({ user: null, session: null, isAuthenticated: false });
+        set({
+          user: null,
+          session: null,
+          organization: null,
+          isAuthenticated: false,
+        });
       } finally {
         set({ isLoading: false });
         sessionRequest = undefined;
@@ -117,7 +141,12 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
     try {
       await apiClient.post("/api/v1/auth/logout");
     } finally {
-      set({ user: null, session: null, isAuthenticated: false });
+      set({
+        user: null,
+        session: null,
+        organization: null,
+        isAuthenticated: false,
+      });
     }
   },
 }));

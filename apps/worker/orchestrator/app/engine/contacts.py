@@ -18,6 +18,7 @@ from bson import ObjectId
 from pymongo.errors import DuplicateKeyError
 
 from ..playbooks.loader import Playbook
+from .identity import normalize, normalize_identity
 
 logger = logging.getLogger(__name__)
 
@@ -28,8 +29,31 @@ def _now() -> datetime:
     return datetime.now(timezone.utc)
 
 
-async def resolve_or_create(db, tenant_id: str, channel: str, external_id: str) -> dict:
-    """Find the contact owning this identity, or create a fresh one."""
+def display_name(name: str | None) -> str | None:
+    """Lowercased name for indexed lookup; `profile.name` keeps the real casing."""
+    return name.strip().lower() if name and name.strip() else None
+
+
+async def resolve_or_create(
+    db,
+    tenant_id: str,
+    channel: str,
+    external_id: str,
+    *,
+    name: str | None = None,
+    user_id: str | None = None,
+    source: str = "pipeline",
+) -> dict:
+    """Find the contact owning this identity, or create a fresh one.
+
+    `external_id` is normalised on the way in, so the same person written two
+    ways resolves to one contact rather than forking (see `.identity`).
+
+    `source` records how the contact came to exist — "pipeline" for an inbound
+    turn, "agent" when the Operator agent messaged someone new. `name` is only
+    used at creation; an existing contact's name is never overwritten here.
+    """
+    external_id = normalize(channel, external_id)
     query = {
         "tenant_id": tenant_id,
         "identities": {"$elemMatch": {"channel": channel, "external_id": external_id}},
@@ -40,9 +64,12 @@ async def resolve_or_create(db, tenant_id: str, channel: str, external_id: str) 
 
     doc = {
         "tenant_id": tenant_id,
+        "user_id": user_id,
         "identities": [{"channel": channel, "external_id": external_id}],
-        "profile": {"name": None, "language": None},
+        "profile": {"name": name, "name_lower": display_name(name), "language": None},
         "lead": {"qualification_score": 0},
+        "source": source,
+        "last_contacted_at": None,
         "created_at": _now(),
         "updated_at": _now(),
     }
@@ -52,7 +79,31 @@ async def resolve_or_create(db, tenant_id: str, channel: str, external_id: str) 
         return doc
     except DuplicateKeyError:
         # lost a race with a concurrent turn — the winner's doc is authoritative
-        return await db.contacts.find_one(query)
+        winner = await db.contacts.find_one(query)
+        if winner is None:
+            # The insert was rejected but nothing matches: the identity was
+            # claimed and then removed, or the write failed for another reason.
+            # Returning None would AttributeError on the caller's next access.
+            raise ContactRaceLost(
+                f"identity {channel}:{external_id} could not be resolved or created"
+            )
+        return winner
+
+
+class ContactRaceLost(RuntimeError):
+    """A concurrent writer claimed this identity and it then vanished."""
+
+
+async def touch_contacted(db, contact_id, when: datetime | None = None) -> None:
+    """Record that we just exchanged a message with this contact.
+
+    Denormalised onto the contact so recipient ranking can order by recency
+    without aggregating over every conversation.
+    """
+    await db.contacts.update_one(
+        {"_id": contact_id},
+        {"$set": {"last_contacted_at": when or _now(), "updated_at": _now()}},
+    )
 
 
 # --------------------------------------------------------------------------- #
@@ -122,7 +173,11 @@ async def update_lead(db, contact_id, lead: dict) -> None:
 # Bulk lead import (CSV/Excel upload)
 # --------------------------------------------------------------------------- #
 async def import_lead(
-    db, tenant_id: str, name: str | None, identities: list[dict]
+    db,
+    tenant_id: str,
+    name: str | None,
+    identities: list[dict],
+    user_id: str | None = None,
 ) -> tuple[dict | None, str, str | None]:
     """Create or update one contact from an imported row.
 
@@ -141,6 +196,13 @@ async def import_lead(
     if not identities:
         return None, "skipped", "no channel identities provided"
 
+    # Canonicalise before matching or storing — otherwise a spreadsheet's
+    # "+971 50 123 4567" never matches the "+971501234567" already on file.
+    identities = [normalize_identity(i) for i in identities]
+    identities = [i for i in identities if i["external_id"]]
+    if not identities:
+        return None, "skipped", "no channel identities provided"
+
     query = {
         "tenant_id": tenant_id,
         "$or": [
@@ -153,9 +215,16 @@ async def import_lead(
     if existing is None:
         doc = {
             "tenant_id": tenant_id,
+            "user_id": user_id,
             "identities": identities,
-            "profile": {"name": name, "language": None},
+            "profile": {
+                "name": name,
+                "name_lower": display_name(name),
+                "language": None,
+            },
             "lead": {"qualification_score": 0},
+            "source": "import",
+            "last_contacted_at": None,
             "created_at": _now(),
             "updated_at": _now(),
         }
@@ -180,6 +249,7 @@ async def import_lead(
     profile = dict(existing.get("profile") or {})
     if name and not profile.get("name"):
         profile["name"] = name
+        profile["name_lower"] = display_name(name)
 
     update = {"identities": merged, "profile": profile, "updated_at": _now()}
     try:

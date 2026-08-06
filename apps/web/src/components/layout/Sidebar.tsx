@@ -1,12 +1,11 @@
 "use client";
 
-import { Link, useLocation, useNavigate } from "react-router-dom";
+import { useState } from "react";
+import { Link, useLocation } from "react-router-dom";
 import {
   ChevronDown,
   ChevronsUpDown,
-  LogOut,
   PanelLeftClose,
-  PanelLeftOpen,
   Search,
 } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -21,6 +20,7 @@ import { UnreadBadge } from "@/components/shared/UnreadBadge";
 import { cn } from "@/lib/utils";
 import { useUIStore } from "@/store/ui.store";
 import { useChannelNav } from "@/hooks/use-channel-nav";
+import { currentUser } from "@/constants/team.constants";
 import { useAuthStore } from "@/store/auth.store";
 import {
   bottomNavItems,
@@ -42,77 +42,75 @@ function initials(name: string) {
 export function Sidebar() {
   const collapsed = useUIStore((s) => s.sidebarCollapsed);
   const toggleSidebar = useUIStore((s) => s.toggleSidebar);
+  const [isHovering, setIsHovering] = useState(false);
   const { pathname } = useLocation();
-  const navigate = useNavigate();
   const { data: channelNav } = useChannelNav();
-  const user = useAuthStore((state) => state.user);
-  const logout = useAuthStore((state) => state.logout);
+  const user = useAuthStore((s) => s.user);
+  const organization = useAuthStore((s) => s.organization);
+
+  // The fixture stands in only until the session lands, so the chip doesn't
+  // flash empty on first paint.
+  const displayName = user?.name || currentUser.name;
+  const avatarUrl = user?.image ?? currentUser.avatarUrl;
+  const teamName = organization?.name ?? user?.email ?? currentUser.email;
+
+  // Collapsed sidebar temporarily expands on hover; the persisted
+  // `collapsed` preference only changes via the collapse button.
+  const isRail = collapsed && !isHovering;
 
   const unreadFor = (unreadKey?: string) =>
     channelNav?.find((c) => c.key === unreadKey)?.unread ?? 0;
 
-  const handleLogout = async () => {
-    await logout();
-    navigate("/welcome", { replace: true });
-  };
-
   return (
     <aside
+      onMouseEnter={() => setIsHovering(true)}
+      onMouseLeave={() => setIsHovering(false)}
       className={cn(
         "sticky top-0 flex h-screen shrink-0 flex-col justify-between border-r border-sidebar-border bg-sidebar p-3 transition-[width] duration-200",
-        collapsed ? "w-[84px] items-center px-3" : "w-[280px] p-5",
+        isRail ? "w-[84px] items-center px-3" : "w-[280px] p-5",
       )}
     >
       <div
         className={cn(
           "flex w-full flex-col gap-[30px]",
-          collapsed && "items-center gap-7",
+          isRail && "items-center gap-7",
         )}
       >
-        <div className={cn("flex w-full flex-col gap-5", collapsed && "gap-6")}>
+        <div className={cn("flex w-full flex-col gap-5", isRail && "gap-6")}>
           <div
             className={cn(
               "flex items-center justify-between",
-              collapsed && "flex-col gap-4",
+              isRail && "flex-col gap-4",
             )}
           >
             <div className="flex items-center gap-2">
               <LogoMark size={36} />
-              {!collapsed && (
-                <div className="flex flex-col">
-                  <div className="flex items-center gap-1">
-                    <span className="font-heading text-[16px] font-semibold text-foreground">
-                      Plucia
-                    </span>
-                    <span className="rounded-full bg-primary px-1.5 py-0.5 text-[11px] font-medium text-primary-foreground">
-                      Pro
-                    </span>
-                  </div>
-                  <span className="text-[12px] font-medium text-muted-foreground">
-                    {user?.email ?? "pluciatest@gmail.com"}
+              {!isRail && (
+                <div className="flex items-center gap-1">
+                  <span className="font-heading text-[16px] font-semibold text-foreground">
+                    Plucia
+                  </span>
+                  <span className="rounded-full bg-primary px-1.5 py-0.5 text-[11px] font-medium text-primary-foreground">
+                    Pro
                   </span>
                 </div>
               )}
             </div>
-            <Tooltip>
-              <TooltipTrigger
-                onClick={toggleSidebar}
-                aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-                className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground"
-              >
-                {collapsed ? (
-                  <PanelLeftOpen className="h-4 w-4" />
-                ) : (
+            {!collapsed && (
+              <Tooltip>
+                <TooltipTrigger
+                  onClick={toggleSidebar}
+                  aria-label="Collapse sidebar"
+                  className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground"
+                >
                   <PanelLeftClose className="h-4 w-4" />
-                )}
-              </TooltipTrigger>
-              <TooltipContent side="right">
-                {collapsed ? "Expand sidebar" : "Collapse sidebar"}
-              </TooltipContent>
-            </Tooltip>
+                </TooltipTrigger>
+                <TooltipContent side="right">Collapse sidebar</TooltipContent>
+              </Tooltip>
+            )}
           </div>
 
-          {collapsed ? (
+          {isRail ? (
             <Tooltip>
               <TooltipTrigger
                 aria-label="Search"
@@ -138,27 +136,24 @@ export function Sidebar() {
         <NavGroup
           section={dashboardSection}
           pathname={pathname}
-          collapsed={collapsed}
+          collapsed={isRail}
           unreadFor={unreadFor}
         />
         <NavGroup
           section={socialsSection}
           pathname={pathname}
-          collapsed={collapsed}
+          collapsed={isRail}
           unreadFor={unreadFor}
         />
       </div>
 
       <div
-        className={cn(
-          "flex w-full flex-col gap-4",
-          collapsed && "items-center",
-        )}
+        className={cn("flex w-full flex-col gap-4", isRail && "items-center")}
       >
         <div
           className={cn(
             "flex w-full flex-col gap-0.5",
-            collapsed && "items-center gap-1.5",
+            isRail && "items-center gap-1.5",
           )}
         >
           {bottomNavItems.map((item) => (
@@ -166,65 +161,43 @@ export function Sidebar() {
               key={item.href}
               item={item}
               pathname={pathname}
-              collapsed={collapsed}
+              collapsed={isRail}
               unread={0}
             />
           ))}
         </div>
         <Separator />
-        {collapsed ? (
-          <div className="flex flex-col items-center gap-2">
-            <Avatar className="h-11 w-11 rounded-xl">
-              <AvatarImage src={user?.image ?? ""} alt={user?.name ?? "User"} />
-              <AvatarFallback className="rounded-xl text-[12px]">
-                {initials(user?.name ?? "User")}
+        {isRail ? (
+          <Avatar className="h-11 w-11 rounded-xl">
+            <AvatarImage src={avatarUrl} alt={displayName} />
+            <AvatarFallback className="rounded-xl text-[12px]">
+              {initials(displayName)}
+            </AvatarFallback>
+          </Avatar>
+        ) : (
+          <button
+            type="button"
+            className="flex w-full items-center gap-2.5 rounded-[10px] bg-card px-2 py-2 pr-3 shadow-row hover:bg-accent"
+          >
+            <Avatar className="h-10 w-10 rounded-[6px]">
+              <AvatarImage src={avatarUrl} alt={displayName} />
+              <AvatarFallback className="rounded-[6px] text-[13px]">
+                {initials(displayName)}
               </AvatarFallback>
             </Avatar>
-            <Tooltip>
-              <TooltipTrigger
-                onClick={handleLogout}
-                aria-label="Logout"
-                className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground"
-              >
-                <LogOut className="h-4 w-4" />
-              </TooltipTrigger>
-              <TooltipContent side="right">Logout</TooltipContent>
-            </Tooltip>
-          </div>
-        ) : (
-          <div className="flex flex-col gap-2">
-            <button
-              type="button"
-              className="flex w-full items-center gap-2.5 rounded-[10px] bg-card px-2 py-2 pr-3 shadow-row hover:bg-accent"
-            >
-              <Avatar className="h-10 w-10 rounded-[6px]">
-                <AvatarImage
-                  src={user?.image ?? ""}
-                  alt={user?.name ?? "User"}
-                />
-                <AvatarFallback className="rounded-[6px] text-[13px]">
-                  {initials(user?.name ?? "User")}
-                </AvatarFallback>
-              </Avatar>
-              <div className="flex flex-1 flex-col items-start overflow-hidden text-left">
-                <span className="w-full truncate font-heading text-[14px] font-semibold text-foreground">
-                  {user?.name ?? "User"}
-                </span>
-                <span className="w-full truncate text-[14px] font-medium text-muted-foreground">
-                  {user?.email ?? "user@example.com"}
-                </span>
-              </div>
-              <ChevronsUpDown className="h-4 w-4 shrink-0 text-muted-foreground" />
-            </button>
-            <button
-              type="button"
-              onClick={handleLogout}
-              className="flex w-full items-center gap-2 rounded-[8px] px-2 py-1.5 text-[14px] font-medium text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
-            >
-              <LogOut className="h-4 w-4" />
-              <span>Logout</span>
-            </button>
-          </div>
+            <div className="flex flex-1 flex-col items-start overflow-hidden text-left">
+              <span className="w-full truncate font-heading text-[14px] font-semibold text-foreground">
+                {displayName}
+              </span>
+              {/* The team, not the email — the email is already the account
+                  identity above, and which workspace you are acting in is the
+                  thing that changes what the agent can see. */}
+              <span className="w-full truncate text-[14px] font-medium text-muted-foreground">
+                {teamName}
+              </span>
+            </div>
+            <ChevronsUpDown className="h-4 w-4 shrink-0 text-muted-foreground" />
+          </button>
         )}
       </div>
     </aside>
@@ -243,8 +216,15 @@ function NavGroup({
   unreadFor: (key?: string) => number;
 }) {
   return (
-    <div className="flex w-full flex-col gap-2.5">
-      {!collapsed && (
+    <div
+      className={cn(
+        "flex w-full flex-col gap-2.5",
+        collapsed && "items-center",
+      )}
+    >
+      {collapsed ? (
+        <div className="h-px w-8 bg-sidebar-border" />
+      ) : (
         <div className="flex items-center gap-1">
           <span className="text-[14px] font-medium text-muted-foreground">
             {section.label}
@@ -313,7 +293,7 @@ function NavRow({
       <TooltipTrigger render={<div className="relative" />}>
         {row}
         {unread > 0 && (
-          <span className="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full bg-destructive" />
+          <span className="absolute -right-1 -top-1 h-2.5 w-2.5 rounded-full bg-destructive ring-2 ring-sidebar" />
         )}
       </TooltipTrigger>
       <TooltipContent side="right">{item.label}</TooltipContent>

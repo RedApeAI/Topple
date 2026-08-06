@@ -60,6 +60,14 @@ class OrchestratorInput(BaseModel):
     request_id: str  # idempotency key
     received_at: datetime
     tenant_id: str
+    # The signed-in person this turn belongs to. Stored as a relational key on
+    # every document the turn writes, so operations can be attributed to a user
+    # and not only to a tenant. Optional so existing callers keep working.
+    user_id: str | None = None
+    # Opaque grouping key for evaluation. Minted by the dashboard per working
+    # session and carried, unread by the pipeline, onto the turn document —
+    # metrics slice on it to compare runs.
+    session_id: str | None = None
     channel: Channel
     granted_scopes: list[str]
     runtime: RuntimeConfig

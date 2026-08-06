@@ -5,6 +5,8 @@ import { AppError } from "../lib/errors.js";
 import { env } from "../lib/env.js";
 import { jsonValidator } from "../lib/validation.js";
 import { requireAuth } from "../middleware/require-auth.js";
+import type { AuthSession, AuthUser } from "../lib/auth.js";
+import { resolveTenant } from "../services/tenant.service.js";
 import { rateLimit } from "../middleware/rate-limit.js";
 import {
   assertOk,
@@ -113,8 +115,26 @@ authRoutes.get("/session", async (context) => {
     return context.json({ data: null, authenticated: false }, 200);
   }
   applyCookies(context, result);
+
+  // The team travels with the session so the sidebar can name it without a
+  // second round trip, and so the client never has to work it out itself.
+  // A failure here must not sign the user out — the app is usable without it.
+  let organization: { id: string; name: string } | null = null;
+  try {
+    const payload = result.data as { user?: AuthUser; session?: AuthSession };
+    if (payload?.user && payload?.session) {
+      organization = await resolveTenant(
+        payload.user,
+        payload.session,
+        context.req.raw.headers,
+      );
+    }
+  } catch {
+    organization = null;
+  }
+
   return context.json({
-    data: result.data,
+    data: { ...(result.data as object), organization },
     authenticated: true,
   });
 });

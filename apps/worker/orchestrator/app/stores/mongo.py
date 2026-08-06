@@ -65,6 +65,19 @@ async def init_indexes(db=None) -> None:
         name="uniq_tenant_identity",
     )
 
+    # Recipient resolution looks up contacts by lowercased name and orders the
+    # pick-list by most-recent contact; neither path had an index.
+    await db.contacts.create_index(
+        [("tenant_id", 1), ("profile.name_lower", 1)],
+        name="tenant_name_lower",
+        sparse=True,
+    )
+    await db.contacts.create_index(
+        [("tenant_id", 1), ("last_contacted_at", -1)],
+        name="tenant_last_contacted",
+        sparse=True,
+    )
+
     await db.conversations.create_index(
         [("tenant_id", 1), ("contact_id", 1), ("channel", 1)],
         name="tenant_contact_channel",
@@ -82,6 +95,25 @@ async def init_indexes(db=None) -> None:
     )
     await db.turns.create_index(
         [("conversation_id", 1), ("ts_start", 1)], name="convo_ts"
+    )
+    # user_id is the relational key on reads; session_id is the eval grouping
+    # key that /v1/metrics/summary aggregates on. Both are sparse because turns
+    # written before these fields existed carry neither.
+    await db.turns.create_index(
+        [("tenant_id", 1), ("user_id", 1), ("ts_start", -1)],
+        name="tenant_user_ts",
+        sparse=True,
+    )
+    await db.turns.create_index(
+        [("tenant_id", 1), ("session_id", 1), ("ts_start", -1)],
+        name="tenant_session_ts",
+        sparse=True,
+    )
+
+    await db.conversations.create_index(
+        [("tenant_id", 1), ("user_id", 1), ("last_message_at", -1)],
+        name="tenant_user_last_message",
+        sparse=True,
     )
 
     await db.operator_threads.create_index(

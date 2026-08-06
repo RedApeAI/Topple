@@ -86,10 +86,12 @@ eggs/
 lib/
 lib64/
 # Application source directories named `lib` are not Python build output.
-!apps/api/src/lib/
-apps/api/src/lib/*
-!apps/web/src/lib/
-apps/web/src/lib/*
+# `lib/` above matches at any depth, so re-include the app source trees --
+# both the directories themselves and everything beneath them.
+!apps/api/src/**/lib/
+!apps/api/src/**/lib/**
+!apps/web/src/**/lib/
+!apps/web/src/**/lib/**
 parts/
 sdist/
 var/

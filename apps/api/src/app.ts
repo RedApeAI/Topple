@@ -9,6 +9,8 @@ import { getSecurityHeaders } from "./lib/security.js";
 import { errorHandler } from "./middleware/error-handler.js";
 import { requestContext } from "./middleware/request-context.js";
 import { authRoutes } from "./routes/auth.js";
+import { mailRoutes, mailWebhookRoutes } from "./routes/mail.js";
+import { orchestratorRoutes } from "./routes/orchestrator.js";
 import { zernioRoutes, zernioWebhookRoutes } from "./routes/zernio.js";
 import type { AppEnv } from "./types.js";
 
@@ -59,6 +61,16 @@ app.get("/healthz", (context) => context.json({ ok: true }));
 app.route("/api/v1/auth", authRoutes);
 app.route("/api/v1/zernio", zernioWebhookRoutes);
 app.route("/api/v1/zernio", zernioRoutes);
+
+// The signed-in user's Gmail, proxied so the OAuth token stays server-side.
+// The webhook route is mounted first: it authenticates by shared secret and
+// must not fall behind the session guard `mailRoutes` applies to everything.
+app.route("/api/v1/mail", mailWebhookRoutes);
+app.route("/api/v1/mail", mailRoutes);
+
+// The agent, proxied. The dashboard never reaches the orchestrator directly —
+// tenant and user come from the session here, not from the caller.
+app.route("/api/v1/agent", orchestratorRoutes);
 
 // Better Auth validates its own payloads and owns all auth/OAuth callbacks.
 app.on(["GET", "POST"], "/api/auth/*", (context) =>
