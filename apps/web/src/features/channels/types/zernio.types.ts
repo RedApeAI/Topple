@@ -30,10 +30,22 @@ export interface WhatsAppTemplate {
   components: Array<Record<string, unknown>>;
 }
 
+export interface WhatsAppPhoneNumber {
+  id: string;
+  display_phone_number: string;
+  verified_name: string;
+  quality_rating: string;
+  name_status: string;
+  messaging_limit_tier: string;
+  wabaId: string;
+  wabaName: string;
+}
+
 export interface ZernioRealtimeEvent {
   id: string;
   type: string;
   platform: string | null;
   conversationId: string | null;
   createdAt: string;
+  data?: Record<string, unknown>;
 }

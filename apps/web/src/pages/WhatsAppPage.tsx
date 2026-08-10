@@ -2,14 +2,17 @@ import { useEffect, useState } from "react";
 import { MessageCirclePlus, RefreshCw, Unplug } from "lucide-react";
 import { DashboardPage } from "@/components/layout/DashboardPage";
 import { Button } from "@/components/ui/button";
-import { ChannelConnectionLoading } from "@/features/channels/components/ChannelConnection";
-import { WhatsAppCredentialsConnection } from "@/features/channels/components/WhatsAppCredentialsConnection";
+import {
+  ChannelConnection,
+  ChannelConnectionLoading,
+} from "@/features/channels/components/ChannelConnection";
 import { WhatsAppIcon } from "@/components/shared/icons/brand-icons";
 import { DisconnectChannelDialog } from "@/features/channels/components/DisconnectChannelDialog";
 import { NewWhatsAppConversationDialog } from "@/features/channels/components/NewWhatsAppConversationDialog";
 import { InboxScreen } from "@/features/inbox/components/InboxScreen";
 import { useChannelStore } from "@/store/channel.store";
 import { useInboxStore } from "@/store/inbox.store";
+import { configureZernioWebhook } from "@/features/channels/services/zernio.service";
 
 export function WhatsAppPage() {
   const [disconnectOpen, setDisconnectOpen] = useState(false);
@@ -20,19 +23,27 @@ export function WhatsAppPage() {
   const disconnecting = useChannelStore((state) => state.disconnecting);
   const error = useChannelStore((state) => state.error);
   const load = useChannelStore((state) => state.load);
-  const connectWhatsAppWithCredentials = useChannelStore(
-    (state) => state.connectWhatsAppWithCredentials,
-  );
+  const connect = useChannelStore((state) => state.connect);
   const disconnect = useChannelStore((state) => state.disconnect);
   const loadConversations = useInboxStore((state) => state.loadConversations);
   const account = status?.accounts.find(
     (candidate) => candidate.platform === "whatsapp",
   );
+  const accountId = account?.id;
 
   useEffect(() => {
     document.title = "WhatsApp — Plucia";
     void load().catch(() => undefined);
   }, [load]);
+
+  // Register the Zernio webhook subscription idempotently once the inbox is in
+  // use. It only succeeds when the API has ZERNIO_WEBHOOK_PUBLIC_URL (an HTTPS
+  // tunnel) configured; without one, realtime push is unavailable and the
+  // client falls back to polling.
+  useEffect(() => {
+    if (!accountId) return;
+    void configureZernioWebhook().catch(() => undefined);
+  }, [accountId]);
 
   return (
     <DashboardPage breadcrumb={["Dashboard", "WhatsApp"]}>
@@ -121,11 +132,15 @@ export function WhatsAppPage() {
           />
         </>
       ) : (
-        <WhatsAppCredentialsConnection
+        <ChannelConnection
+          platform="whatsapp"
+          label="WhatsApp"
+          icon={WhatsAppIcon}
+          loading={loading}
           connecting={connecting === "whatsapp"}
           error={error}
           reconnect={account?.needsReconnection}
-          onConnect={connectWhatsAppWithCredentials}
+          onConnect={() => void connect("whatsapp").catch(() => undefined)}
           onRetry={() => void load(true).catch(() => undefined)}
         />
       )}

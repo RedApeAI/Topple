@@ -30,7 +30,16 @@ export default defineConfig(({ mode }) => {
       proxy: {
         // Preserve the public browser host/protocol so Better Auth can build
         // same-origin OAuth callbacks when Vite is behind an HTTPS tunnel.
-        "/api": { target: backendTarget, changeOrigin: true, xfwd: true },
+        // `ws: true` forwards socket.io's WebSocket transport (which arrives as
+        // an HTTP `Upgrade` request) — without it the browser's
+        // ws://localhost:3000/api/socket.io handshake is dropped and the
+        // client times out, so realtime messages never push to the UI.
+        "/api": {
+          target: backendTarget,
+          changeOrigin: true,
+          xfwd: true,
+          ws: true,
+        },
         "/healthz": { target: backendTarget, changeOrigin: true, xfwd: true },
       },
     },
