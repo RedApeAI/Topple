@@ -20,7 +20,6 @@ import { UnreadBadge } from "@/components/shared/UnreadBadge";
 import { cn } from "@/lib/utils";
 import { useUIStore } from "@/store/ui.store";
 import { useChannelNav } from "@/hooks/use-channel-nav";
-import { currentUser } from "@/constants/team.constants";
 import { useAuthStore } from "@/store/auth.store";
 import {
   bottomNavItems,
@@ -48,11 +47,9 @@ export function Sidebar() {
   const user = useAuthStore((s) => s.user);
   const organization = useAuthStore((s) => s.organization);
 
-  // The fixture stands in only until the session lands, so the chip doesn't
-  // flash empty on first paint.
-  const displayName = user?.name || currentUser.name;
-  const avatarUrl = user?.image ?? currentUser.avatarUrl;
-  const teamName = organization?.name ?? user?.email ?? currentUser.email;
+  const displayName = user?.name ?? "Account";
+  const avatarUrl = user?.image ?? undefined;
+  const teamName = organization?.name ?? "Workspace";
 
   // Collapsed sidebar temporarily expands on hover; the persisted
   // `collapsed` preference only changes via the collapse button.

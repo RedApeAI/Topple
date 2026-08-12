@@ -15,6 +15,7 @@ const UI_TO_API: Record<ChannelKey, OrchestratorChannel | null> = {
   // Stored on contacts as an identity, but `schemas.envelope.Channel` doesn't
   // accept it — there is no LinkedIn turn pipeline yet.
   linkedin: null,
+  telegram: null,
 };
 
 const API_TO_UI: Record<OrchestratorChannel, ChannelKey> = {

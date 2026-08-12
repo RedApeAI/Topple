@@ -7,30 +7,35 @@
     "predev": "pnpm --filter @repo/db-sql build",
     "dev": "node --import tsx src/index.ts",
     "build": "tsc",
+    "cf:dev": "wrangler dev",
+    "cf:deploy": "wrangler deploy",
+    "cf:deploy:dry-run": "wrangler deploy --dry-run",
+    "cf:types": "wrangler types",
     "prestart": "pnpm --filter @repo/db-sql build",
     "start": "node dist/index.js",
     "lint": "eslint --max-warnings 0",
-    "check-types": "tsc --noEmit"
+    "check-types": "tsc --noEmit",
+    "test": "node --import tsx --test --import ./src/messaging/__tests__/test-env.ts src/messaging/__tests__/*.test.ts"
   },
   "dependencies": {
     "@better-auth/drizzle-adapter": "1.6.23",
     "@hono/node-server": "^2.0.8",
     "@hono/zod-validator": "^0.8.0",
     "@repo/db-sql": "workspace:*",
-    "@socket.io/redis-adapter": "^8.3.0",
     "better-auth": "1.6.23",
     "dotenv": "^16.6.1",
     "drizzle-orm": "^0.45.2",
     "hono": "^4.12.29",
-    "socket.io": "^4.8.3",
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@cloudflare/workers-types": "5.20260809.1",
     "@repo/eslint-config": "workspace:*",
     "@repo/typescript-config": "workspace:*",
     "@types/node": "^22.15.3",
     "eslint": "^9.39.1",
     "tsx": "^4.20.6",
-    "typescript": "5.9.2"
+    "typescript": "5.9.2",
+    "wrangler": "^4.120.0"
   }
 }

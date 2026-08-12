@@ -93,7 +93,6 @@ export const auth = betterAuth({
       secure: env.COOKIE_SECURE,
       sameSite: env.COOKIE_CROSS_SITE ? "none" : "lax",
       path: "/",
-      ...(env.COOKIE_CROSS_SITE ? { partitioned: true } : {}),
     },
     useSecureCookies: env.COOKIE_SECURE,
   },

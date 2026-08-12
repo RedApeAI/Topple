@@ -12,8 +12,8 @@ export function CalendarPage() {
     <DashboardPage breadcrumb={["Dashboard", "Calendar"]}>
       <ComingSoon
         icon={CalendarMinus2}
-        title="Calendar is on the way"
-        description="See every meeting the Operator books for you, synced across channels."
+        title="Calendar needs a calendar API"
+        description="No calendar provider or event resource is currently exposed by the backend, so this page is intentionally inactive."
       />
     </DashboardPage>
   );

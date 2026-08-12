@@ -27,6 +27,8 @@ interface MailState {
   error: string | null;
   labels: string[];
   account: MailAddress | null;
+  nextPageToken?: string;
+  loadingMore: boolean;
 
   filter: MailFilter;
   query: MailQuery;
@@ -38,6 +40,7 @@ interface MailState {
   undo: MailUndo | null;
 
   load: (force?: boolean) => Promise<void>;
+  loadMore: () => Promise<void>;
 
   setFilter: (filter: MailFilter) => void;
   setQuery: (patch: Partial<MailQuery>) => void;
@@ -86,6 +89,8 @@ function toOutgoing(draft: MailDraft): mailApi.OutgoingMail {
     ...(draft.bcc ? { bcc: parseAddressList(draft.bcc) } : {}),
     subject: draft.subject,
     body: draft.body,
+    ...(draft.threadId ? { threadId: draft.threadId } : {}),
+    ...(draft.inReplyTo ? { inReplyTo: draft.inReplyTo } : {}),
   };
 }
 
@@ -150,6 +155,8 @@ export const useMailStore = create<MailState>((set, get) => {
     error: null,
     labels: [],
     account: null,
+    nextPageToken: undefined,
+    loadingMore: false,
 
     filter: { kind: "view", value: "all" },
     query: EMPTY_MAIL_QUERY,
@@ -164,8 +171,15 @@ export const useMailStore = create<MailState>((set, get) => {
       if (!force && get().status !== "idle") return;
       set({ status: "loading", error: null });
       try {
-        const { messages, labels, account } = await mailApi.fetchMailbox();
-        set({ messages, labels, account, status: "ready" });
+        const { messages, labels, account, nextPageToken } =
+          await mailApi.fetchMailbox();
+        set({
+          messages,
+          labels,
+          account,
+          nextPageToken,
+          status: "ready",
+        });
         // Opening mail is the first moment the mailbox is known to be
         // connected. Warm the agent's recipient directory in the background —
         // a failure here must never affect the inbox the user is looking at.
@@ -175,6 +189,30 @@ export const useMailStore = create<MailState>((set, get) => {
           status: "error",
           error: errorMessage(error, "Couldn't load your mailbox"),
         });
+      }
+    },
+
+    loadMore: async () => {
+      const token = get().nextPageToken;
+      if (!token || get().loadingMore) return;
+      set({ loadingMore: true, error: null });
+      try {
+        const page = await mailApi.fetchMailbox(60, token);
+        const existingIds = new Set(
+          get().messages.map((message) => message.id),
+        );
+        set((state) => ({
+          messages: [
+            ...state.messages,
+            ...page.messages.filter((message) => !existingIds.has(message.id)),
+          ],
+          labels: [...new Set([...state.labels, ...page.labels])],
+          nextPageToken: page.nextPageToken,
+        }));
+      } catch (error) {
+        set({ error: errorMessage(error, "Couldn't load more mail") });
+      } finally {
+        set({ loadingMore: false });
       }
     },
 

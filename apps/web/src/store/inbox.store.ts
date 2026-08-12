@@ -4,11 +4,10 @@ import {
   fetchConversations,
 } from "@/features/inbox/services/conversation.service";
 import {
-  approveDraft,
-  discardDraft,
   fetchChatDetail,
   sendContactMessage,
 } from "@/features/inbox/services/chat.service";
+import { approveDraft, discardDraft } from "@/lib/mock/orchestrator";
 import type {
   ChatDetail,
   ChatMessage,
@@ -23,16 +22,20 @@ import {
   formatRelativeTime,
 } from "@/lib/format-relative-time";
 
-/** Pull the Zernio message id out of the send endpoint response. */
+/** Pull the normalized message id out of a send endpoint response. */
 function extractSentMessageId(response: unknown): string | undefined {
-  const data = (
-    response as {
-      data?: { data?: { messageId?: unknown } };
-    }
-  )?.data?.data;
-  return typeof data?.messageId === "string" && data.messageId
-    ? data.messageId
-    : undefined;
+  const responseData = response as {
+    data?: {
+      data?: { messageId?: unknown; id?: unknown };
+      message?: { id?: unknown };
+    };
+  };
+  const data = responseData?.data?.data;
+  if (typeof data?.messageId === "string" && data.messageId)
+    return data.messageId;
+  if (typeof data?.id === "string" && data.id) return data.id;
+  const messageId = responseData?.data?.message?.id;
+  return typeof messageId === "string" && messageId ? messageId : undefined;
 }
 
 type ScopeMap<T> = Partial<Record<InboxScope, T>>;
@@ -56,7 +59,11 @@ interface InboxStore {
     force?: boolean,
   ) => Promise<void>;
   mergeChat: (conversation: Conversation) => Promise<void>;
-  sendMessage: (chat: ChatDetail, text: string) => Promise<void>;
+  sendMessage: (
+    chat: ChatDetail,
+    text: string,
+    attachmentIds?: string[],
+  ) => Promise<void>;
   appendMessageToChat: (conversationId: string, message: ChatMessage) => void;
   updateMessageStatus: (
     conversationId: string,
@@ -170,15 +177,25 @@ export const useInboxStore = create<InboxStore>((set, get) => ({
     ]);
   },
 
-  sendMessage: async (chat, text) => {
-    const optimisticId = `local-${Date.now()}`;
+  sendMessage: async (chat, text, attachmentIds) => {
+    const clientMessageId = crypto.randomUUID();
+    const optimisticId = `local-${clientMessageId}`;
     set({ sendPending: true, sendError: undefined });
     set((state) => {
       const existing = state.chats[chat.id];
       const nextConversations = { ...state.conversations };
-      if (nextConversations.whatsapp) {
-        nextConversations.whatsapp = nextConversations.whatsapp.map((c) =>
-          c.id === chat.id ? { ...c, preview: text } : c,
+      for (const scope of Object.keys(nextConversations) as InboxScope[]) {
+        const list = nextConversations[scope];
+        if (!list) continue;
+        nextConversations[scope] = list.map((c) =>
+          c.id === chat.id
+            ? {
+                ...c,
+                preview: text,
+                unread: false,
+                timestamp: formatRelativeTime(new Date().toISOString()),
+              }
+            : c,
         );
       }
       return {
@@ -204,9 +221,13 @@ export const useInboxStore = create<InboxStore>((set, get) => ({
       };
     });
     try {
-      const response = await sendContactMessage(chat, text);
-      // The realtime `message:delivered`/`message:read`/`message:failed`
-      // events carry the Zernio message id, so replace the optimistic
+      const response = await sendContactMessage(
+        chat,
+        text,
+        clientMessageId,
+        attachmentIds,
+      );
+      // Realtime delivery events carry the provider message id, so replace the optimistic
       // `local-` id with it once the server confirms the send. Otherwise the
       // status updates can never match the optimistic bubble.
       const realMessageId = extractSentMessageId(response);
@@ -257,9 +278,17 @@ export const useInboxStore = create<InboxStore>((set, get) => ({
       const ids = new Set(existing.messages.map((m) => m.id));
       if (ids.has(message.id)) return {};
       const nextConversations = { ...state.conversations };
-      if (nextConversations.whatsapp) {
-        nextConversations.whatsapp = nextConversations.whatsapp.map((c) =>
-          c.id === conversationId ? { ...c, preview: message.text } : c,
+      for (const scope of Object.keys(nextConversations) as InboxScope[]) {
+        const list = nextConversations[scope];
+        if (!list) continue;
+        nextConversations[scope] = list.map((c) =>
+          c.id === conversationId
+            ? {
+                ...c,
+                preview: message.text,
+                timestamp: formatRelativeTime(new Date().toISOString()),
+              }
+            : c,
         );
       }
       return {
@@ -328,7 +357,7 @@ export const useInboxStore = create<InboxStore>((set, get) => ({
   },
 
   mergeChat: async (conversation: Conversation) => {
-    if (conversation.source !== "zernio" || !conversation.accountId) return;
+    if (conversation.source !== "messaging") return;
     try {
       const fresh = await fetchChatDetail(conversation);
       set((state) => {

@@ -16,9 +16,10 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
-  WhatsAppIcon,
+  CallSparkIcon,
   GmailIcon,
-  LinkedInIcon,
+  InstagramIcon,
+  WhatsAppIcon,
 } from "@/components/shared/icons/brand-icons";
 import { cn } from "@/lib/utils";
 import { useUIStore, type OperatorMode } from "@/store/ui.store";
@@ -31,7 +32,8 @@ const CHANNELS: {
 }[] = [
   { key: "whatsapp", label: "WhatsApp", icon: WhatsAppIcon },
   { key: "mail", label: "Mail", icon: GmailIcon },
-  { key: "linkedin", label: "Linkedin", icon: LinkedInIcon },
+  { key: "instagram", label: "Instagram", icon: InstagramIcon },
+  { key: "call", label: "AI Calling", icon: CallSparkIcon },
 ];
 
 const MODES: {

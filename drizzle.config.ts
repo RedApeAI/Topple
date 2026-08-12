@@ -9,12 +9,13 @@ const rootDir = dirname(fileURLToPath(import.meta.url));
 // `pnpm --filter @repo/db-sql db:migrate` runs drizzle-kit with the *package*
 // as its working directory, so a bare `dotenv/config` would look for
 // `packages/db-sql/.env` and silently find nothing. Load by absolute path
-// instead, in precedence order — dotenv never overwrites an already-set
-// variable, so the first file to define DATABASE_URL wins.
+// instead, with the API's local profile first. dotenv never overwrites an
+// already-set variable, so migrations target the same database the API uses.
 for (const envPath of [
-  resolve(rootDir, ".env"),
-  resolve(rootDir, "packages/db-sql/.env"),
+  resolve(rootDir, "apps/api/.env.local"),
   resolve(rootDir, "apps/api/.env"),
+  resolve(rootDir, "packages/db-sql/.env"),
+  resolve(rootDir, ".env"),
 ]) {
   if (existsSync(envPath)) loadEnv({ path: envPath });
 }

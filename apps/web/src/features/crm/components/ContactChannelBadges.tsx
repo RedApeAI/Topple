@@ -2,8 +2,15 @@ import { ChannelBadge } from "@/components/shared/ChannelBadge";
 import { cn } from "@/lib/utils";
 import type { LeadChannel } from "../types/lead.types";
 
-/** Channels the orchestrator can actually run a turn on — see `toApiChannel`. */
-const CONTACTABLE = new Set(["whatsapp", "mail", "call", "instagram"]);
+/** Channels with a connected messaging or agent send path. */
+const CONTACTABLE = new Set([
+  "whatsapp",
+  "mail",
+  "call",
+  "instagram",
+  "linkedin",
+  "telegram",
+]);
 
 interface ContactChannelBadgesProps {
   channels: LeadChannel[];

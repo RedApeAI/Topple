@@ -1,6 +1,7 @@
 export type ChannelKey =
   | "whatsapp"
   | "linkedin"
+  | "telegram"
   | "mail"
   | "call"
   | "instagram";

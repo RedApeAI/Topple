@@ -10,7 +10,7 @@ import { ContactLeadDialog } from "./ContactLeadDialog";
 import type { Lead, LeadChannel } from "../types/lead.types";
 
 export function CrmScreen() {
-  const { data: leads, isLoading } = useLeads();
+  const { data: leads, isLoading, error, retry } = useLeads();
   const [importOpen, setImportOpen] = React.useState(false);
   const [contactTarget, setContactTarget] = React.useState<{
     lead: Lead;
@@ -32,6 +32,8 @@ export function CrmScreen() {
       <LeadsTable
         leads={leads}
         isLoading={isLoading}
+        error={error}
+        onRetry={() => void retry()}
         onContact={(lead, channel) => setContactTarget({ lead, channel })}
       />
 

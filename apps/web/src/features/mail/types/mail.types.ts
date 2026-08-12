@@ -46,6 +46,7 @@ export interface MailAttachment {
 
 export interface MailMessage {
   id: string;
+  threadId: string;
   box: MailBox;
   from: MailAddress;
   to: MailAddress[];
@@ -105,4 +106,6 @@ export interface MailDraft {
   bcc: string;
   subject: string;
   body: string;
+  threadId?: string;
+  inReplyTo?: string;
 }

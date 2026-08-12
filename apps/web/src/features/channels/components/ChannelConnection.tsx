@@ -1,10 +1,10 @@
 import { ExternalLink, Loader2, LockKeyhole, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { errorMessage } from "@/lib/api/client";
-import type { ConnectablePlatform } from "../types/zernio.types";
+import type { ConnectableChannel } from "../types/messaging.types";
 
 interface ChannelConnectionProps {
-  platform: ConnectablePlatform;
+  platform: ConnectableChannel;
   label: string;
   icon: React.ComponentType<{ className?: string }>;
   loading: boolean;
@@ -41,7 +41,9 @@ export function ChannelConnection({
           <p className="mt-1.5 text-[14px] leading-6 text-muted-foreground">
             {platform === "whatsapp"
               ? "Connect your WhatsApp Business account to read customer conversations and reply from Plucia."
-              : "Connect your LinkedIn profile or organization so Plucia can recognize and manage the account."}
+              : platform.startsWith("linkedin")
+                ? "Connect your LinkedIn account to read and reply to conversations from Plucia."
+                : `Connect your ${label} account to read and reply to conversations from Plucia.`}
           </p>
         </div>
 
@@ -50,8 +52,8 @@ export function ChannelConnection({
             <LockKeyhole className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
             <p className="text-[13px] leading-5 text-muted-foreground">
               {platform === "whatsapp"
-                ? "Meta’s secure Embedded Signup opens over this dashboard. You stay in Plucia, and Plucia never receives your Facebook password."
-                : "Authorization opens in a secure popup, so your Plucia workspace stays in place. Plucia never receives your social account password."}
+                ? "The provider's secure hosted signup opens outside Plucia. Plucia never receives your account password."
+                : "Authorization opens on the provider's secure hosted page. Plucia never receives your account password."}
             </p>
           </div>
 
@@ -85,7 +87,7 @@ export function ChannelConnection({
             {preparing
               ? "Preparing secure signup…"
               : connecting
-                ? "Waiting for Meta authorization…"
+                ? "Waiting for provider authorization…"
                 : reconnect
                   ? `Reconnect ${label}`
                   : `Continue with ${label}`}

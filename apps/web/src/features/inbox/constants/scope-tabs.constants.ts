@@ -5,6 +5,7 @@ import {
   MessageCircleMoreIcon,
   WhatsAppOutlineIcon,
 } from "@/components/shared/icons/brand-icons";
+import { Send } from "lucide-react";
 import type { InboxScope } from "../types/conversation.types";
 
 export interface ScopeTab {
@@ -17,6 +18,7 @@ export const scopeTabs: ScopeTab[] = [
   { value: "all", label: "All", icon: MessageCircleMoreIcon },
   { value: "whatsapp", label: "WhatsApp", icon: WhatsAppOutlineIcon },
   { value: "linkedin", label: "Linkedin", icon: LinkedInOutlineIcon },
+  { value: "telegram", label: "Telegram", icon: Send },
   { value: "mail", label: "Mail", icon: MailOutlineIcon },
   { value: "call", label: "Calls", icon: CustomerSupportIcon },
 ];

@@ -293,7 +293,23 @@
     @apply border-border outline-ring/50;
   }
   body {
-    @apply bg-background text-foreground;
+    @apply min-h-screen bg-background text-foreground antialiased;
+    background-image: radial-gradient(
+      circle at 92% -12%,
+      color-mix(in srgb, var(--brand-3) 7%, transparent),
+      transparent 26rem
+    );
+  }
+  .dark body {
+    background-image: radial-gradient(
+      circle at 92% -12%,
+      color-mix(in srgb, var(--brand-3) 10%, transparent),
+      transparent 30rem
+    );
+  }
+  ::selection {
+    background: color-mix(in srgb, var(--brand-3) 24%, transparent);
+    color: var(--foreground);
   }
   html {
     @apply font-sans;

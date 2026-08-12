@@ -12,7 +12,6 @@ import { NewWhatsAppConversationDialog } from "@/features/channels/components/Ne
 import { InboxScreen } from "@/features/inbox/components/InboxScreen";
 import { useChannelStore } from "@/store/channel.store";
 import { useInboxStore } from "@/store/inbox.store";
-import { configureZernioWebhook } from "@/features/channels/services/zernio.service";
 
 export function WhatsAppPage() {
   const [disconnectOpen, setDisconnectOpen] = useState(false);
@@ -24,32 +23,23 @@ export function WhatsAppPage() {
   const error = useChannelStore((state) => state.error);
   const load = useChannelStore((state) => state.load);
   const connect = useChannelStore((state) => state.connect);
+  const reconnect = useChannelStore((state) => state.reconnect);
   const disconnect = useChannelStore((state) => state.disconnect);
   const loadConversations = useInboxStore((state) => state.loadConversations);
   const account = status?.accounts.find(
-    (candidate) => candidate.platform === "whatsapp",
+    (candidate) => candidate.provider === "whatsapp",
   );
-  const accountId = account?.id;
 
   useEffect(() => {
     document.title = "WhatsApp — Plucia";
     void load().catch(() => undefined);
   }, [load]);
 
-  // Register the Zernio webhook subscription idempotently once the inbox is in
-  // use. It only succeeds when the API has ZERNIO_WEBHOOK_PUBLIC_URL (an HTTPS
-  // tunnel) configured; without one, realtime push is unavailable and the
-  // client falls back to polling.
-  useEffect(() => {
-    if (!accountId) return;
-    void configureZernioWebhook().catch(() => undefined);
-  }, [accountId]);
-
   return (
     <DashboardPage breadcrumb={["Dashboard", "WhatsApp"]}>
       {!status && loading ? (
         <ChannelConnectionLoading />
-      ) : account?.status === "active" ? (
+      ) : account?.status === "connected" && account.enabled ? (
         <>
           <InboxScreen
             lockedScope="whatsapp"
@@ -122,10 +112,10 @@ export function WhatsAppPage() {
             onOpenChange={setDisconnectOpen}
             label="WhatsApp"
             accountName={account.displayName ?? account.username}
-            disconnecting={disconnecting === "whatsapp"}
+            disconnecting={disconnecting === account.id}
             error={disconnectOpen ? error : undefined}
             onConfirm={() => {
-              void disconnect("whatsapp", account.id)
+              void disconnect(account.id)
                 .then(() => setDisconnectOpen(false))
                 .catch(() => undefined);
             }}
@@ -139,8 +129,12 @@ export function WhatsAppPage() {
           loading={loading}
           connecting={connecting === "whatsapp"}
           error={error}
-          reconnect={account?.needsReconnection}
-          onConnect={() => void connect("whatsapp").catch(() => undefined)}
+          reconnect={Boolean(account && account.status !== "connected")}
+          onConnect={() =>
+            void (account ? reconnect(account) : connect("whatsapp")).catch(
+              () => undefined,
+            )
+          }
           onRetry={() => void load(true).catch(() => undefined)}
         />
       )}

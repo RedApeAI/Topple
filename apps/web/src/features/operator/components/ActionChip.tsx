@@ -9,6 +9,8 @@ const CHANNEL_LABELS: Record<string, string> = {
   email: "email",
   voice: "phone",
   instagram: "Instagram",
+  linkedin: "LinkedIn",
+  telegram: "Telegram",
 };
 
 interface ActionChipProps {

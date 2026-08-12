@@ -146,6 +146,8 @@ export function ComposeDialog() {
     bcc: [...bcc, ...parseAddressList(bccDraft)].join(", "),
     subject,
     body,
+    ...(initial?.threadId ? { threadId: initial.threadId } : {}),
+    ...(initial?.inReplyTo ? { inReplyTo: initial.inReplyTo } : {}),
   });
 
   const bodyEmpty = body.trim().length === 0;

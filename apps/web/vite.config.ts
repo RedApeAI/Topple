@@ -30,15 +30,36 @@ export default defineConfig(({ mode }) => {
       proxy: {
         // Preserve the public browser host/protocol so Better Auth can build
         // same-origin OAuth callbacks when Vite is behind an HTTPS tunnel.
-        // `ws: true` forwards socket.io's WebSocket transport (which arrives as
-        // an HTTP `Upgrade` request) — without it the browser's
-        // ws://localhost:3000/api/socket.io handshake is dropped and the
-        // client times out, so realtime messages never push to the UI.
         "/api": {
           target: backendTarget,
           changeOrigin: true,
-          xfwd: true,
-          ws: true,
+          configure(proxy) {
+            proxy.on("proxyReq", (proxyReq, req) => {
+              // The browser talks to the API over plain HTTP (Vite->backend),
+              // so http-proxy's `xfwd` would stamp x-forwarded-proto: http and
+              // Better Auth would build an http:// OAuth redirect. Detect the
+              // real client scheme from the `cf-visitor` header cloudflared
+              // injects and forward it so callbacks stay https:// behind the
+              // tunnel (Google rejects http redirects for non-localhost).
+              const cfVisitor = req.headers["cf-visitor"];
+              const scheme =
+                typeof cfVisitor === "string" && cfVisitor.includes('"https"')
+                  ? "https"
+                  : "http";
+              proxyReq.setHeader("x-forwarded-proto", scheme);
+              if (req.headers.host) {
+                proxyReq.setHeader("x-forwarded-host", req.headers.host);
+              }
+              if (req.headers["x-forwarded-for"]) {
+                proxyReq.setHeader(
+                  "x-forwarded-for",
+                  req.headers["x-forwarded-for"],
+                );
+              } else if (req.socket?.remoteAddress) {
+                proxyReq.setHeader("x-forwarded-for", req.socket.remoteAddress);
+              }
+            });
+          },
         },
         "/healthz": { target: backendTarget, changeOrigin: true, xfwd: true },
       },

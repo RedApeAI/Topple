@@ -120,7 +120,7 @@ export function teamNameFromEmail(email: string, user: AuthUser): string {
   return label ? titleCase(label) : `${firstName(user)}'s Team`;
 }
 
-/** Organisations auto-created by the old Zernio-side helper. */
+/** Organisations auto-created by the previous workspace helper. */
 const LEGACY_NAME = /'s Workspace$/;
 
 /**

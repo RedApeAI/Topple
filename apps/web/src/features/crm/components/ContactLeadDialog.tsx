@@ -20,6 +20,8 @@ const CHANNEL_LABEL: Record<string, string> = {
   mail: "email",
   call: "a call-back",
   instagram: "Instagram",
+  linkedin: "LinkedIn",
+  telegram: "Telegram",
 };
 
 const CHANNEL_INBOX_HREF: Record<string, string> = {
@@ -27,6 +29,8 @@ const CHANNEL_INBOX_HREF: Record<string, string> = {
   mail: "/dashboard/mail",
   call: "/dashboard/ai-calling",
   instagram: "/dashboard/instagram",
+  linkedin: "/dashboard/linkedin",
+  telegram: "/dashboard/telegram",
 };
 
 interface ContactLeadDialogProps {
@@ -37,9 +41,8 @@ interface ContactLeadDialogProps {
 
 /**
  * "Contact this lead" — the CRM's entry point into a brand new conversation.
- * There's no outbound-first endpoint on the orchestrator, so this plays the
- * lead's first message and shows the agent's live reply, same mechanic as
- * the inbox composer (see `sendInboundMessage`).
+ * Messaging channels use the outbound-first normalized inbox endpoint. Email
+ * and calling still use the Operator/orchestrator plane.
  */
 export function ContactLeadDialog({
   lead,
@@ -80,38 +83,46 @@ export function ContactLeadDialog({
           </div>
           <DialogDescription>
             Sends on {CHANNEL_LABEL[channel.channel] ?? channel.channel} to{" "}
-            {channel.externalId}. There&apos;s no live channel gateway yet, so
-            this plays the lead&apos;s first message and lets the AI agent reply
-            — same as the inbox composer.
+            {channel.externalId}. Connected messaging channels use the
+            normalized inbox API; email and calling use the Operator service.
           </DialogDescription>
         </DialogHeader>
 
         {contact.data ? (
           <div className="flex flex-col gap-3 rounded-lg border border-border bg-muted/50 p-3">
-            <div className="flex flex-col gap-1">
-              <span className="text-[11px] font-medium text-muted-foreground">
-                You (as {lead.name})
-              </span>
-              <p className="text-[14px] text-foreground">{text}</p>
-            </div>
-            <div className="flex flex-col gap-1">
-              <span className="text-[11px] font-medium text-muted-foreground">
-                Agent reply
-              </span>
-              {contact.data.reply.messages.length > 0 ? (
-                contact.data.reply.messages.map((message, i) => (
-                  <p key={i} className="text-[14px] text-foreground">
-                    {message}
-                  </p>
-                ))
-              ) : (
-                <p className="text-[13px] italic text-muted-foreground">
-                  {contact.data.reply.status === "suppressed"
-                    ? "Suppressed by guardrails."
-                    : "No reply generated."}
-                </p>
-              )}
-            </div>
+            {contact.data.kind === "messaging" ? (
+              <p className="text-[14px] text-foreground">
+                Conversation started. It will appear in the connected channel
+                inbox as soon as the provider confirms it.
+              </p>
+            ) : (
+              <>
+                <div className="flex flex-col gap-1">
+                  <span className="text-[11px] font-medium text-muted-foreground">
+                    You (as {lead.name})
+                  </span>
+                  <p className="text-[14px] text-foreground">{text}</p>
+                </div>
+                <div className="flex flex-col gap-1">
+                  <span className="text-[11px] font-medium text-muted-foreground">
+                    Agent reply
+                  </span>
+                  {contact.data.result.reply.messages.length > 0 ? (
+                    contact.data.result.reply.messages.map((message, i) => (
+                      <p key={i} className="text-[14px] text-foreground">
+                        {message}
+                      </p>
+                    ))
+                  ) : (
+                    <p className="text-[13px] italic text-muted-foreground">
+                      {contact.data.result.reply.status === "suppressed"
+                        ? "Suppressed by guardrails."
+                        : "No reply generated."}
+                    </p>
+                  )}
+                </div>
+              </>
+            )}
             <Link
               to={CHANNEL_INBOX_HREF[channel.channel] ?? "/dashboard/inbox"}
               className="self-start text-[13px] font-medium text-foreground underline underline-offset-2"
