@@ -57,19 +57,25 @@ export function errorMessage(
   fallback = "Something went wrong. Please try again.",
 ): string {
   if (axios.isAxiosError(error)) {
+    // If the API returned a structured explanation, surface it even for a
+    // 502/503/504. Those statuses can represent an upstream provider failure,
+    // not only a dead local backend or proxy.
+    const responseMessage = bodyMessage(error.response?.data);
+    if (responseMessage) return responseMessage;
     if (isBackendUnreachable(error)) {
       return "Can't reach the server — check that it's running and try again.";
     }
-    return bodyMessage(error.response?.data) ?? error.message ?? fallback;
+    return error.message ?? fallback;
   }
   if (error instanceof Error && error.message) return error.message;
   return fallback;
 }
 
 /**
- * True when the request never reached a working service — the caller is then
- * free to fall back to fixture data rather than showing an error. A 4xx is
- * deliberately *not* unreachable: the service answered, the request was wrong.
+ * True when the request never reached a working service — callers can use
+ * static UI defaults for non-data chrome rather than showing an error. A 4xx
+ * is deliberately *not* unreachable: the service answered, the request was
+ * wrong.
  */
 export function isBackendUnreachable(error: unknown): boolean {
   if (!axios.isAxiosError(error)) return false;

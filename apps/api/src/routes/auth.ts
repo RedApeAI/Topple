@@ -110,33 +110,37 @@ authRoutes.post("/logout", async (context) => {
 });
 
 authRoutes.get("/session", async (context) => {
-  const result = await getSession(context.req.raw.headers);
-  if (!result.ok) {
+  try {
+    const result = await getSession(context.req.raw.headers);
+    if (!result.ok) {
+      return context.json({ data: null, authenticated: false }, 200);
+    }
+    applyCookies(context, result);
+    // The team travels with the session so the sidebar can name it without a
+    // second round trip, and so the client never has to work it out itself.
+    // A failure here must not sign the user out — the app is usable without it.
+    let organization: { id: string; name: string } | null = null;
+    try {
+      const payload = result.data as { user?: AuthUser; session?: AuthSession };
+      if (payload?.user && payload?.session) {
+        organization = await resolveTenant(
+          payload.user,
+          payload.session,
+          context.req.raw.headers,
+        );
+      }
+    } catch {
+      organization = null;
+    }
+
+    return context.json({
+      data: { ...(result.data as object), organization },
+      authenticated: true,
+    });
+  } catch (error) {
+    console.error("GET /auth/session error:", error);
     return context.json({ data: null, authenticated: false }, 200);
   }
-  applyCookies(context, result);
-
-  // The team travels with the session so the sidebar can name it without a
-  // second round trip, and so the client never has to work it out itself.
-  // A failure here must not sign the user out — the app is usable without it.
-  let organization: { id: string; name: string } | null = null;
-  try {
-    const payload = result.data as { user?: AuthUser; session?: AuthSession };
-    if (payload?.user && payload?.session) {
-      organization = await resolveTenant(
-        payload.user,
-        payload.session,
-        context.req.raw.headers,
-      );
-    }
-  } catch {
-    organization = null;
-  }
-
-  return context.json({
-    data: { ...(result.data as object), organization },
-    authenticated: true,
-  });
 });
 
 authRoutes.get("/me", requireAuth, async (context) => {

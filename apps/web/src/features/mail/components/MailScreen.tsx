@@ -15,6 +15,7 @@ import { MailUndoToast } from "./MailUndoToast";
 export function MailScreen() {
   const messages = useMailStore((state) => state.messages);
   const status = useMailStore((state) => state.status);
+  const error = useMailStore((state) => state.error);
   const filter = useMailStore((state) => state.filter);
   const query = useMailStore((state) => state.query);
   const openId = useMailStore((state) => state.openId);
@@ -63,7 +64,9 @@ export function MailScreen() {
               <div className="min-h-0 flex-1 overflow-y-auto">
                 <MailList
                   messages={visible}
-                  loading={status !== "ready"}
+                  loading={status === "idle" || status === "loading"}
+                  error={status === "error" ? error : undefined}
+                  onRetry={() => void load(true)}
                   focusedId={focusedId}
                 />
               </div>

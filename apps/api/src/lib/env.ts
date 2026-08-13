@@ -1,5 +1,3 @@
-import "dotenv/config";
-
 import { z } from "zod";
 
 const optionalCredential = z.preprocess(
@@ -65,17 +63,42 @@ const rawEnvSchema = z
     // endpoint sends mail as an arbitrary user_id and has no session cookie to
     // check, so without this configured it refuses every request.
     OUTBOUND_WEBHOOK_SECRET: optionalCredential,
-    ZERNIO_API_KEY: optionalCredential,
-    ZERNIO_WEBHOOK_SECRET: optionalCredential,
-    ZERNIO_WEBHOOK_PUBLIC_URL: z.preprocess(
-      (value) => (value === "" ? undefined : value),
-      z.url().optional(),
-    ),
-    ZERNIO_BASE_URL: z.url().default("https://zernio.com/api/v1"),
-    ZERNIO_CONNECT_REDIRECT_URL: z.preprocess(
-      (value) => (value === "" ? undefined : value),
-      z.url().optional(),
-    ),
+    // Unipile messaging is optional in local development. Routes return a
+    // typed configuration error until the provider credentials are present.
+    UNIPILE_API_KEY: optionalCredential,
+    UNIPILE_BASE_URL: z.url().default("https://api.unipile.com"),
+    UNIPILE_API_VERSION: z
+      .string()
+      .regex(/^v[0-9]+$/)
+      .default("v2"),
+    UNIPILE_WEBHOOK_SECRET: optionalCredential,
+    UNIPILE_HOSTED_AUTH_DOMAIN: optionalCredential,
+    MESSAGING_CALLBACK_URL: z.url().optional(),
+    MESSAGING_MAX_ATTACHMENT_BYTES: z.coerce
+      .number()
+      .int()
+      .min(1)
+      .max(15 * 1024 * 1024)
+      .default(15 * 1024 * 1024),
+    MESSAGING_SSE_POLL_MS: z.coerce
+      .number()
+      .int()
+      .min(250)
+      .max(10_000)
+      .default(2_000),
+    MESSAGING_SSE_MAX_SECONDS: z.coerce
+      .number()
+      .int()
+      .min(5)
+      .max(60)
+      .default(25),
+    MESSAGING_AI_ENABLED: z
+      .enum(["true", "false"])
+      .default("false")
+      .transform((value) => value === "true"),
+    MESSAGING_AI_PROVIDER_URL: z.url().optional(),
+    MESSAGING_AI_API_KEY: optionalCredential,
+    MESSAGING_AI_MODEL: z.string().min(1).max(128).default("messaging-default"),
   })
   .superRefine((value, context) => {
     for (const [provider, clientId, clientSecret] of [

@@ -5,6 +5,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthGuard } from "@/components/auth-guard";
 import { useAuthStore } from "@/store/auth.store";
 import WelcomePage from "@/pages/WelcomePage";
+import { ResetPasswordPage } from "@/pages/ResetPasswordPage";
 
 const DashboardLayout = lazy(() =>
   import("@/pages/DashboardLayout").then((module) => ({
@@ -50,14 +51,19 @@ const CalendarPage = lazy(() =>
     default: module.CalendarPage,
   })),
 );
+const SettingsPage = lazy(() =>
+  import("@/pages/SettingsPage").then((module) => ({
+    default: module.SettingsPage,
+  })),
+);
 const InstagramPage = lazy(() =>
   import("@/pages/InstagramPage").then((module) => ({
     default: module.InstagramPage,
   })),
 );
-const ZernioCallbackPage = lazy(() =>
-  import("@/pages/ZernioCallbackPage").then((module) => ({
-    default: module.ZernioCallbackPage,
+const TelegramPage = lazy(() =>
+  import("@/pages/TelegramPage").then((module) => ({
+    default: module.TelegramPage,
   })),
 );
 
@@ -91,14 +97,7 @@ export default function App() {
               {/* Public routes */}
               <Route path="/" element={<Navigate to="/dashboard" replace />} />
               <Route path="/welcome" element={<WelcomePage />} />
-              <Route
-                path="/dashboard/zernio/callback"
-                element={
-                  <AuthGuard>
-                    <ZernioCallbackPage />
-                  </AuthGuard>
-                }
-              />
+              <Route path="/reset-password" element={<ResetPasswordPage />} />
               {/* Protected dashboard routes */}
               <Route path="/dashboard" element={<ProtectedDashboard />}>
                 <Route index element={<Navigate to="inbox" replace />} />
@@ -112,6 +111,8 @@ export default function App() {
                 <Route path="ai-calling" element={<AiCallingPage />} />
                 <Route path="calendar" element={<CalendarPage />} />
                 <Route path="instagram" element={<InstagramPage />} />
+                <Route path="telegram" element={<TelegramPage />} />
+                <Route path="settings" element={<SettingsPage />} />
               </Route>
             </Routes>
           </Suspense>

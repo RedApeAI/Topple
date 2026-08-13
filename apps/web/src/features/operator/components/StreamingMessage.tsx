@@ -5,7 +5,7 @@ import { Check, Trash2 } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { LogoMark } from "@/components/shared/Logo";
 import { cn } from "@/lib/utils";
-import { currentUser } from "@/constants/team.constants";
+import { useAuthStore } from "@/store/auth.store";
 import { pulseVariants } from "@/design/tokens/motion";
 import { AgentTrace } from "./AgentTrace";
 import { ActionChip } from "./ActionChip";
@@ -41,6 +41,7 @@ export function StreamingMessage({
   onDiscard,
   draftBusy,
 }: StreamingMessageProps) {
+  const currentUser = useAuthStore((state) => state.user);
   const isUser = message.role === "user";
   const isRunning = message.status === "running";
   const isDraft = message.status === "draft";
@@ -51,9 +52,9 @@ export function StreamingMessage({
     >
       {isUser ? (
         <Avatar className="h-9 w-9 shrink-0">
-          <AvatarImage src={currentUser.avatarUrl} alt="" />
+          <AvatarImage src={currentUser?.image ?? undefined} alt="" />
           <AvatarFallback className="text-[11px]">
-            {initials(currentUser.name)}
+            {initials(currentUser?.name ?? "You")}
           </AvatarFallback>
         </Avatar>
       ) : (

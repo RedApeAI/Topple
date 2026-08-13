@@ -2,8 +2,10 @@ import { useEffect, useState } from "react";
 import { MessageCirclePlus, RefreshCw, Unplug } from "lucide-react";
 import { DashboardPage } from "@/components/layout/DashboardPage";
 import { Button } from "@/components/ui/button";
-import { ChannelConnectionLoading } from "@/features/channels/components/ChannelConnection";
-import { WhatsAppCredentialsConnection } from "@/features/channels/components/WhatsAppCredentialsConnection";
+import {
+  ChannelConnection,
+  ChannelConnectionLoading,
+} from "@/features/channels/components/ChannelConnection";
 import { WhatsAppIcon } from "@/components/shared/icons/brand-icons";
 import { DisconnectChannelDialog } from "@/features/channels/components/DisconnectChannelDialog";
 import { NewWhatsAppConversationDialog } from "@/features/channels/components/NewWhatsAppConversationDialog";
@@ -20,13 +22,12 @@ export function WhatsAppPage() {
   const disconnecting = useChannelStore((state) => state.disconnecting);
   const error = useChannelStore((state) => state.error);
   const load = useChannelStore((state) => state.load);
-  const connectWhatsAppWithCredentials = useChannelStore(
-    (state) => state.connectWhatsAppWithCredentials,
-  );
+  const connect = useChannelStore((state) => state.connect);
+  const reconnect = useChannelStore((state) => state.reconnect);
   const disconnect = useChannelStore((state) => state.disconnect);
   const loadConversations = useInboxStore((state) => state.loadConversations);
   const account = status?.accounts.find(
-    (candidate) => candidate.platform === "whatsapp",
+    (candidate) => candidate.provider === "whatsapp",
   );
 
   useEffect(() => {
@@ -38,7 +39,7 @@ export function WhatsAppPage() {
     <DashboardPage breadcrumb={["Dashboard", "WhatsApp"]}>
       {!status && loading ? (
         <ChannelConnectionLoading />
-      ) : account?.status === "active" ? (
+      ) : account?.status === "connected" && account.enabled ? (
         <>
           <InboxScreen
             lockedScope="whatsapp"
@@ -111,21 +112,29 @@ export function WhatsAppPage() {
             onOpenChange={setDisconnectOpen}
             label="WhatsApp"
             accountName={account.displayName ?? account.username}
-            disconnecting={disconnecting === "whatsapp"}
+            disconnecting={disconnecting === account.id}
             error={disconnectOpen ? error : undefined}
             onConfirm={() => {
-              void disconnect("whatsapp", account.id)
+              void disconnect(account.id)
                 .then(() => setDisconnectOpen(false))
                 .catch(() => undefined);
             }}
           />
         </>
       ) : (
-        <WhatsAppCredentialsConnection
+        <ChannelConnection
+          platform="whatsapp"
+          label="WhatsApp"
+          icon={WhatsAppIcon}
+          loading={loading}
           connecting={connecting === "whatsapp"}
           error={error}
-          reconnect={account?.needsReconnection}
-          onConnect={connectWhatsAppWithCredentials}
+          reconnect={Boolean(account && account.status !== "connected")}
+          onConnect={() =>
+            void (account ? reconnect(account) : connect("whatsapp")).catch(
+              () => undefined,
+            )
+          }
           onRetry={() => void load(true).catch(() => undefined)}
         />
       )}

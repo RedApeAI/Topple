@@ -30,7 +30,37 @@ export default defineConfig(({ mode }) => {
       proxy: {
         // Preserve the public browser host/protocol so Better Auth can build
         // same-origin OAuth callbacks when Vite is behind an HTTPS tunnel.
-        "/api": { target: backendTarget, changeOrigin: true, xfwd: true },
+        "/api": {
+          target: backendTarget,
+          changeOrigin: true,
+          configure(proxy) {
+            proxy.on("proxyReq", (proxyReq, req) => {
+              // The browser talks to the API over plain HTTP (Vite->backend),
+              // so http-proxy's `xfwd` would stamp x-forwarded-proto: http and
+              // Better Auth would build an http:// OAuth redirect. Detect the
+              // real client scheme from the `cf-visitor` header cloudflared
+              // injects and forward it so callbacks stay https:// behind the
+              // tunnel (Google rejects http redirects for non-localhost).
+              const cfVisitor = req.headers["cf-visitor"];
+              const scheme =
+                typeof cfVisitor === "string" && cfVisitor.includes('"https"')
+                  ? "https"
+                  : "http";
+              proxyReq.setHeader("x-forwarded-proto", scheme);
+              if (req.headers.host) {
+                proxyReq.setHeader("x-forwarded-host", req.headers.host);
+              }
+              if (req.headers["x-forwarded-for"]) {
+                proxyReq.setHeader(
+                  "x-forwarded-for",
+                  req.headers["x-forwarded-for"],
+                );
+              } else if (req.socket?.remoteAddress) {
+                proxyReq.setHeader("x-forwarded-for", req.socket.remoteAddress);
+              }
+            });
+          },
+        },
         "/healthz": { target: backendTarget, changeOrigin: true, xfwd: true },
       },
     },

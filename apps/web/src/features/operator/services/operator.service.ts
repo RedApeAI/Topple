@@ -1,7 +1,3 @@
-import threadsFixture from "@mock/fixtures/operator-threads.json";
-import historyFixture from "@mock/fixtures/operator-history.json";
-import transcriptFixture from "@mock/fixtures/operator-transcript.json";
-import { isBackendUnreachable } from "@/lib/api/client";
 import { getConversation, listTurns } from "@/lib/mock/orchestrator";
 import { formatRelativeTime } from "@/lib/format-relative-time";
 import type { ApiTurnSummary } from "@/lib/mock/orchestrator.types";
@@ -36,62 +32,29 @@ function toThread(turn: ApiTurnSummary): OperatorThread {
 
 /** Live and recently finished orchestrator turns. */
 export async function fetchOperatorThreads(): Promise<OperatorThread[]> {
-  try {
-    const turns = await listTurns(30);
-    return turns
-      .filter((t) => t.status === "in_progress" || !t.error)
-      .map(toThread);
-  } catch (error) {
-    if (isBackendUnreachable(error)) {
-      console.warn(
-        "[operator] orchestrator unreachable — showing fixture data",
-        error,
-      );
-      return threadsFixture as OperatorThread[];
-    }
-    throw error;
-  }
+  const turns = await listTurns(30);
+  return turns
+    .filter((t) => t.status === "in_progress" || !t.error)
+    .map(toThread);
 }
 
 /** Every recorded turn, errors included — the audit trail. */
 export async function fetchOperatorHistory(): Promise<OperatorThread[]> {
-  try {
-    const turns = await listTurns(100);
-    return turns.map(toThread);
-  } catch (error) {
-    if (isBackendUnreachable(error)) {
-      console.warn(
-        "[operator] orchestrator unreachable — showing fixture data",
-        error,
-      );
-      return historyFixture as OperatorThread[];
-    }
-    throw error;
-  }
+  const turns = await listTurns(100);
+  return turns.map(toThread);
 }
 
 /** Message history of one conversation. */
 export async function fetchOperatorTranscript(
   conversationId: string,
 ): Promise<OperatorMessage[]> {
-  try {
-    const detail = await getConversation(conversationId);
-    return detail.messages
-      .filter((msg) => msg.status !== "discarded")
-      .map((msg) => ({
-        id: msg._id,
-        role: msg.direction === "inbound" ? "user" : "operator",
-        text: msg.text,
-        status: msg.status === "draft" ? "draft" : "done",
-      }));
-  } catch (error) {
-    if (isBackendUnreachable(error)) {
-      console.warn(
-        "[operator] orchestrator unreachable — showing fixture data",
-        error,
-      );
-      return transcriptFixture as OperatorMessage[];
-    }
-    throw error;
-  }
+  const detail = await getConversation(conversationId);
+  return detail.messages
+    .filter((msg) => msg.status !== "discarded")
+    .map((msg) => ({
+      id: msg._id,
+      role: msg.direction === "inbound" ? "user" : "operator",
+      text: msg.text,
+      status: msg.status === "draft" ? "draft" : "done",
+    }));
 }

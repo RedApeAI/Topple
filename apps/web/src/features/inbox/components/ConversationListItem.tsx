@@ -49,13 +49,28 @@ export function ConversationListItem({
 
       <div className="flex min-w-0 flex-1 flex-col gap-0.5">
         <div className="flex w-full items-center justify-between gap-2">
-          <span className="truncate font-heading text-[16px] leading-none tracking-[-0.16px] text-foreground">
+          <span
+            className={cn(
+              "truncate font-heading text-[16px] leading-none tracking-[-0.16px] text-foreground",
+              conversation.unread && "font-semibold",
+            )}
+          >
             {conversation.name}
           </span>
-          <span className="shrink-0 text-[12px] tracking-[-0.6px] text-muted-foreground/70">
+          <span className="flex shrink-0 items-center gap-1.5 text-[12px] tracking-[-0.6px] text-muted-foreground/70">
             {conversation.timestamp}
+            {conversation.unreadCount && conversation.unreadCount > 1 ? (
+              <span className="rounded-full bg-primary px-1.5 py-0.5 text-[10px] font-semibold text-primary-foreground">
+                {conversation.unreadCount}
+              </span>
+            ) : null}
           </span>
         </div>
+        {conversation.accountLabel ? (
+          <span className="truncate text-[11px] text-muted-foreground/60">
+            {conversation.accountLabel}
+          </span>
+        ) : null}
         <p className="truncate text-[14px] leading-[1.3] tracking-[-0.7px] text-muted-foreground/80">
           {conversation.preview}
         </p>

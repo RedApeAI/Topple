@@ -1,4 +1,5 @@
 import { cn } from "@/lib/utils";
+import { Send } from "lucide-react";
 import type { ChannelKey } from "@/types/channel.types";
 import {
   CallBadgeGlyph,
@@ -20,6 +21,7 @@ const CHANNEL_CONFIG: Record<
     icon: InstagramBadgeGlyph,
     className: "surface-instagram-gradient",
   },
+  telegram: { icon: Send, className: "bg-[#229ed9]" },
 };
 
 interface ChannelBadgeProps {

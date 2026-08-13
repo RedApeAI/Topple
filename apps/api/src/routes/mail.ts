@@ -293,7 +293,7 @@ mailWebhookRoutes.post("/outbound", async (context) => {
 
   const { channel, user_id: userId, to, messages, subject } = body.data;
 
-  // Other channels belong to their own adapters. Acknowledge so a WhatsApp
+  // Other channels belong to their own adapters. Acknowledge them so the
   // dispatch isn't logged as a delivery failure by the orchestrator.
   if (channel !== "email") {
     return context.json({ data: { skipped: true, channel } });

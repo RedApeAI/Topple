@@ -12,16 +12,19 @@ export interface Mailbox {
   messages: MailMessage[];
   labels: string[];
   account: MailAddress;
+  nextPageToken?: string;
 }
 
 /**
  * One page of the whole mailbox. Gmail's `in:anywhere` is fetched once and the
  * sidebar views filter it client-side, which is what keeps every existing view
- * (starred, done, trash, labels) working off a single round trip. Paging
- * deeper than `limit` is a follow-up — `nextPageToken` is returned but not yet
- * consumed.
+ * (starred, done, trash, labels) working off a single round trip. Additional
+ * pages use the returned Gmail `nextPageToken`.
  */
-export async function fetchMailbox(limit = 60): Promise<Mailbox> {
+export async function fetchMailbox(
+  limit = 60,
+  pageToken?: string,
+): Promise<Mailbox> {
   const [mailbox, account] = await Promise.all([
     apiClient.get<{
       data: {
@@ -29,7 +32,9 @@ export async function fetchMailbox(limit = 60): Promise<Mailbox> {
         labels: string[];
         nextPageToken?: string;
       };
-    }>("/api/v1/mail/messages", { params: { box: "all", limit } }),
+    }>("/api/v1/mail/messages", {
+      params: { box: "all", limit, ...(pageToken ? { pageToken } : {}) },
+    }),
     apiClient.get<{ data: { emailAddress: string } }>("/api/v1/mail/profile"),
   ]);
 
@@ -40,6 +45,9 @@ export async function fetchMailbox(limit = 60): Promise<Mailbox> {
       name: account.data.data.emailAddress.split("@")[0] ?? "Me",
       email: account.data.data.emailAddress,
     },
+    ...(mailbox.data.data.nextPageToken
+      ? { nextPageToken: mailbox.data.data.nextPageToken }
+      : {}),
   };
 }
 

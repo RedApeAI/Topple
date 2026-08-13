@@ -180,7 +180,14 @@ export async function getSession(
       cookies: extractCookies(result?.headers),
     };
   } catch (error) {
-    throw mapAuthError(error);
+    if (env.NODE_ENV === "development") {
+      console.error("getSession error:", error);
+    }
+    return {
+      ok: false,
+      status: 401,
+      data: null,
+    };
   }
 }
 

@@ -12,6 +12,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 // import { formatRelativeTime } from "@/lib/format-relative-time";
 import { formatRelativeTime } from "@/lib/format-relative-time";
 import { ContactChannelBadges } from "./ContactChannelBadges";
+import { errorMessage } from "@/lib/api/client";
 import type { Lead, LeadChannel } from "../types/lead.types";
 
 function initials(name: string) {
@@ -26,10 +27,18 @@ function initials(name: string) {
 interface LeadsTableProps {
   leads: Lead[] | undefined;
   isLoading: boolean;
+  error?: unknown;
+  onRetry?: () => void;
   onContact: (lead: Lead, channel: LeadChannel) => void;
 }
 
-export function LeadsTable({ leads, isLoading, onContact }: LeadsTableProps) {
+export function LeadsTable({
+  leads,
+  isLoading,
+  error,
+  onRetry,
+  onContact,
+}: LeadsTableProps) {
   const columns = React.useMemo<ColumnDef<Lead>[]>(
     () => [
       {
@@ -92,6 +101,28 @@ export function LeadsTable({ leads, isLoading, onContact }: LeadsTableProps) {
         {Array.from({ length: 6 }).map((_, i) => (
           <Skeleton key={i} className="h-12 w-full rounded-lg" />
         ))}
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex flex-1 flex-col items-center justify-center gap-2 rounded-2xl bg-background px-6 text-center">
+        <p className="text-[14px] font-medium text-foreground">
+          Couldn&apos;t load leads
+        </p>
+        <p className="max-w-[340px] text-[13px] text-muted-foreground">
+          {errorMessage(error, "The CRM is unavailable right now.")}
+        </p>
+        {onRetry ? (
+          <button
+            type="button"
+            onClick={onRetry}
+            className="rounded-md bg-secondary px-3 py-1.5 text-[13px] font-medium text-secondary-foreground hover:bg-accent"
+          >
+            Try again
+          </button>
+        ) : null}
       </div>
     );
   }

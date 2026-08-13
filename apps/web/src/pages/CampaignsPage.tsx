@@ -12,8 +12,8 @@ export function CampaignsPage() {
     <DashboardPage breadcrumb={["Dashboard", "AI Agent Campaigns"]}>
       <ComingSoon
         icon={GalleryVerticalEnd}
-        title="AI Agent Campaigns is on the way"
-        description="Launch and monitor autonomous outbound campaigns run by your AI Agents across every channel."
+        title="Campaigns need a campaign API"
+        description="The current backend exposes Operator turns and messaging conversations, but it does not yet expose campaign creation, scheduling, or campaign analytics."
       />
     </DashboardPage>
   );

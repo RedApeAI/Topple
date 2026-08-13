@@ -84,6 +84,8 @@ export function MailReader({ message }: { message: MailMessage }) {
         ? message.subject
         : `Re: ${message.subject}`,
       body: quoted(message),
+      threadId: message.threadId,
+      inReplyTo: message.id,
     });
 
   return (

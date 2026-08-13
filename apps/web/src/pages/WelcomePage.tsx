@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useNavigate, useLocation } from "react-router-dom";
+import { useNavigate, useLocation, Link } from "react-router-dom";
 import { apiClient, errorMessage } from "@/lib/api/client";
 import { useAuthStore } from "@/store/auth.store";
 
@@ -269,37 +269,6 @@ export default function WelcomePage() {
                 </svg>
               }
             />
-            <OAuthButton
-              provider="microsoft"
-              label="Continue with Microsoft"
-              returnTo={returnTo}
-              icon={
-                <svg width="20" height="20" viewBox="0 0 24 24">
-                  <rect x="2" y="2" width="9.5" height="9.5" fill="#F25022" />
-                  <rect
-                    x="12.5"
-                    y="2"
-                    width="9.5"
-                    height="9.5"
-                    fill="#7FBA00"
-                  />
-                  <rect
-                    x="2"
-                    y="12.5"
-                    width="9.5"
-                    height="9.5"
-                    fill="#00A4EF"
-                  />
-                  <rect
-                    x="12.5"
-                    y="12.5"
-                    width="9.5"
-                    height="9.5"
-                    fill="#FFB900"
-                  />
-                </svg>
-              }
-            />
           </div>
 
           <div className="flex items-center gap-[16px] mt-[28px]">
@@ -392,6 +361,12 @@ export default function WelcomePage() {
                     {isSignUp ? "Sign In" : "Sign Up"}
                   </button>
                 </div>
+                <Link
+                  to="/reset-password"
+                  className="mt-3 block text-center font-inter text-[13px] text-[#606060] underline underline-offset-4"
+                >
+                  Forgot password?
+                </Link>
               </>
             )}
           </form>

@@ -1,11 +1,10 @@
 # Plucia API v1
 
-Hono API for browser authentication, tenant membership, channel metadata,
-conversation pointers, and agent configuration. It runs on Node.js and uses
-Better Auth, Drizzle ORM, Neon/Postgres, and Zod.
+Hono API for browser authentication, Gmail mail, tenant membership, agent
+access, and the normalized Unipile messaging inbox. It runs on Node.js or
+Cloudflare Workers and uses Better Auth, Drizzle ORM, Neon/Postgres, and Zod.
 
-This version intentionally does not contain worker orchestration, Redis,
-Lambda/ASG coordination, message processing, Bedrock calls, or cloud setup.
+The Node and Cloudflare entry points both serve the same HTTP API.
 
 ## Setup
 
@@ -30,25 +29,90 @@ Run checks with:
 pnpm --filter @repo/db-sql check-types
 pnpm --filter api check-types
 pnpm --filter api lint
+pnpm --filter api test
 ```
+
+The unified inbox architecture, route contract, provider matrix, webhook
+handling, Worker deployment, and known limitations are documented in
+`docs/messaging-unified-inbox.md`.
+
+## Cloudflare Workers deployment
+
+The API can run on Cloudflare Workers through `src/worker.ts`.
+
+1. Authenticate and create the Worker resources:
+
+   ```sh
+   pnpm --filter api exec wrangler login
+   pnpm --filter api exec wrangler hyperdrive create plucia-api-db \
+     --connection-string "$DATABASE_URL"
+   ```
+
+   Hyperdrive is optional because this API already uses Neon’s serverless HTTP
+   driver. Keep the command above for a production connection-pooling setup;
+   if you create it, add its binding ID under `hyperdrive` in `wrangler.jsonc`
+   when the database client is migrated to use that binding.
+
+2. Set every sensitive value as a Worker secret. Do not add them to
+   `wrangler.jsonc`:
+
+   ```sh
+   pnpm --filter api exec wrangler secret put DATABASE_URL
+   pnpm --filter api exec wrangler secret put BETTER_AUTH_SECRET
+   pnpm --filter api exec wrangler secret put BETTER_AUTH_URL
+   pnpm --filter api exec wrangler secret put FRONTEND_ORIGINS
+   ```
+
+   Add the Google/Apple credentials when those integrations are enabled. Set
+   `COOKIE_CROSS_SITE=true` when the web app and API use separate sites.
+
+3. Put the deployed Worker hostname in `BETTER_AUTH_URL` and add that
+   hostname to the OAuth redirect URI allowlists.
+
+4. Validate and deploy:
+
+   ```sh
+   pnpm --filter api cf:deploy:dry-run
+   pnpm --filter api cf:deploy
+   ```
+
+Database migrations still run outside Workers with
+`pnpm --filter @repo/db-sql db:migrate`.
+
+After deployment, configure the web app with the Worker URL:
+
+```text
+VITE_API_URL=https://plucia-api.ariyamandebnath-ad.workers.dev
+```
+
+### Environment profiles
+
+Use `apps/api/.env.example` as the starting point for local Node.js development.
+Worker deployments should provide the same required authentication, database,
+and frontend-origin values as Worker secrets. Do not commit local environment
+files.
 
 ## Environment
 
-| Variable                                   | Required         | Purpose                                                                                   |
-| ------------------------------------------ | ---------------- | ----------------------------------------------------------------------------------------- |
-| `DATABASE_URL`                             | yes              | Neon/Postgres connection string                                                           |
-| `BETTER_AUTH_SECRET`                       | yes              | Random secret, at least 32 characters                                                     |
-| `BETTER_AUTH_URL`                          | yes              | Fallback public auth origin; allowlisted incoming frontend hosts are resolved per request |
-| `FRONTEND_ORIGINS`                         | yes              | Exact comma-separated browser origins allowed by CORS and Better Auth                     |
-| `PORT`                                     | no               | HTTP port, default `4000`                                                                 |
-| `COOKIE_CROSS_SITE`                        | no               | Use `Secure; SameSite=None` cookies when frontend and API are on different sites          |
-| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | together         | Enables Google sign-in                                                                    |
-| `APPLE_CLIENT_ID`, `APPLE_CLIENT_SECRET`   | together         | Enables Apple sign-in                                                                     |
-| `ZERNIO_API_KEY`                           | yes for channels | Server-only Zernio API key                                                                |
-| `ZERNIO_BASE_URL`                          | no               | Zernio API root, default `https://zernio.com/api/v1`                                      |
-| `ZERNIO_WEBHOOK_SECRET`                    | for realtime     | Verifies signed Zernio webhook bodies                                                     |
-| `ZERNIO_WEBHOOK_PUBLIC_URL`                | for realtime     | Public HTTPS URL ending in `/api/v1/zernio/webhooks`                                      |
-| `ZERNIO_CONNECT_REDIRECT_URL`              | for LinkedIn     | Frontend callback used by hosted LinkedIn OAuth                                           |
+| Variable                                            | Required             | Purpose                                                                                         |
+| --------------------------------------------------- | -------------------- | ----------------------------------------------------------------------------------------------- |
+| `DATABASE_URL`                                      | yes                  | Neon/Postgres connection string                                                                 |
+| `BETTER_AUTH_SECRET`                                | yes                  | Random secret, at least 32 characters                                                           |
+| `BETTER_AUTH_URL`                                   | yes                  | Fallback public auth origin; allowlisted incoming frontend hosts are resolved per request       |
+| `FRONTEND_ORIGINS`                                  | yes                  | Exact comma-separated browser origins allowed by CORS and Better Auth                           |
+| `PORT`                                              | no                   | HTTP port, default `4000`                                                                       |
+| `COOKIE_CROSS_SITE`                                 | no                   | Use `Secure; SameSite=None` cookies when frontend and API are on different sites                |
+| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`          | together             | Enables Google sign-in                                                                          |
+| `APPLE_CLIENT_ID`, `APPLE_CLIENT_SECRET`            | together             | Enables optional social sign-in                                                                 |
+| `ORCHESTRATOR_URL`                                  | no                   | Internal agent service URL, default `http://localhost:8000`                                     |
+| `OUTBOUND_WEBHOOK_SECRET`                           | for service webhooks | Shared secret for orchestrator mail callbacks                                                   |
+| `UNIPILE_API_KEY`                                   | for messaging        | Application-scoped Unipile v2 API key; legacy v1 access tokens do not work with the v2 base URL |
+| `UNIPILE_BASE_URL`, `UNIPILE_API_VERSION`           | no                   | Unipile endpoint and version, default `https://api.unipile.com` / `v2`                          |
+| `UNIPILE_WEBHOOK_SECRET`                            | for webhooks         | Server-only raw-body webhook HMAC secret                                                        |
+| `UNIPILE_HOSTED_AUTH_DOMAIN`                        | no                   | Optional Unipile hosted-auth domain                                                             |
+| `MESSAGING_CALLBACK_URL`                            | no                   | Optional fixed hosted-auth callback                                                             |
+| `MESSAGING_ATTACHMENTS_BUCKET`                      | optional binding     | R2 bucket for browser/provider attachment storage                                               |
+| `MESSAGING_AI_ENABLED`, `MESSAGING_AI_PROVIDER_URL` | optional AI          | Feature flag and internal tenant-safe AI adapter endpoint                                       |
 
 Wildcards are rejected in `FRONTEND_ORIGINS`. Never combine a wildcard origin
 with credentialed CORS. When `COOKIE_CROSS_SITE=true`, both the frontend and API
@@ -61,74 +125,19 @@ provider has only one credential configured.
 
 Successful product responses use `{ "data": ... }`. Errors use
 `{ "error": { "code", "message", "requestId"? } }`. Unknown JSON fields are
-rejected. Request bodies are limited to 1 MiB.
+rejected. Messaging requests are limited to 16 MiB at the Hono boundary and
+attachment uploads are validated again against `MESSAGING_MAX_ATTACHMENT_BYTES`.
 
 Organization IDs are never trusted as proof of access. Every product request
 derives the user from the signed session cookie and checks the `members` table
 for that organization. Roles are:
 
-- `member`: read channels, conversations, and agent config.
+- `member`: read mail, conversations, and agent data.
 - `admin`: member access plus create/update/delete product data and manage most members.
 - `owner`: admin access plus owner-only organization operations enforced by Better Auth.
 
 Cross-tenant item lookups always include both the item ID and organization ID,
 so an Org A member cannot read an Org B row by guessing its UUID.
-
-## Zernio channel connections
-
-Authenticated WhatsApp and LinkedIn account onboarding is exposed under
-`/api/v1/zernio`. The server owns the Zernio API key and maintains one Zernio
-profile per Better Auth organization. The browser never receives the key or
-temporary hosted-OAuth tokens. During headless WhatsApp setup, the browser sends
-the customer-supplied Meta System User token once to this authenticated API;
-the API forwards it to Zernio without persisting or logging it.
-
-| Method   | Route                                                   | Purpose                                            |
-| -------- | ------------------------------------------------------- | -------------------------------------------------- |
-| `GET`    | `/api/v1/zernio/channels`                               | Sync and return connected account status           |
-| `POST`   | `/api/v1/zernio/channels/linkedin/connect`              | Start hosted LinkedIn OAuth                        |
-| `POST`   | `/api/v1/zernio/channels/whatsapp/credentials`          | Connect WhatsApp with server-side Meta credentials |
-| `DELETE` | `/api/v1/zernio/channels/:platform/:accountId`          | Disconnect a tenant-owned account                  |
-| `GET`    | `/api/v1/zernio/conversations`                          | List authenticated tenant WhatsApp threads         |
-| `POST`   | `/api/v1/zernio/conversations`                          | Start WhatsApp chat with approved template         |
-| `GET`    | `/api/v1/zernio/conversations/:id/messages?accountId=…` | Read a tenant-owned WhatsApp thread                |
-| `POST`   | `/api/v1/zernio/conversations/:id/messages`             | Send in an existing tenant-owned thread            |
-| `POST`   | `/api/v1/zernio/conversations/:id/read?accountId=…`     | Mark a WhatsApp thread read                        |
-| `GET`    | `/api/v1/zernio/whatsapp/templates?accountId=…`         | List approved WhatsApp templates                   |
-| `POST`   | `/api/v1/zernio/webhooks`                               | Receive signed Zernio events                       |
-| `POST`   | `/api/v1/zernio/webhooks/configure`                     | Register/update the Zernio subscription            |
-| `GET`    | `/api/v1/zernio/events?after=…`                         | Poll tenant-scoped real-time notifications         |
-
-Required production configuration:
-
-- `ZERNIO_API_KEY`: server-only Zernio secret key.
-- `ZERNIO_BASE_URL`: defaults to `https://zernio.com/api/v1`.
-- `ZERNIO_WEBHOOK_SECRET`: server-only secret used to verify Zernio's
-  `X-Zernio-Signature` HMAC header.
-- `ZERNIO_WEBHOOK_PUBLIC_URL`: public HTTPS URL for
-  `/api/v1/zernio/webhooks`; required for real-time inbox events.
-- `ZERNIO_CONNECT_REDIRECT_URL`: frontend completion route for hosted OAuth
-  platforms such as LinkedIn; defaults to `/dashboard/zernio/callback` on the
-  first configured frontend origin.
-
-WhatsApp uses the headless credentials route with a permanent
-Meta System User token, WABA ID, Phone Number ID, and optional six-digit PIN.
-The API derives the tenant's Zernio profile, forwards those values without
-persisting or logging them, and returns `Cache-Control: no-store`. This flow
-does not use the Facebook JS SDK, browser redirects, or domain allowlisting.
-The Meta token must include `whatsapp_business_management` and
-`whatsapp_business_messaging`. These Meta credentials are entered in the
-WhatsApp dashboard connection form; they do not belong in either `.env` file.
-
-When the WhatsApp inbox opens, the web app idempotently calls the configure
-route. The API creates or updates the `Plucia WhatsApp Inbox` webhook in
-Zernio. In local development, expose port 4000 through an HTTPS tunnel and set
-its full webhook endpoint as `ZERNIO_WEBHOOK_PUBLIC_URL`; Zernio cannot deliver
-webhooks to `localhost`.
-
-Apply the database migrations before enabling the integration. LinkedIn OAuth
-is supported, but LinkedIn does not expose direct-message APIs to third-party
-applications; only WhatsApp uses the inbox and send routes.
 
 ## Auth endpoints
 
@@ -216,48 +225,20 @@ Invitation persistence and acceptance are enabled. Actual invitation email
 delivery is intentionally not faked; add a transactional email implementation
 to Better Auth's `sendInvitationEmail` callback before production onboarding.
 
-## Channel connection endpoints
+## Mail endpoints
 
-Base path: `/api/organizations/:organizationId/channels`.
+Authenticated mail routes are mounted under `/api/v1/mail`. They proxy Gmail
+using the signed-in user's server-side OAuth token and support profile lookup,
+message listing/reading, read/star/archive/trash/spam changes, labels, sending,
+and drafts. Service callbacks are mounted at `/api/v1/mail/directory` and
+`/api/v1/mail/outbound` and require `X-Outbound-Secret`.
 
-| Method   | Path          | Role    | Body                                                                                  |
-| -------- | ------------- | ------- | ------------------------------------------------------------------------------------- |
-| `GET`    | `/`           | member+ | List tenant connections                                                               |
-| `POST`   | `/`           | admin+  | `channelType`, optional account/display fields, `secretReference`, `config`, `status` |
-| `GET`    | `/:channelId` | member+ | Get one tenant connection                                                             |
-| `PATCH`  | `/:channelId` | admin+  | Any allowed mutable fields; empty body rejected                                       |
-| `DELETE` | `/:channelId` | admin+  | Delete one tenant connection                                                          |
+## Agent endpoints
 
-`channelType` is one of `whatsapp`, `instagram`, `linkedin`, `email`, or
-`voice`. Raw OAuth tokens/API secrets are not accepted. Store them in a secrets
-manager and send only `secretReference`; that reference is not returned in API
-responses. Platform-specific OAuth handshakes are not implemented in v1.
-
-## Conversation metadata endpoints
-
-Base path: `/api/organizations/:organizationId/conversations`. These endpoints
-never accept or return message content.
-
-| Method   | Path                                   | Role    | Input                                                                                          |
-| -------- | -------------------------------------- | ------- | ---------------------------------------------------------------------------------------------- |
-| `GET`    | `/?channel=&status=&limit=25&offset=0` | member+ | Filtered/paginated metadata list; max limit 100                                                |
-| `POST`   | `/`                                    | admin+  | `channel`, `externalThreadId`, at least one of `mongoDocumentId` or `s3Key`, optional `status` |
-| `GET`    | `/:conversationId`                     | member+ | Metadata and external history pointer                                                          |
-| `PATCH`  | `/:conversationId`                     | admin+  | Update pointers and/or `status`                                                                |
-| `DELETE` | `/:conversationId`                     | admin+  | Delete metadata only; external storage is untouched                                            |
-
-## Agent config endpoints
-
-Base path: `/api/organizations/:organizationId/agent-config`.
-
-| Method   | Path | Role    | Purpose                                                                          |
-| -------- | ---- | ------- | -------------------------------------------------------------------------------- |
-| `GET`    | `/`  | member+ | Get tenant config                                                                |
-| `PUT`    | `/`  | admin+  | Create/replace via upsert: adapter reference, knowledge-base reference, settings |
-| `DELETE` | `/`  | admin+  | Delete tenant config                                                             |
-
-The table stores references and JSON settings only. It does not invoke workers,
-LoRA adapters, or Bedrock.
+Authenticated agent proxy routes are mounted under `/api/v1/agent`. They cover
+conversations, contacts, turns, operator threads and commands, lead imports,
+draft approval/discard, and directory synchronization. Tenant and user
+identities are derived from the authenticated session.
 
 ## Security notes
 

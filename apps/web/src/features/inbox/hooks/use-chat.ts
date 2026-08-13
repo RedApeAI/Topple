@@ -20,7 +20,7 @@ export function useChatDetail(conversation: Conversation | undefined) {
   useEffect(() => {
     if (conversation) void load(conversation);
 
-    if (conversation?.source !== "zernio") return;
+    if (conversation?.source !== "messaging") return;
     const refreshOnFocus = () => {
       void load(conversation, true);
     };
@@ -29,7 +29,7 @@ export function useChatDetail(conversation: Conversation | undefined) {
   }, [conversation, load]);
 
   useEffect(() => {
-    if (data?.source === "zernio") {
+    if (data?.source === "messaging") {
       void markChatRead(data).catch(() => undefined);
     }
   }, [data]);
@@ -40,16 +40,14 @@ export function useChatDetail(conversation: Conversation | undefined) {
 export function useSendMessage(chat: ChatDetail | undefined) {
   const sendMessage = useInboxStore((state) => state.sendMessage);
   const isPending = useInboxStore((state) => state.sendPending);
-  const variables = useInboxStore((state) => state.sendVariables);
   const error = useInboxStore((state) => state.sendError);
   return {
     isPending,
-    variables,
     isError: Boolean(error),
     error,
-    mutate: (text: string) => {
+    mutate: (text: string, attachmentIds?: string[]) => {
       if (!chat) return;
-      void sendMessage(chat, text).catch(() => undefined);
+      void sendMessage(chat, text, attachmentIds).catch(() => undefined);
     },
   };
 }

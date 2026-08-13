@@ -1,5 +1,10 @@
 import type { LucideIcon } from "lucide-react";
-import { Activity, CalendarMinus2, GalleryVerticalEnd } from "lucide-react";
+import {
+  Activity,
+  CalendarMinus2,
+  GalleryVerticalEnd,
+  Send,
+} from "lucide-react";
 import {
   CallSparkIcon,
   CrmIcon,
@@ -71,6 +76,12 @@ export const socialsSection: NavSection = {
       href: "/dashboard/instagram",
       icon: InstagramIcon,
       unreadKey: "instagram",
+    },
+    {
+      label: "Telegram",
+      href: "/dashboard/telegram",
+      icon: Send,
+      unreadKey: "telegram",
     },
     {
       label: "CRM",

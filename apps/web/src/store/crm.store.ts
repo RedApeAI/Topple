@@ -3,9 +3,11 @@ import { importLeads } from "@/lib/mock/orchestrator";
 import type {
   ApiLeadImportResponse,
   ApiLeadImportRow,
-  ApiTurnResult,
 } from "@/lib/mock/orchestrator.types";
-import { contactLead } from "@/features/crm/services/contact-lead.service";
+import {
+  contactLead,
+  type ContactLeadResult,
+} from "@/features/crm/services/contact-lead.service";
 import { fetchLeads } from "@/features/crm/services/lead.service";
 import type { Lead, LeadChannel } from "@/features/crm/types/lead.types";
 import { useInboxStore } from "./inbox.store";
@@ -18,12 +20,15 @@ interface CrmStore {
   importError?: unknown;
   contactPending: boolean;
   contactError?: unknown;
-  contactResult?: ApiTurnResult;
+  contactResult?: ContactLeadResult;
   resetImport: () => void;
   resetContact: () => void;
   loadLeads: (force?: boolean) => Promise<void>;
   importRows: (rows: ApiLeadImportRow[]) => Promise<ApiLeadImportResponse>;
-  contact: (leadChannel: LeadChannel, text: string) => Promise<ApiTurnResult>;
+  contact: (
+    leadChannel: LeadChannel,
+    text: string,
+  ) => Promise<ContactLeadResult>;
 }
 
 let leadsRequest: Promise<void> | undefined;
