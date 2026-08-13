@@ -105,6 +105,22 @@ export async function listMessagingAccounts(auth: MessagingAuthContext) {
     );
 }
 
+export async function countMessagingThreadsForAccount(
+  organizationId: string,
+  accountId: string,
+): Promise<number> {
+  const [result] = await getDb()
+    .select({ count: sql<number>`count(*)::int` })
+    .from(messagingThreads)
+    .where(
+      and(
+        eq(messagingThreads.organizationId, organizationId),
+        eq(messagingThreads.connectedAccountId, accountId),
+      ),
+    );
+  return result?.count ?? 0;
+}
+
 export async function insertOrUpdateMessagingAccount(input: {
   organizationId: string;
   createdByUserId: string;
@@ -139,6 +155,7 @@ export async function insertOrUpdateMessagingAccount(input: {
         emailAddress: values.emailAddress,
         phoneNumber: values.phoneNumber,
         status: values.status,
+        enabled: true,
         providerMetadata: values.providerMetadata,
         updatedAt: values.updatedAt,
       },
@@ -190,6 +207,31 @@ export async function createConnectionState(input: {
       "Connection state could not be persisted",
     );
   return row;
+}
+
+/**
+ * Unipile error callbacks do not include the hosted-auth state. Correlate
+ * those callbacks with the most recent live connection attempt for this
+ * authenticated user instead of accepting an arbitrary account id.
+ */
+export async function findPendingConnectionState(input: {
+  organizationId: string;
+  userId: string;
+}) {
+  const [row] = await getDb()
+    .select()
+    .from(messagingConnectionStates)
+    .where(
+      and(
+        eq(messagingConnectionStates.organizationId, input.organizationId),
+        eq(messagingConnectionStates.userId, input.userId),
+        isNull(messagingConnectionStates.consumedAt),
+        gt(messagingConnectionStates.expiresAt, new Date()),
+      ),
+    )
+    .orderBy(desc(messagingConnectionStates.createdAt))
+    .limit(1);
+  return row ?? null;
 }
 
 export async function consumeConnectionState(input: {
@@ -525,12 +567,12 @@ export async function insertPendingOutboundMessage(input: {
       clientIdempotencyKey: input.idempotencyKey,
       updatedAt: new Date(),
     })
-    .onConflictDoNothing({
-      target: [
-        messagingMessages.organizationId,
-        messagingMessages.clientIdempotencyKey,
-      ],
-    })
+    // The organization/idempotency index is partial (`WHERE ... IS NOT
+    // NULL`). PostgreSQL cannot infer that index from a bare column target and
+    // rejects the insert with 42P10 before a message can be sent. Omitting the
+    // target lets PostgreSQL use either idempotency unique index safely; the
+    // lookup below still returns the original row for an idempotent retry.
+    .onConflictDoNothing()
     .returning();
   return (
     row ??

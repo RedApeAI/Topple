@@ -104,6 +104,8 @@ export function accountStatusFromUnipile(
     case "running":
     case "connected":
     case "ready":
+    case "partial":
+    case "degraded":
       return "connected";
     case "pending":
     case "connecting":

@@ -4,6 +4,8 @@ import type { AuthSession, AuthUser } from "./lib/auth.js";
  * the same Hono app usable from the Node development server and tests. */
 export type AppBindings = {
   NODE_ENV?: string;
+  DEV_AUTH_BYPASS?: string;
+  DEV_AUTH_USER_ID?: string;
   DATABASE_URL?: string;
   BETTER_AUTH_SECRET?: string;
   BETTER_AUTH_URL?: string;

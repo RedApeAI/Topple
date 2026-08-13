@@ -32,6 +32,7 @@ export interface MessagingAccount {
   lastErrorCode: string | null;
   lastErrorMessage: string | null;
   backfillProgress: number | null;
+  realtimeMode: "webhook" | "polling";
   createdAt: string;
   updatedAt: string;
 }
@@ -269,7 +270,7 @@ export async function fetchMessagingChatDetail(
     labels: detail.labels,
     capabilities: {
       reply: true,
-      attachments: ["linkedin", "whatsapp", "telegram"].includes(
+      attachments: ["linkedin", "whatsapp", "instagram", "telegram"].includes(
         thread.provider,
       ),
       archive: !["instagram", "whatsapp"].includes(thread.provider),
@@ -286,7 +287,13 @@ export async function sendMessagingReply(input: {
   const response = await apiClient.post(
     `/api/v1/inbox/threads/${encodeURIComponent(input.threadId)}/reply`,
     { text: input.text, attachmentIds: input.attachmentIds, idempotencyKey },
-    { headers: { "Idempotency-Key": idempotencyKey } },
+    {
+      headers: { "Idempotency-Key": idempotencyKey },
+      // Unipile outbound calls may take up to 90 seconds, and stale Instagram
+      // chat recovery can require a probe plus a second provider call. Keep
+      // this longer timeout scoped to sends rather than slowing every API call.
+      timeout: 210_000,
+    },
   );
   return response.data;
 }
@@ -313,7 +320,10 @@ export async function startMessagingConversation(input: {
       inmailSignature: input.inmailSignature,
       idempotencyKey,
     },
-    { headers: { "Idempotency-Key": idempotencyKey } },
+    {
+      headers: { "Idempotency-Key": idempotencyKey },
+      timeout: 210_000,
+    },
   );
   return response.data;
 }
@@ -321,6 +331,8 @@ export async function startMessagingConversation(input: {
 export async function retryMessagingMessage(messageId: string): Promise<void> {
   await apiClient.post(
     `/api/v1/inbox/messages/${encodeURIComponent(messageId)}/retry`,
+    undefined,
+    { timeout: 210_000 },
   );
 }
 
@@ -409,10 +421,14 @@ export async function archiveMessagingThread(
 }
 
 export async function fetchMessagingAccounts(): Promise<MessagingAccount[]> {
-  const { data } = await apiClient.get<{ data: MessagingAccount[] }>(
-    "/api/v1/messaging/accounts",
-  );
-  return data.data;
+  const { data } = await apiClient.get<{
+    data: Array<Omit<MessagingAccount, "realtimeMode">>;
+    realtime: { mode: MessagingAccount["realtimeMode"] };
+  }>("/api/v1/messaging/accounts");
+  return data.data.map((account) => ({
+    ...account,
+    realtimeMode: data.realtime.mode,
+  }));
 }
 
 export async function connectMessagingAccount(
@@ -458,6 +474,25 @@ export async function syncMessagingAccount(accountId: string): Promise<void> {
   await apiClient.post(
     `/api/v1/messaging/accounts/${encodeURIComponent(accountId)}/sync`,
   );
+}
+
+export async function pollMessagingAccount(accountId: string): Promise<{
+  skipped?: boolean;
+  changedThreads?: number;
+  insertedMessages?: number;
+}> {
+  const { data } = await apiClient.post<{
+    data: {
+      skipped?: boolean;
+      changedThreads?: number;
+      insertedMessages?: number;
+    };
+  }>(
+    `/api/v1/messaging/accounts/${encodeURIComponent(accountId)}/poll`,
+    undefined,
+    { timeout: 90_000 },
+  );
+  return data.data;
 }
 
 export type MessagingAiArtifact = {

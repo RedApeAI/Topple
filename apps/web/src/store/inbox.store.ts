@@ -101,8 +101,14 @@ export const useInboxStore = create<InboxStore>((set, get) => ({
     if (existing) return existing;
 
     const request = (async () => {
+      const hasCachedConversations = get().conversations[scope] !== undefined;
       set((state) => ({
-        conversationLoading: { ...state.conversationLoading, [scope]: true },
+        // Keep the current list visible while a forced refresh is in flight.
+        // Realtime updates should never replace a usable inbox with skeletons.
+        conversationLoading: {
+          ...state.conversationLoading,
+          [scope]: !hasCachedConversations,
+        },
         conversationErrors: { ...state.conversationErrors, [scope]: undefined },
       }));
       try {
@@ -153,7 +159,14 @@ export const useInboxStore = create<InboxStore>((set, get) => ({
       }));
       try {
         const chat = await fetchChatDetail(conversation);
-        set((state) => ({ chats: { ...state.chats, [conversationId]: chat } }));
+        set((state) => ({
+          chats: { ...state.chats, [conversationId]: chat },
+          // A provider send can finish after the browser's former 30-second
+          // timeout. Once the authoritative thread reload succeeds, discard
+          // that stale transport banner; message-level failures remain on the
+          // individual bubble with their Retry action.
+          sendError: undefined,
+        }));
       } catch (error) {
         set((state) => ({
           chatErrors: { ...state.chatErrors, [conversationId]: error },

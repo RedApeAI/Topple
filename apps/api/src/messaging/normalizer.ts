@@ -120,6 +120,7 @@ function participantArray(raw: Record<string, unknown>): unknown[] {
   ]) {
     if (Array.isArray(value)) return value;
   }
+  if (raw.user && typeof raw.user === "object") return [raw.user];
   const participants = record(raw.participants);
   if (Object.keys(participants).length > 0) return Object.values(participants);
   return [];
@@ -175,6 +176,14 @@ export function normalizeAccount(
   if (!unipileAccountId || !provider)
     throw new Error("Malformed Unipile account payload");
   const user = record(item.user);
+  const metadata = record(item.metadata);
+  const productStatuses = record(metadata.products_connection_status);
+  const detectedLinkedinProduct =
+    provider === "linkedin"
+      ? Object.entries(productStatuses).find(([, status]) =>
+          ["running", "connected", "ready"].includes(String(status)),
+        )?.[0]
+      : undefined;
   return {
     unipileAccountId,
     provider,
@@ -183,12 +192,16 @@ export function normalizeAccount(
       item.account_type,
       item.product,
       item.subtype,
+      detectedLinkedinProduct,
     ),
     displayName: firstString(item.name, item.display_name, user.name),
     username: firstString(item.username, user.username, user.public_identifier),
     emailAddress: firstString(item.email, item.email_address, user.email),
     phoneNumber: firstString(item.phone, item.phone_number, user.phone),
-    status: accountStatusFromUnipile(item.status),
+    status:
+      item.is_locked === true
+        ? "failed"
+        : accountStatusFromUnipile(item.status),
     providerMetadata: item,
   };
 }
@@ -208,12 +221,20 @@ export function normalizeThread(
     throw new Error("Malformed Unipile chat payload: missing id");
   const messages = Array.isArray(item.messages) ? item.messages : [];
   const lastMessage = record(item.last_message);
-  const participants = participantArray(item)
+  const rawParticipants = participantArray(item);
+  const participantValues =
+    rawParticipants.length === 0 && firstString(item.user_id)
+      ? [{ id: item.user_id, name: item.name }]
+      : rawParticipants;
+  const participants = participantValues
     .map((participant) => participantFromRaw(participant, provider))
     .filter(
       (participant): participant is NormalizedParticipant =>
         participant !== null,
     );
+  const participantTitle = participants.find(
+    (participant) => !participant.isSelf,
+  )?.normalizedName;
   return {
     externalThreadId,
     externalThreadAltId: firstString(
@@ -221,8 +242,13 @@ export function normalizeThread(
       item.conversation_id,
       item.chat_id,
     ),
-    subject: firstString(item.subject),
-    title: firstString(item.name, item.title, item.display_name),
+    subject: firstString(item.subject, item.description),
+    title: firstString(
+      item.name,
+      item.title,
+      item.display_name,
+      participantTitle,
+    ),
     preview: previewText(
       firstString(
         item.last_message_text,
@@ -236,6 +262,7 @@ export function normalizeThread(
     latestActivityAt: asDate(
       item.updated_at,
       item.last_message_at,
+      item.last_message_timestamp,
       lastMessage.timestamp,
       lastMessage.sent_at,
       lastMessage.created_at,
@@ -244,6 +271,7 @@ export function normalizeThread(
     ),
     lastMessageAt: asDate(
       item.last_message_at,
+      item.last_message_timestamp,
       lastMessage.timestamp,
       lastMessage.sent_at,
       lastMessage.created_at,

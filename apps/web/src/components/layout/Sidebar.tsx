@@ -5,11 +5,21 @@ import { Link, useLocation } from "react-router-dom";
 import {
   ChevronDown,
   ChevronsUpDown,
+  LoaderCircle,
+  LogOut,
   PanelLeftClose,
   Search,
 } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Separator } from "@/components/ui/separator";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
   Tooltip,
   TooltipContent,
@@ -46,10 +56,22 @@ export function Sidebar() {
   const { data: channelNav } = useChannelNav();
   const user = useAuthStore((s) => s.user);
   const organization = useAuthStore((s) => s.organization);
+  const logout = useAuthStore((s) => s.logout);
+  const [loggingOut, setLoggingOut] = useState(false);
 
   const displayName = user?.name ?? "Account";
   const avatarUrl = user?.image ?? undefined;
   const teamName = organization?.name ?? "Workspace";
+
+  const handleLogout = async () => {
+    if (loggingOut) return;
+    setLoggingOut(true);
+    try {
+      await logout();
+    } finally {
+      setLoggingOut(false);
+    }
+  };
 
   // Collapsed sidebar temporarily expands on hover; the persisted
   // `collapsed` preference only changes via the collapse button.
@@ -164,17 +186,15 @@ export function Sidebar() {
           ))}
         </div>
         <Separator />
-        {isRail ? (
-          <Avatar className="h-11 w-11 rounded-xl">
-            <AvatarImage src={avatarUrl} alt={displayName} />
-            <AvatarFallback className="rounded-xl text-[12px]">
-              {initials(displayName)}
-            </AvatarFallback>
-          </Avatar>
-        ) : (
-          <button
-            type="button"
-            className="flex w-full items-center gap-2.5 rounded-[10px] bg-card px-2 py-2 pr-3 shadow-row hover:bg-accent"
+        <DropdownMenu>
+          <DropdownMenuTrigger
+            aria-label={`Open account menu for ${displayName}`}
+            className={cn(
+              "outline-none focus-visible:ring-2 focus-visible:ring-ring",
+              isRail
+                ? "rounded-xl"
+                : "flex w-full items-center gap-2.5 rounded-[10px] bg-card px-2 py-2 pr-3 text-left shadow-row hover:bg-accent",
+            )}
           >
             <Avatar className="h-10 w-10 rounded-[6px]">
               <AvatarImage src={avatarUrl} alt={displayName} />
@@ -182,18 +202,91 @@ export function Sidebar() {
                 {initials(displayName)}
               </AvatarFallback>
             </Avatar>
-            <div className="flex flex-1 flex-col items-start overflow-hidden text-left">
-              <span className="w-full truncate font-heading text-[14px] font-semibold text-foreground">
+            {!isRail && (
+              <>
+                <div className="flex flex-1 flex-col items-start overflow-hidden text-left">
+                  <span className="w-full truncate font-heading text-[14px] font-semibold text-foreground">
+                    {displayName}
+                  </span>
+                  {/* The team, not the email — the email is already the account
+                      identity above, and which workspace you are acting in is the
+                      thing that changes what the agent can see. */}
+                  <span className="w-full truncate text-[14px] font-medium text-muted-foreground">
+                    {teamName}
+                  </span>
+                </div>
+                <ChevronsUpDown className="h-4 w-4 shrink-0 text-muted-foreground" />
+              </>
+            )}
+          </DropdownMenuTrigger>
+          <DropdownMenuContent
+            side="top"
+            align="end"
+            sideOffset={8}
+            className="min-w-56 p-1.5"
+          >
+            <DropdownMenuLabel className="px-2 py-1.5">
+              <span className="block truncate text-[13px] font-semibold text-foreground">
                 {displayName}
               </span>
-              {/* The team, not the email — the email is already the account
-                  identity above, and which workspace you are acting in is the
-                  thing that changes what the agent can see. */}
-              <span className="w-full truncate text-[14px] font-medium text-muted-foreground">
-                {teamName}
-              </span>
-            </div>
-            <ChevronsUpDown className="h-4 w-4 shrink-0 text-muted-foreground" />
+              {user?.email ? (
+                <span className="mt-0.5 block truncate font-normal text-muted-foreground">
+                  {user.email}
+                </span>
+              ) : null}
+            </DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              variant="destructive"
+              disabled={loggingOut}
+              onClick={() => void handleLogout()}
+              className="px-2 py-2"
+            >
+              {loggingOut ? (
+                <LoaderCircle className="animate-spin" />
+              ) : (
+                <LogOut />
+              )}
+              {loggingOut ? "Logging out…" : "Log out"}
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+        {isRail ? (
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <button
+                  type="button"
+                  aria-label="Log out"
+                  disabled={loggingOut}
+                  onClick={() => void handleLogout()}
+                  className="flex h-11 w-11 items-center justify-center rounded-xl border border-destructive/20 text-destructive transition-colors hover:bg-destructive/10 disabled:cursor-wait disabled:opacity-60"
+                />
+              }
+            >
+              {loggingOut ? (
+                <LoaderCircle className="h-5 w-5 animate-spin" />
+              ) : (
+                <LogOut className="h-5 w-5" />
+              )}
+            </TooltipTrigger>
+            <TooltipContent side="right">
+              {loggingOut ? "Logging out…" : "Log out"}
+            </TooltipContent>
+          </Tooltip>
+        ) : (
+          <button
+            type="button"
+            disabled={loggingOut}
+            onClick={() => void handleLogout()}
+            className="flex w-full items-center justify-center gap-2 rounded-[10px] border border-destructive/20 px-3 py-2.5 text-[14px] font-medium text-destructive transition-colors hover:bg-destructive/10 disabled:cursor-wait disabled:opacity-60"
+          >
+            {loggingOut ? (
+              <LoaderCircle className="h-4 w-4 animate-spin" />
+            ) : (
+              <LogOut className="h-4 w-4" />
+            )}
+            {loggingOut ? "Logging out…" : "Log out"}
           </button>
         )}
       </div>

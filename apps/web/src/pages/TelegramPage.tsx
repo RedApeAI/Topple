@@ -6,6 +6,7 @@ import {
   ChannelConnectionLoading,
 } from "@/features/channels/components/ChannelConnection";
 import { InboxScreen } from "@/features/inbox/components/InboxScreen";
+import { accountNeedsReconnect } from "@/features/channels/types/messaging.types";
 import { useChannelStore } from "@/store/channel.store";
 
 export function TelegramPage() {
@@ -29,7 +30,7 @@ export function TelegramPage() {
     <DashboardPage breadcrumb={["Dashboard", "Telegram"]}>
       {!status && loading ? (
         <ChannelConnectionLoading />
-      ) : account?.status === "connected" && account.enabled ? (
+      ) : account?.enabled ? (
         <InboxScreen lockedScope="telegram" title="Telegram" />
       ) : (
         <ChannelConnection
@@ -39,7 +40,7 @@ export function TelegramPage() {
           loading={loading}
           connecting={connecting === "telegram"}
           error={error}
-          reconnect={Boolean(account)}
+          reconnect={Boolean(account && accountNeedsReconnect(account))}
           onConnect={() =>
             void (account ? reconnect(account) : connect("telegram")).catch(
               () => undefined,
