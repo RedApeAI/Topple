@@ -10,6 +10,16 @@ const rawEnvSchema = z
     NODE_ENV: z
       .enum(["development", "test", "production"])
       .default("development"),
+    // Local-only identity bypass for exercising the dashboard without an
+    // email/OAuth login. It is deliberately rejected outside development.
+    DEV_AUTH_BYPASS: z
+      .enum(["true", "false"])
+      .default("false")
+      .transform((value) => value === "true"),
+    DEV_AUTH_USER_ID: z.preprocess(
+      (value) => (value === "" ? undefined : value),
+      z.string().uuid().optional(),
+    ),
     PORT: z.coerce.number().int().min(1).max(65_535).default(4000),
     DATABASE_URL: z.string().min(1),
     BETTER_AUTH_SECRET: z.string().min(32),
@@ -112,6 +122,22 @@ const rawEnvSchema = z
           message: `${provider} OAuth requires both client id and client secret`,
         });
       }
+    }
+
+    if (value.DEV_AUTH_BYPASS && value.NODE_ENV !== "development") {
+      context.addIssue({
+        code: "custom",
+        path: ["DEV_AUTH_BYPASS"],
+        message: "development auth bypass is only allowed in development",
+      });
+    }
+    if (value.DEV_AUTH_BYPASS && !value.DEV_AUTH_USER_ID) {
+      context.addIssue({
+        code: "custom",
+        path: ["DEV_AUTH_USER_ID"],
+        message:
+          "a user id is required when development auth bypass is enabled",
+      });
     }
   });
 

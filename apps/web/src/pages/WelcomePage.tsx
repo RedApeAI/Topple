@@ -131,20 +131,23 @@ export default function WelcomePage() {
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
   const login = useAuthStore((state) => state.login);
   const register = useAuthStore((state) => state.register);
+  const devBypass = useAuthStore((state) => state.devBypass);
   const returnTo = authReturnPath(location.state);
   const [step, setStep] = useState<Step>("oauth");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [devBypassLoading, setDevBypassLoading] = useState(false);
   const [isSignUp, setIsSignUp] = useState(false);
+  const devBypassEnabled = import.meta.env.VITE_DEV_AUTH_BYPASS === "true";
 
   // Redirect to dashboard if already authenticated
   useEffect(() => {
-    if (isAuthenticated) {
+    if (isAuthenticated && !devBypassEnabled) {
       navigate(returnTo, { replace: true });
     }
-  }, [isAuthenticated, navigate, returnTo]);
+  }, [devBypassEnabled, isAuthenticated, navigate, returnTo]);
 
   const checkEmail = async () => {
     if (!/^\S+@\S+\.\S+$/.test(email.trim())) {
@@ -187,6 +190,24 @@ export default function WelcomePage() {
       }
     } finally {
       setLoading(false);
+    }
+  };
+
+  const enterWithDevBypass = async () => {
+    setError("");
+    setDevBypassLoading(true);
+    try {
+      await devBypass();
+      navigate(returnTo, { replace: true });
+    } catch (err) {
+      setError(
+        errorMessage(
+          err,
+          "The local development session could not be started.",
+        ),
+      );
+    } finally {
+      setDevBypassLoading(false);
     }
   };
 
@@ -370,6 +391,30 @@ export default function WelcomePage() {
               </>
             )}
           </form>
+
+          {devBypassEnabled && (
+            <section className="mt-[28px] rounded-[14px] border border-dashed border-[#c9c9c9] bg-[#fafafa] p-[16px]">
+              <div className="flex items-center justify-between gap-[12px]">
+                <span className="font-inter text-[12px] font-semibold uppercase tracking-[0.08em] text-[#606060]">
+                  Local development
+                </span>
+                <span className="rounded-full bg-[#e8f5e9] px-[8px] py-[3px] font-inter text-[11px] font-medium text-[#2e7d32]">
+                  enabled
+                </span>
+              </div>
+              <p className="mt-[8px] font-inter text-[13px] leading-[19px] text-[#606060]">
+                Enter the configured development workspace without signing in.
+              </p>
+              <button
+                type="button"
+                onClick={() => void enterWithDevBypass()}
+                disabled={devBypassLoading}
+                className="mt-[12px] flex w-full items-center justify-center rounded-[8px] bg-[#ededed] px-[16px] py-[10px] font-inter text-[14px] font-medium text-[#202020] transition-colors hover:bg-[#e2e2e2] disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {devBypassLoading ? "Entering workspace…" : "Enter workspace"}
+              </button>
+            </section>
+          )}
 
           {/* 
             [PRESERVED COMMENTED CODE - DO NOT REMOVE]

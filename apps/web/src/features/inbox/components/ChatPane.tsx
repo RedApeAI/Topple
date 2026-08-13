@@ -92,7 +92,10 @@ interface ChatPaneProps {
   onClose: () => void;
 }
 
-export function ChatPane({ conversation, onClose }: ChatPaneProps) {
+export const ChatPane = React.memo(function ChatPane({
+  conversation,
+  onClose,
+}: ChatPaneProps) {
   const { data: chat, isLoading, isError } = useChatDetail(conversation);
   const send = useSendMessage(chat);
   const { approve, discard } = useDraftActions(conversation.id);
@@ -471,7 +474,7 @@ export function ChatPane({ conversation, onClose }: ChatPaneProps) {
       )}
     </section>
   );
-}
+});
 
 const INSIGHT_TYPES: Array<{ type: MessagingAiArtifactType; label: string }> = [
   { type: "summary", label: "Summary" },
@@ -733,7 +736,7 @@ interface ComposerProps {
   aiBusy?: boolean;
   aiError?: string;
   onRequestDraft?: () => void;
-  onSend: (text: string, attachmentIds?: string[]) => void;
+  onSend: (text: string, attachmentIds?: string[]) => Promise<void>;
 }
 
 function Composer({
@@ -770,11 +773,11 @@ function Composer({
               ),
             )
           : undefined;
-      onSend(text, attachmentIds);
+      await onSend(text, attachmentIds);
       setFiles([]);
       setValue("");
     } catch (cause) {
-      setUploadError(errorMessage(cause, "Attachment could not be uploaded"));
+      setUploadError(errorMessage(cause, "Message could not be sent"));
     } finally {
       setUploading(false);
     }

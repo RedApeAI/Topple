@@ -18,10 +18,17 @@ import type { AppEnv } from "../types.js";
 export const messagingWebhookRoutes = new Hono<AppEnv>();
 
 function background(context: Context<AppEnv>, promise: Promise<unknown>): void {
-  const executionContext = context.executionCtx;
-  if (executionContext && typeof executionContext.waitUntil === "function")
-    executionContext.waitUntil(promise.catch(() => undefined));
-  else void promise.catch(() => undefined);
+  const guarded = promise.catch(() => undefined);
+  try {
+    const executionContext = context.executionCtx;
+    if (executionContext && typeof executionContext.waitUntil === "function") {
+      executionContext.waitUntil(guarded);
+      return;
+    }
+  } catch {
+    // Hono's Node adapter does not expose a Workers ExecutionContext.
+  }
+  void guarded;
 }
 
 messagingWebhookRoutes.post(

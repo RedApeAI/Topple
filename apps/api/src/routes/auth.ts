@@ -1,4 +1,5 @@
 import { Context, Hono } from "hono";
+import { deleteCookie, getCookie, setCookie } from "hono/cookie";
 import { z } from "zod";
 
 import { AppError } from "../lib/errors.js";
@@ -6,6 +7,10 @@ import { env } from "../lib/env.js";
 import { jsonValidator } from "../lib/validation.js";
 import { requireAuth } from "../middleware/require-auth.js";
 import type { AuthSession, AuthUser } from "../lib/auth.js";
+import {
+  DEV_AUTH_LOGGED_OUT_COOKIE,
+  getDevAuthIdentity,
+} from "../services/dev-auth.service.js";
 import { resolveTenant } from "../services/tenant.service.js";
 import { rateLimit } from "../middleware/rate-limit.js";
 import {
@@ -103,6 +108,15 @@ authRoutes.post(
 );
 
 authRoutes.post("/logout", async (context) => {
+  if (await getDevAuthIdentity(context.env)) {
+    setCookie(context, DEV_AUTH_LOGGED_OUT_COOKIE, "1", {
+      httpOnly: true,
+      sameSite: "Lax",
+      path: "/",
+      maxAge: 60 * 60 * 24 * 30,
+    });
+    return context.json({ data: { success: true } });
+  }
   const result = await logout(context.req.raw.headers);
   assertOk(result);
   applyCookies(context, result);
@@ -110,6 +124,17 @@ authRoutes.post("/logout", async (context) => {
 });
 
 authRoutes.get("/session", async (context) => {
+  const devIdentity =
+    getCookie(context, DEV_AUTH_LOGGED_OUT_COOKIE) === "1"
+      ? null
+      : await getDevAuthIdentity(context.env);
+  if (devIdentity) {
+    return context.json({
+      data: devIdentity,
+      authenticated: true,
+    });
+  }
+
   try {
     const result = await getSession(context.req.raw.headers);
     if (!result.ok) {
@@ -141,6 +166,20 @@ authRoutes.get("/session", async (context) => {
     console.error("GET /auth/session error:", error);
     return context.json({ data: null, authenticated: false }, 200);
   }
+});
+
+/** Establishes the local-only bypass identity used by the dashboard. */
+authRoutes.post("/dev-bypass", async (context) => {
+  const identity = await getDevAuthIdentity(context.env);
+  if (!identity) {
+    throw new AppError(
+      404,
+      "DEV_AUTH_DISABLED",
+      "Development auth bypass is disabled",
+    );
+  }
+  deleteCookie(context, DEV_AUTH_LOGGED_OUT_COOKIE, { path: "/" });
+  return context.json({ data: { enabled: true } });
 });
 
 authRoutes.get("/me", requireAuth, async (context) => {

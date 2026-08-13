@@ -21,20 +21,26 @@ import {
 } from "./crypto.js";
 import type {
   MessagingConnectChannel,
+  NormalizedAccount,
   NormalizedMessage,
   NormalizedThread,
   UnipileWebhookEnvelope,
 } from "./contracts.js";
-import { providerForConnectChannel } from "./contracts.js";
+import {
+  messagingConnectChannels,
+  providerForConnectChannel,
+} from "./contracts.js";
 import { enqueueMessagingJob } from "./jobs.js";
 import {
   consumeConnectionState,
+  countMessagingThreadsForAccount,
   createConnectionState,
   createInboundEvent,
   createMessagingAuditEvent,
   createOutboxEvent,
   findMessagingAccount,
   findMessagingAccountByUnipileId,
+  findPendingConnectionState,
   findMessagingThread,
   findThreadByExternalId,
   findContactIdentifier,
@@ -85,6 +91,25 @@ const LINKEDIN_PRIMARY_INBOXES = {
   recruiter: "RECRUITER_PRIMARY",
 } as const;
 type LinkedinProduct = keyof typeof LINKEDIN_PRIMARY_INBOXES;
+type MessagingAccountRow =
+  typeof import("@repo/db-sql").messagingConnectedAccounts.$inferSelect;
+type MessagingThreadWithRelated = NonNullable<
+  Awaited<ReturnType<typeof getThreadWithRelated>>
+>;
+type MessagingDeliveryClient = Pick<
+  ReturnType<typeof createUnipileClient>,
+  "getChat" | "sendChatMessage" | "startChat"
+>;
+
+const RECOVERABLE_ACCOUNT_STATUSES = new Set([
+  "failed",
+  "expired",
+  "revoked",
+  // A local development process can stop while a history backfill is running.
+  // Provider health is authoritative on the next poll/send, so do not leave
+  // an otherwise running account permanently stuck in the syncing state.
+  "syncing",
+]);
 
 function stateSecret(): string {
   // Better Auth already requires a high-entropy secret. Deriving the state
@@ -169,10 +194,18 @@ function assertNonEmailProvider(provider: string): void {
 
 function inferLinkedinProduct(
   providerAccountType: string | null,
+  providerMetadata: Record<string, unknown> = {},
 ): LinkedinProduct {
   const normalized = providerAccountType?.toLowerCase() ?? "";
   if (normalized.includes("recruiter")) return "recruiter";
   if (normalized.includes("sales")) return "sales_navigator";
+  const metadata = providerRecord(providerMetadata.metadata);
+  const productStatuses = providerRecord(metadata.products_connection_status);
+  const activeProduct = Object.entries(productStatuses).find(([, status]) =>
+    ["running", "connected", "ready"].includes(String(status)),
+  )?.[0];
+  if (activeProduct?.includes("recruiter")) return "recruiter";
+  if (activeProduct?.includes("sales")) return "sales_navigator";
   return "classic";
 }
 
@@ -180,6 +213,36 @@ function providerRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === "object"
     ? (value as Record<string, unknown>)
     : {};
+}
+
+async function resolveLinkedinSyncInbox(input: {
+  account: typeof import("@repo/db-sql").messagingConnectedAccounts.$inferSelect;
+  bindings?: AppBindings;
+}): Promise<string> {
+  const page = normalizePageItems(
+    await createUnipileClient(input.bindings).listInboxes({
+      accountId: input.account.unipileAccountId,
+    }),
+  );
+  const product = inferLinkedinProduct(
+    input.account.providerAccountType,
+    input.account.providerMetadata,
+  );
+  const preferredId = LINKEDIN_PRIMARY_INBOXES[product];
+  const inboxes = page.items.map(providerRecord);
+  const preferred = inboxes.find(
+    (inbox) => inbox.id === preferredId && inbox.disabled !== true,
+  );
+  if (typeof preferred?.id === "string") return preferred.id;
+  const fallback = inboxes.find(
+    (inbox) => typeof inbox.id === "string" && inbox.disabled !== true,
+  );
+  if (typeof fallback?.id === "string") return fallback.id;
+  throw new AppError(
+    502,
+    "LINKEDIN_INBOX_UNAVAILABLE",
+    "The connected LinkedIn account does not expose an available messaging inbox",
+  );
 }
 
 async function resolveLinkedinStartOptions(input: {
@@ -205,7 +268,10 @@ async function resolveLinkedinStartOptions(input: {
 
   const product =
     input.linkedinProduct ??
-    inferLinkedinProduct(input.account.providerAccountType);
+    inferLinkedinProduct(
+      input.account.providerAccountType,
+      input.account.providerMetadata,
+    );
   if (
     (product === "sales_navigator" || product === "recruiter") &&
     !input.inmailSubject?.trim()
@@ -222,25 +288,25 @@ async function resolveLinkedinStartOptions(input: {
       "Recruiter starts require an InMail signature",
     );
 
-  let inboxId: string | undefined;
-  if (product !== "classic") {
-    const page = normalizePageItems(
-      await createUnipileClient(input.bindings).listInboxes({
-        accountId: input.account.unipileAccountId,
-      }),
+  // LinkedIn uses product-specific inboxes for both history and new chats.
+  // The v2 account-wide Start a Chat endpoint is not implemented for this
+  // provider, including Classic.
+  const page = normalizePageItems(
+    await createUnipileClient(input.bindings).listInboxes({
+      accountId: input.account.unipileAccountId,
+    }),
+  );
+  const expectedInbox = LINKEDIN_PRIMARY_INBOXES[product];
+  const inboxId = page.items
+    .map(providerRecord)
+    .find((inbox) => inbox.id === expectedInbox && inbox.disabled !== true)
+    ?.id as string | undefined;
+  if (!inboxId)
+    throw new AppError(
+      422,
+      "LINKEDIN_PRODUCT_UNAVAILABLE",
+      `The connected account does not provide the ${product === "classic" ? "Classic" : product === "sales_navigator" ? "Sales Navigator" : "Recruiter"} inbox`,
     );
-    const expectedInbox = LINKEDIN_PRIMARY_INBOXES[product];
-    inboxId = page.items
-      .map(providerRecord)
-      .find((inbox) => inbox.id === expectedInbox && inbox.disabled !== true)
-      ?.id as string | undefined;
-    if (!inboxId)
-      throw new AppError(
-        422,
-        "LINKEDIN_PRODUCT_UNAVAILABLE",
-        `The connected account does not provide the ${product === "sales_navigator" ? "Sales Navigator" : "Recruiter"} inbox`,
-      );
-  }
 
   const specifics =
     product === "sales_navigator" && input.inmailSubject
@@ -324,6 +390,37 @@ async function persistParticipantIdentities(input: {
   }
 }
 
+async function persistProviderThread(input: {
+  organizationId: string;
+  account: MessagingAccountRow;
+  raw: unknown;
+}) {
+  const normalized = safeThread(
+    normalizeThread(input.raw, input.account.provider),
+  );
+  const thread = await upsertThread(
+    input.organizationId,
+    input.account.id,
+    input.account.provider,
+    normalized,
+  );
+  for (const participant of normalized.participants) {
+    await upsertParticipant(
+      input.organizationId,
+      thread.id,
+      input.account.provider,
+      participant,
+    );
+    await persistParticipantIdentities({
+      organizationId: input.organizationId,
+      threadId: thread.id,
+      provider: input.account.provider,
+      participant,
+    });
+  }
+  return { normalized, thread };
+}
+
 function bytesToBase64(bytes: Uint8Array): string {
   let output = "";
   const chunkSize = 0x8000;
@@ -389,6 +486,7 @@ async function providerAttachments(input: {
     result.push({
       filename: attachment.filename,
       content_type: attachment.mimeType,
+      // Unipile Messaging API v2 expects base64 file content in `content`.
       content: bytesToBase64(bytes),
     });
   }
@@ -427,15 +525,63 @@ async function authorizedMessagingAttachment(
   };
 }
 
-function normalizePageItems(value: unknown): {
+type ProviderPagePosition = { cursor?: string; offset?: number };
+
+function normalizePageItems(
+  value: unknown,
+  pagination?: { position: ProviderPagePosition; limit: number },
+): {
   items: unknown[];
   nextCursor: string | null;
+  nextOffset: number | null;
 } {
   const page = validateUnipilePage(value);
+  const raw = providerRecord(value);
+  const items = page.data.length > 0 ? page.data : (page.items ?? []);
+  const usesCursor =
+    Object.hasOwn(raw, "next_cursor") || Object.hasOwn(raw, "cursor");
+  const nextCursor = page.next_cursor ?? page.cursor ?? null;
+  const hasAnotherOffsetPage =
+    pagination &&
+    !usesCursor &&
+    items.length > 0 &&
+    (page.has_more === true || items.length >= pagination.limit);
   return {
-    items: page.data.length > 0 ? page.data : (page.items ?? []),
-    nextCursor: page.next_cursor ?? page.cursor ?? null,
+    items,
+    nextCursor,
+    nextOffset: hasAnotherOffsetPage
+      ? (pagination.position.offset ?? 0) + items.length
+      : null,
   };
+}
+
+function parseBackfillPosition(value: string | null): ProviderPagePosition {
+  if (!value) return {};
+  if (value.startsWith("offset:")) {
+    const offset = Number(value.slice("offset:".length));
+    return Number.isSafeInteger(offset) && offset >= 0 ? { offset } : {};
+  }
+  if (value.startsWith("cursor:"))
+    return { cursor: value.slice("cursor:".length) };
+  // Compatibility with cursor values persisted before positions were tagged.
+  return { cursor: value };
+}
+
+function nextPagePosition(page: {
+  nextCursor: string | null;
+  nextOffset: number | null;
+}): ProviderPagePosition | null {
+  if (page.nextCursor) return { cursor: page.nextCursor };
+  if (page.nextOffset !== null) return { offset: page.nextOffset };
+  return null;
+}
+
+function serializeBackfillPosition(
+  position: ProviderPagePosition | null,
+): string | null {
+  if (position?.cursor) return `cursor:${position.cursor}`;
+  if (position?.offset !== undefined) return `offset:${position.offset}`;
+  return null;
 }
 
 export async function createMessagingConnectionLink(input: {
@@ -480,19 +626,26 @@ export async function createMessagingConnectionLink(input: {
     configValue(input.bindings, "callback") ??
     `${input.requestOrigin.replace(/\/$/, "")}/api/v1/messaging/accounts/connect/callback`;
   const client = createUnipileClient(input.bindings);
-  const config =
-    input.channel === "linkedin_sales_navigator"
+  const config = {
+    ...(input.channel === "linkedin_sales_navigator"
       ? { linkedin: { products: ["classic", "sales_navigator"] } }
       : input.channel === "linkedin_recruiter"
         ? { linkedin: { products: ["classic", "recruiter"] } }
-        : undefined;
+        : {}),
+    // WhatsApp history is decentralized. Ask Hosted Auth to wait for
+    // Unipile's mandatory initial sync before returning to this callback, so
+    // Plucia can backfill the complete conversation history immediately.
+    ...(input.channel === "whatsapp"
+      ? { global: { wait_initial_sync: true } }
+      : {}),
+  };
   try {
     return await client.createAuthLink({
       providers: providerForConnectChannel(input.channel),
       redirectUri: callbackUrl,
       expiresOn: new Date(state.payload.expiresAt).toISOString(),
       state: state.state,
-      ...(config ? { config } : {}),
+      ...(Object.keys(config).length > 0 ? { config } : {}),
     });
   } catch (error) {
     if (error instanceof UnipileProviderError) {
@@ -838,6 +991,122 @@ export async function completeMessagingConnection(input: {
   return { account, returnPath: payload.returnPath };
 }
 
+/**
+ * Complete a hosted-auth callback when Unipile reports api/already_exists.
+ *
+ * Per Unipile's v2 contract, the callback detail is the existing Account ID
+ * and the provider authentication has succeeded. Error callbacks omit state,
+ * so this path additionally requires and consumes the latest unexpired
+ * connection attempt for the authenticated user and checks its provider.
+ */
+export async function completeExistingMessagingConnection(input: {
+  auth: MessagingAuthContext;
+  bindings?: AppBindings;
+  accountId: string;
+}) {
+  const pending = await findPendingConnectionState({
+    organizationId: input.auth.organizationId,
+    userId: input.auth.userId,
+  });
+  const existing = await findMessagingAccountByUnipileId(input.accountId);
+
+  // A browser refresh after an already-completed callback is safe and should
+  // still return to the app rather than exposing a raw API error page.
+  if (!pending && existing?.organizationId === input.auth.organizationId) {
+    return {
+      account: existing,
+      returnPath: `/dashboard/${existing.provider}`,
+    };
+  }
+  if (!pending) {
+    throw new AppError(
+      400,
+      "INVALID_CONNECTION_STATE",
+      "No active messaging connection attempt matches this callback",
+    );
+  }
+
+  let normalized: NormalizedAccount;
+  try {
+    normalized = normalizeAccount(
+      await createUnipileClient(input.bindings).getAccount(input.accountId),
+      input.accountId,
+    );
+  } catch (error) {
+    throw providerError(error);
+  }
+  assertNonEmailProvider(normalized.provider);
+
+  const requestedChannel = messagingConnectChannels.find(
+    (channel) => channel === pending.requestedChannel,
+  );
+  if (
+    !requestedChannel ||
+    providerForConnectChannel(requestedChannel) !== normalized.provider
+  ) {
+    throw new AppError(
+      400,
+      "MESSAGING_PROVIDER_MISMATCH",
+      "The connected account does not match the requested messaging channel",
+    );
+  }
+  if (existing && existing.organizationId !== input.auth.organizationId) {
+    throw new AppError(
+      409,
+      "MESSAGING_ACCOUNT_ALREADY_CONNECTED",
+      "This provider account is already connected to another organization",
+    );
+  }
+
+  const consumed = await consumeConnectionState({
+    organizationId: input.auth.organizationId,
+    userId: input.auth.userId,
+    nonceHash: pending.nonceHash,
+  });
+  if (!consumed) {
+    throw new AppError(
+      409,
+      "CONNECTION_STATE_REPLAYED",
+      "This messaging connection has already been completed",
+    );
+  }
+
+  const account = await insertOrUpdateMessagingAccount({
+    organizationId: input.auth.organizationId,
+    createdByUserId: existing?.createdByUserId ?? input.auth.userId,
+    normalized: { ...normalized, status: "syncing" },
+  });
+  await createOutboxEvent({
+    organizationId: input.auth.organizationId,
+    eventType: "connected_account.updated",
+    aggregateType: "connected_account",
+    aggregateId: account.id,
+    payload: {
+      accountId: account.id,
+      status: account.status,
+      provider: account.provider,
+    },
+  });
+  await createMessagingAuditEvent({
+    organizationId: input.auth.organizationId,
+    userId: input.auth.userId,
+    action: "messaging.account.connected",
+    aggregateType: "connected_account",
+    aggregateId: account.id,
+    metadata: {
+      provider: account.provider,
+      reusedExistingUnipileAccount: true,
+    },
+  });
+  await enqueueMessagingJob({
+    jobKey: `messaging:backfill:${account.id}`,
+    organizationId: input.auth.organizationId,
+    kind: "account_backfill",
+    payload: { accountId: account.id },
+  });
+  return { account, returnPath: pending.returnPath };
+}
+
 export async function refreshMessagingAccount(input: {
   auth: MessagingAuthContext;
   bindings?: AppBindings;
@@ -880,6 +1149,65 @@ export async function refreshMessagingAccount(input: {
     return updated ?? account;
   } catch (error) {
     throw providerError(error);
+  }
+}
+
+/**
+ * Reconcile a stale local failure with Unipile without forcing the user
+ * through hosted auth again. Conversation backfill and provider connection
+ * health are separate concerns, so a temporary sync failure must not make a
+ * still-running account unusable for outbound messages.
+ */
+export async function restoreMessagingAccountIfHealthy(input: {
+  account: MessagingAccountRow;
+  bindings?: AppBindings;
+}): Promise<MessagingAccountRow> {
+  if (
+    !input.account.enabled ||
+    !RECOVERABLE_ACCOUNT_STATUSES.has(input.account.status)
+  )
+    return input.account;
+
+  try {
+    const normalized = normalizeAccount(
+      await createUnipileClient(input.bindings).getAccount(
+        input.account.unipileAccountId,
+      ),
+      input.account.unipileAccountId,
+    );
+    if (normalized.status !== "connected") return input.account;
+
+    const updated = await updateMessagingAccount(
+      input.account.organizationId,
+      input.account.id,
+      {
+        provider: normalized.provider,
+        providerAccountType: normalized.providerAccountType,
+        displayName: normalized.displayName,
+        username: normalized.username,
+        emailAddress: normalized.emailAddress,
+        phoneNumber: normalized.phoneNumber,
+        providerMetadata: safeMetadata(normalized.providerMetadata),
+        status: "connected",
+        enabled: true,
+        lastErrorCode: null,
+        lastErrorMessage: null,
+      },
+    );
+    if (!updated) return input.account;
+
+    await createOutboxEvent({
+      organizationId: input.account.organizationId,
+      eventType: "connected_account.updated",
+      aggregateType: "connected_account",
+      aggregateId: input.account.id,
+      payload: { accountId: input.account.id, status: "connected" },
+    });
+    return updated;
+  } catch {
+    // Keep the stored status when the health check itself is unavailable. The
+    // caller can then return the existing actionable reconnect error.
+    return input.account;
   }
 }
 
@@ -961,132 +1289,222 @@ export async function syncMessagingAccount(input: {
     lastErrorCode: null,
     lastErrorMessage: null,
   });
-  let cursor: string | undefined = account.backfillCursor ?? undefined;
+  let position = parseBackfillPosition(account.backfillCursor);
   let pages = 0;
   let chatCount = account.backfillProgress ?? 0;
+  let historyWarning: string | null = null;
   try {
+    // Refresh the provider account before reading cached chat shells. Unipile
+    // can still return a stale chat list while the underlying account is in
+    // an errored state, which otherwise looks like a successful empty inbox.
+    const providerAccount = normalizeAccount(
+      await client.getAccount(account.unipileAccountId),
+      account.unipileAccountId,
+    );
+    await updateMessagingAccount(input.organizationId, account.id, {
+      providerAccountType: providerAccount.providerAccountType,
+      displayName: providerAccount.displayName,
+      username: providerAccount.username,
+      emailAddress: providerAccount.emailAddress,
+      phoneNumber: providerAccount.phoneNumber,
+      providerMetadata: safeMetadata(providerAccount.providerMetadata),
+    });
+    if (providerAccount.status !== "connected") {
+      throw new AppError(
+        502,
+        "PROVIDER_ACCOUNT_NOT_READY",
+        `The connected ${account.provider} account is ${providerAccount.status} in Unipile. Reconnect it before syncing messages.`,
+      );
+    }
+    // LinkedIn exposes product-specific inboxes in API v2. Calling the
+    // account-wide /chats endpoint for LinkedIn returns api/not_implemented;
+    // use the account's primary product inbox instead.
+    const linkedinInboxId =
+      account.provider === "linkedin"
+        ? await resolveLinkedinSyncInbox({ account, bindings: input.bindings })
+        : undefined;
+    // LinkedIn's v2 provider caps inbox chat pages at 25 items. Other
+    // messaging providers accept the larger page used by the generic path.
+    const chatPageLimit = linkedinInboxId ? 25 : 50;
     do {
       const page = normalizePageItems(
-        await client.listChats({
-          accountId: account.unipileAccountId,
-          cursor,
-          limit: 50,
-        }),
-      );
-      for (const rawChat of page.items) {
-        const normalizedThread = safeThread(
-          normalizeThread(rawChat, account.provider),
-        );
-        const thread = await upsertThread(
-          input.organizationId,
-          account.id,
-          account.provider,
-          normalizedThread,
-        );
-        for (const participant of normalizedThread.participants) {
-          await upsertParticipant(
-            input.organizationId,
-            thread.id,
-            account.provider,
-            participant,
-          );
-          await persistParticipantIdentities({
-            organizationId: input.organizationId,
-            threadId: thread.id,
-            provider: account.provider,
-            participant,
-          });
-        }
-        let messageCursor: string | undefined;
-        let messagePages = 0;
-        do {
-          const messagePage = normalizePageItems(
-            await client.listMessages({
+        linkedinInboxId
+          ? await client.listInboxChats({
               accountId: account.unipileAccountId,
-              chatId: normalizedThread.externalThreadId,
-              cursor: messageCursor,
-              limit: 100,
+              inboxId: linkedinInboxId,
+              ...position,
+              limit: chatPageLimit,
+            })
+          : await client.listChats({
+              accountId: account.unipileAccountId,
+              ...position,
+              limit: chatPageLimit,
             }),
-          );
-          for (const rawMessage of messagePage.items) {
-            const normalizedMessage = safeMessage(
-              await normalizeMessage(
-                account.unipileAccountId,
-                rawMessage,
-                account.provider,
-                "sync.message",
-              ),
+        { position, limit: chatPageLimit },
+      );
+      const preparedThreads: Array<{
+        normalized: NormalizedThread;
+        thread: Awaited<ReturnType<typeof upsertThread>>;
+      }> = [];
+
+      // Persist every chat shell first. Provider histories can contain
+      // thousands of messages; users should see the complete conversation
+      // list immediately instead of waiting for chat #1 to finish backfilling.
+      for (const rawChat of page.items) {
+        const prepared = await persistProviderThread({
+          organizationId: input.organizationId,
+          account,
+          raw: rawChat,
+        });
+        preparedThreads.push(prepared);
+      }
+      chatCount = await countMessagingThreadsForAccount(
+        input.organizationId,
+        account.id,
+      );
+      await updateMessagingAccount(input.organizationId, account.id, {
+        backfillProgress: chatCount,
+        backfillCursor: serializeBackfillPosition(position),
+      });
+      if (preparedThreads.length > 0) {
+        await createOutboxEvent({
+          organizationId: input.organizationId,
+          eventType: "connected_account.updated",
+          aggregateType: "connected_account",
+          aggregateId: account.id,
+          payload: {
+            accountId: account.id,
+            status: "syncing",
+            progress: chatCount,
+          },
+        });
+      }
+
+      // Once the page's conversation list is visible, fill each thread's
+      // message history. This remains idempotent and can safely resume/retry.
+      for (const prepared of preparedThreads) {
+        const { normalized: normalizedThread, thread } = prepared;
+        let messagePosition: ProviderPagePosition = {};
+        let messagePages = 0;
+        try {
+          do {
+            const messagePage = normalizePageItems(
+              await client.listMessages({
+                accountId: account.unipileAccountId,
+                chatId: normalizedThread.externalThreadId,
+                ...messagePosition,
+                limit: 100,
+              }),
+              { position: messagePosition, limit: 100 },
             );
-            const persisted = await insertOrUpdateInboundMessage({
-              organizationId: input.organizationId,
-              threadId: thread.id,
-              connectedAccountId: account.id,
-              normalized: normalizedMessage,
-            });
-            await updateThreadForMessage({
-              organizationId: input.organizationId,
-              threadId: thread.id,
-              messageId: persisted.row?.id ?? "",
-              preview: normalizedMessage.preview,
-              sentAt: normalizedMessage.sentAt,
-              inbound: normalizedMessage.direction === "inbound",
-              unread: false,
-            });
-            for (const attachment of normalizedMessage.attachments) {
-              const storedAttachment = await insertInboundAttachment({
-                id: crypto.randomUUID(),
+            for (const rawMessage of messagePage.items) {
+              const normalizedMessage = safeMessage(
+                await normalizeMessage(
+                  account.unipileAccountId,
+                  rawMessage,
+                  account.provider,
+                  "sync.message",
+                ),
+              );
+              const persisted = await insertOrUpdateInboundMessage({
                 organizationId: input.organizationId,
-                createdByUserId: account.createdByUserId,
-                messageId: persisted.row?.id ?? null,
                 threadId: thread.id,
-                providerAttachmentId: attachment.providerAttachmentId,
-                filename: attachment.filename,
-                mimeType: attachment.mimeType,
-                sizeBytes: attachment.sizeBytes,
-                providerUrl: attachment.providerUrl,
-                thumbnailMetadata: attachment.thumbnailMetadata,
-                safeDisplayMetadata: attachment.safeDisplayMetadata,
-                downloadStatus: "pending",
-                storageKey: `messaging/${input.organizationId}/${thread.id}/${crypto.randomUUID()}/${safeFilename(attachment.filename)}`,
+                connectedAccountId: account.id,
+                normalized: normalizedMessage,
               });
-              if (storedAttachment.inserted && storedAttachment.attachment) {
-                await enqueueMessagingJob({
-                  jobKey: `messaging:attachment:${storedAttachment.attachment.id}`,
+              await updateThreadForMessage({
+                organizationId: input.organizationId,
+                threadId: thread.id,
+                messageId: persisted.row?.id ?? "",
+                preview: normalizedMessage.preview,
+                sentAt: normalizedMessage.sentAt,
+                inbound: normalizedMessage.direction === "inbound",
+                unread: false,
+              });
+              for (const attachment of normalizedMessage.attachments) {
+                const storedAttachment = await insertInboundAttachment({
+                  id: crypto.randomUUID(),
                   organizationId: input.organizationId,
-                  kind: "attachment_process",
-                  payload: {
-                    attachmentId: storedAttachment.attachment.id,
-                    threadId: thread.id,
-                  },
+                  createdByUserId: account.createdByUserId,
+                  messageId: persisted.row?.id ?? null,
+                  threadId: thread.id,
+                  providerAttachmentId: attachment.providerAttachmentId,
+                  filename: attachment.filename,
+                  mimeType: attachment.mimeType,
+                  sizeBytes: attachment.sizeBytes,
+                  providerUrl: attachment.providerUrl,
+                  thumbnailMetadata: attachment.thumbnailMetadata,
+                  safeDisplayMetadata: attachment.safeDisplayMetadata,
+                  downloadStatus: "pending",
+                  storageKey: `messaging/${input.organizationId}/${thread.id}/${crypto.randomUUID()}/${safeFilename(attachment.filename)}`,
                 });
+                if (storedAttachment.inserted && storedAttachment.attachment) {
+                  await enqueueMessagingJob({
+                    jobKey: `messaging:attachment:${storedAttachment.attachment.id}`,
+                    organizationId: input.organizationId,
+                    kind: "attachment_process",
+                    payload: {
+                      attachmentId: storedAttachment.attachment.id,
+                      threadId: thread.id,
+                    },
+                  });
+                }
               }
             }
-          }
-          messageCursor = messagePage.nextCursor ?? undefined;
-          messagePages += 1;
-        } while (messageCursor && messagePages < 100);
-        chatCount += 1;
-        if (chatCount % 10 === 0)
-          await updateMessagingAccount(input.organizationId, account.id, {
-            backfillProgress: chatCount,
-            backfillCursor: cursor ?? null,
-          });
+            messagePosition = nextPagePosition(messagePage) ?? {};
+            messagePages += 1;
+          } while (
+            (messagePosition.cursor !== undefined ||
+              messagePosition.offset !== undefined) &&
+            messagePages < 100
+          );
+        } catch (error) {
+          // Unipile can return a stale Instagram chat shell that appears in
+          // the account-wide list but is no longer addressable by the detail
+          // endpoint. Keep the conversation visible and continue syncing the
+          // remaining chats instead of failing the entire account.
+          const providerHistoryUnavailable =
+            error instanceof UnipileProviderError &&
+            (error.status === 404 ||
+              (account.provider === "instagram" && error.status === 504));
+          if (!providerHistoryUnavailable) throw error;
+          historyWarning ??=
+            account.provider === "instagram"
+              ? "Some Instagram conversations were returned by the provider without accessible message history. Retry sync to try again."
+              : "Some conversations were returned by the provider without accessible message history. Retry sync to try again.";
+        }
+        await createOutboxEvent({
+          organizationId: input.organizationId,
+          eventType: "thread.updated",
+          aggregateType: "thread",
+          aggregateId: thread.id,
+          payload: {
+            threadId: thread.id,
+            accountId: account.id,
+            ...(historyWarning ? { historyWarning: true } : {}),
+          },
+        });
       }
-      cursor = page.nextCursor ?? undefined;
+      position = nextPagePosition(page) ?? {};
+      await updateMessagingAccount(input.organizationId, account.id, {
+        backfillProgress: chatCount,
+        backfillCursor: serializeBackfillPosition(position),
+      });
       pages += 1;
       if (pages >= (input.maxChatPages ?? 20)) break;
-    } while (cursor);
-    const complete = !cursor;
+    } while (position.cursor !== undefined || position.offset !== undefined);
+    const complete =
+      position.cursor === undefined && position.offset === undefined;
     const updated = await updateMessagingAccount(
       input.organizationId,
       account.id,
       {
         status: complete ? "connected" : "syncing",
         lastSuccessfulSyncAt: complete ? new Date() : null,
-        backfillCursor: cursor ?? null,
+        backfillCursor: serializeBackfillPosition(complete ? null : position),
         backfillProgress: chatCount,
-        lastErrorCode: null,
-        lastErrorMessage: null,
+        lastErrorCode: historyWarning ? "PROVIDER_RESOURCE_NOT_FOUND" : null,
+        lastErrorMessage: historyWarning,
       },
     );
     await createOutboxEvent({
@@ -1101,9 +1519,10 @@ export async function syncMessagingAccount(input: {
         complete,
       },
     });
-    if (cursor)
+    const serializedPosition = serializeBackfillPosition(position);
+    if (!complete && serializedPosition)
       await enqueueMessagingJob({
-        jobKey: `messaging:backfill:${account.id}:${cursor}`,
+        jobKey: `messaging:backfill:${account.id}:${serializedPosition}`,
         organizationId: input.organizationId,
         kind: "account_backfill",
         payload: { accountId: account.id },
@@ -1111,9 +1530,16 @@ export async function syncMessagingAccount(input: {
     return updated;
   } catch (error) {
     const mapped = providerError(error);
+    const status =
+      mapped.code === "PROVIDER_AUTHENTICATION_FAILED"
+        ? "expired"
+        : mapped.code === "PROVIDER_ACCOUNT_NOT_READY"
+          ? "failed"
+          : "connected";
     await updateMessagingAccount(input.organizationId, account.id, {
-      status:
-        mapped.code === "PROVIDER_AUTHENTICATION_FAILED" ? "expired" : "failed",
+      // A chat-history/backfill failure does not disconnect the provider
+      // account. Keep its sync error separately while allowing messaging.
+      status,
       lastErrorCode: mapped.code,
       lastErrorMessage: mapped.message,
     });
@@ -1124,7 +1550,7 @@ export async function syncMessagingAccount(input: {
       aggregateId: account.id,
       payload: {
         accountId: account.id,
-        status: "failed",
+        status,
         errorCode: mapped.code,
       },
     });
@@ -1132,9 +1558,144 @@ export async function syncMessagingAccount(input: {
   }
 }
 
+/**
+ * Lightweight inbox reconciliation used only while no Unipile webhook is
+ * configured. It reads the most recent provider chat page and fetches message
+ * pages only for conversations whose provider timestamp moved forward.
+ *
+ * This is intentionally bounded. Full history remains the responsibility of
+ * syncMessagingAccount; production realtime should use signed webhooks.
+ */
+export async function syncRecentMessagingAccount(input: {
+  auth: MessagingAuthContext;
+  bindings?: AppBindings;
+  accountId: string;
+}) {
+  let account = await findMessagingAccount(
+    input.auth.organizationId,
+    input.accountId,
+  );
+  if (!account || !canUseAccount(account, input.auth))
+    throw new AppError(
+      404,
+      "MESSAGING_ACCOUNT_NOT_FOUND",
+      "Messaging account not found",
+    );
+  assertNonEmailProvider(account.provider);
+  account = await restoreMessagingAccountIfHealthy({
+    account,
+    bindings: input.bindings,
+  });
+  assertActiveMessagingAccount(account);
+
+  const client = createUnipileClient(input.bindings);
+  const linkedinInboxId =
+    account.provider === "linkedin"
+      ? await resolveLinkedinSyncInbox({ account, bindings: input.bindings })
+      : undefined;
+  const chatLimit = 10;
+  const recentMessageLimit = 10;
+  const chatPage = normalizePageItems(
+    linkedinInboxId
+      ? await client.listInboxChats({
+          accountId: account.unipileAccountId,
+          inboxId: linkedinInboxId,
+          limit: chatLimit,
+        })
+      : await client.listChats({
+          accountId: account.unipileAccountId,
+          limit: chatLimit,
+        }),
+  );
+
+  let changedThreads = 0;
+  let insertedMessages = 0;
+  const recentChats = await Promise.all(
+    chatPage.items.map(async (rawChat) => {
+      const normalized = safeThread(normalizeThread(rawChat, account.provider));
+      const existing = await findThreadByExternalId(
+        input.auth.organizationId,
+        account.id,
+        normalized.externalThreadId,
+      );
+      return { rawChat, normalized, existing };
+    }),
+  );
+  for (const { rawChat, normalized, existing } of recentChats) {
+    const providerMovedForward =
+      !existing ||
+      (normalized.lastMessageAt !== null &&
+        (!existing.lastMessageAt ||
+          normalized.lastMessageAt.getTime() >
+            existing.lastMessageAt.getTime()));
+    if (!providerMovedForward) continue;
+
+    changedThreads += 1;
+    const prepared = await persistProviderThread({
+      organizationId: input.auth.organizationId,
+      account,
+      raw: rawChat,
+    });
+    const after = existing?.lastMessageAt
+      ? new Date(existing.lastMessageAt.getTime() - 60_000).toISOString()
+      : undefined;
+    try {
+      // One recent page is sufficient for a frequent fallback. Full history
+      // uses the durable paginated backfill and is intentionally kept out of
+      // the browser request path.
+      const messagePage = normalizePageItems(
+        await client.listMessages({
+          accountId: account.unipileAccountId,
+          chatId: normalized.externalThreadId,
+          after,
+          limit: recentMessageLimit,
+        }),
+      );
+      for (const rawMessage of messagePage.items) {
+        const rawMessageRecord = rawRecordOf(rawMessage);
+        const persisted = await persistNormalizedMessage({
+          organizationId: input.auth.organizationId,
+          account,
+          bindings: input.bindings,
+          thread: prepared.thread,
+          raw: rawMessage,
+          eventType: "poll.message",
+          threadId: normalized.externalThreadId,
+          unread:
+            rawMessageRecord.is_seen !== true &&
+            rawMessageRecord.read_status !== "read",
+        });
+        if (persisted.inserted) insertedMessages += 1;
+      }
+    } catch (error) {
+      const staleProviderChat =
+        error instanceof UnipileProviderError &&
+        (error.status === 404 ||
+          error.providerCode === "provider/resource_not_found");
+      if (!staleProviderChat) throw error;
+    }
+    await createOutboxEvent({
+      organizationId: input.auth.organizationId,
+      eventType: "thread.updated",
+      aggregateType: "thread",
+      aggregateId: prepared.thread.id,
+      payload: { threadId: prepared.thread.id, accountId: account.id },
+    });
+  }
+
+  return {
+    accountId: account.id,
+    checkedThreads: chatPage.items.length,
+    changedThreads,
+    insertedMessages,
+  };
+}
+
 async function persistNormalizedMessage(input: {
   organizationId: string;
   account: typeof import("@repo/db-sql").messagingConnectedAccounts.$inferSelect;
+  bindings?: AppBindings;
+  thread?: typeof import("@repo/db-sql").messagingThreads.$inferSelect;
   raw: unknown;
   eventType: string;
   threadId?: string | null;
@@ -1157,23 +1718,50 @@ async function persistNormalizedMessage(input: {
       input.eventType,
     ),
   );
-  const syntheticThread: NormalizedThread = safeThread(
-    normalizeThread(
-      {
-        id: externalThreadId,
-        chat_id: externalThreadId,
-        last_message_at: message.sentAt.toISOString(),
-        last_message_text: message.preview,
-      },
-      input.account.provider,
-    ),
-  );
-  const thread = await upsertThread(
-    input.organizationId,
-    input.account.id,
-    input.account.provider,
-    syntheticThread,
-  );
+  let thread =
+    input.thread ??
+    (await findThreadByExternalId(
+      input.organizationId,
+      input.account.id,
+      externalThreadId,
+    ));
+
+  // A message webhook can be the first event Plucia sees for a newly-created
+  // conversation. Hydrate the full v2 Chat object so the inbox immediately
+  // has its title, user and avatar. Existing chats are never overwritten by a
+  // synthetic shell, which previously erased participant-facing metadata on
+  // every message.new event.
+  if (!thread) {
+    try {
+      const hydrated = await persistProviderThread({
+        organizationId: input.organizationId,
+        account: input.account,
+        raw: await createUnipileClient(input.bindings).getChat({
+          accountId: input.account.unipileAccountId,
+          chatId: externalThreadId,
+        }),
+      });
+      thread = hydrated.thread;
+    } catch {
+      const syntheticThread: NormalizedThread = safeThread(
+        normalizeThread(
+          {
+            id: externalThreadId,
+            chat_id: externalThreadId,
+            last_message_at: message.sentAt.toISOString(),
+            last_message_text: message.preview,
+          },
+          input.account.provider,
+        ),
+      );
+      thread = await upsertThread(
+        input.organizationId,
+        input.account.id,
+        input.account.provider,
+        syntheticThread,
+      );
+    }
+  }
   const messageParticipant = participantFromMessage(
     rawRecord,
     input.account.provider,
@@ -1284,6 +1872,84 @@ function providerMessageIdOf(value: Record<string, unknown>): string | null {
   );
 }
 
+export async function sendChatMessageWithRecovery(input: {
+  bindings?: AppBindings;
+  client?: MessagingDeliveryClient;
+  thread: MessagingThreadWithRelated;
+  text: string;
+  attachments?: Array<Record<string, unknown>>;
+}): Promise<{
+  raw: Record<string, unknown>;
+  recoveredExternalThreadId: string | null;
+}> {
+  const client = input.client ?? createUnipileClient(input.bindings);
+  try {
+    return {
+      raw: await client.sendChatMessage({
+        accountId: input.thread.account.unipileAccountId,
+        chatId: input.thread.thread.externalThreadId,
+        text: input.text,
+        ...(input.attachments ? { attachments: input.attachments } : {}),
+      }),
+      recoveredExternalThreadId: null,
+    };
+  } catch (sendError) {
+    // Instagram can return stale chat shells from list/sync. Before treating a
+    // 5xx send as transient, verify the cached chat id. If it no longer exists,
+    // restart the individual chat with the recipient's messaging identifier;
+    // Unipile sends the message as part of this request.
+    if (
+      input.thread.account.provider !== "instagram" ||
+      !(sendError instanceof UnipileProviderError) ||
+      ![404, 500, 502, 503, 504].includes(sendError.status)
+    )
+      throw sendError;
+
+    let staleChat = false;
+    try {
+      await client.getChat({
+        accountId: input.thread.account.unipileAccountId,
+        chatId: input.thread.thread.externalThreadId,
+      });
+    } catch (probeError) {
+      staleChat =
+        probeError instanceof UnipileProviderError &&
+        (probeError.status === 404 ||
+          probeError.providerCode === "provider/resource_not_found");
+    }
+    if (!staleChat) throw sendError;
+
+    const recipientIds = [
+      ...new Set(
+        input.thread.participants
+          .filter((participant) => !participant.isSelf)
+          .map((participant) => participant.providerParticipantId)
+          .filter(Boolean),
+      ),
+    ];
+    if (recipientIds.length !== 1)
+      throw new AppError(
+        409,
+        "STALE_INSTAGRAM_CONVERSATION",
+        "This Instagram conversation is no longer available and its recipient could not be resolved",
+      );
+
+    const raw = await client.startChat({
+      accountId: input.thread.account.unipileAccountId,
+      participantIds: recipientIds,
+      text: input.text,
+      ...(input.attachments ? { attachments: input.attachments } : {}),
+    });
+    return {
+      raw,
+      // Instagram individual chat ids are the recipient's messaging
+      // identifier. Prefer the explicit provider response when present.
+      recoveredExternalThreadId:
+        firstProviderString(raw.chat_id, raw.id) ?? recipientIds[0]!,
+    };
+  }
+}
+
 export async function processMessagingInboundEvent(input: {
   eventId: string;
   bindings?: AppBindings;
@@ -1327,13 +1993,16 @@ export async function processMessagingInboundEvent(input: {
           type === "account.initial_sync.running"
             ? "syncing"
             : type === "account.initial_sync.completed"
-              ? "connected"
+              ? "syncing"
               : type === "account.initial_sync.failed"
-                ? "failed"
+                ? "connected"
                 : statusValue === "running" ||
                     statusValue === "ready" ||
                     statusValue === "reconnect" ||
-                    statusValue === "add"
+                    statusValue === "add" ||
+                    statusValue === "unlocked" ||
+                    statusValue === "partial" ||
+                    statusValue === "degraded"
                   ? "connected"
                   : statusValue === "paused"
                     ? "paused"
@@ -1341,15 +2010,50 @@ export async function processMessagingInboundEvent(input: {
                       ? "disconnected"
                       : statusValue === "expired" || statusValue === "revoked"
                         ? statusValue
-                        : statusValue === "errored" ||
+                        : statusValue === "locked" ||
+                            statusValue === "errored" ||
                             statusValue === "error" ||
                             statusValue === "failed"
                           ? "failed"
                           : undefined;
         if (status) {
+          const lifecycleError =
+            type === "account.initial_sync.failed"
+              ? {
+                  code: "PROVIDER_INITIAL_SYNC_FAILED",
+                  message:
+                    "Unipile is retrying the initial history sync. Messaging remains available, but older conversations may be incomplete.",
+                }
+              : statusValue === "partial"
+                ? {
+                    code: "PROVIDER_ACCOUNT_PARTIAL",
+                    message:
+                      "Some products on this connected account require authentication; available messaging products remain usable.",
+                  }
+                : statusValue === "degraded"
+                  ? {
+                      code: "PROVIDER_ACCOUNT_DEGRADED",
+                      message:
+                        "Some products on this connected account are temporarily unavailable.",
+                    }
+                  : statusValue === "locked"
+                    ? {
+                        code: "PROVIDER_ACCOUNT_LOCKED",
+                        message:
+                          "Unipile has temporarily locked API access to this connected account.",
+                      }
+                    : statusValue === "errored" || statusValue === "error"
+                      ? {
+                          code: "PROVIDER_ACCOUNT_INTERRUPTED",
+                          message:
+                            "The provider connection is temporarily interrupted. Unipile will retry it automatically.",
+                        }
+                      : null;
           await updateMessagingAccount(account.organizationId, account.id, {
             status,
             enabled: status !== "disconnected",
+            lastErrorCode: lifecycleError?.code ?? null,
+            lastErrorMessage: lifecycleError?.message ?? null,
           });
           await createOutboxEvent({
             organizationId: account.organizationId,
@@ -1358,6 +2062,14 @@ export async function processMessagingInboundEvent(input: {
             aggregateId: account.id,
             payload: { accountId: account.id, status },
           });
+          if (type === "account.initial_sync.completed") {
+            await enqueueMessagingJob({
+              jobKey: `messaging:initial-sync-completed:${account.id}:${event.id}`,
+              organizationId: account.organizationId,
+              kind: "account_backfill",
+              payload: { accountId: account.id },
+            });
+          }
         }
       }
     } else if (account && type.startsWith("message.receipt.")) {
@@ -1511,6 +2223,7 @@ export async function processMessagingInboundEvent(input: {
         await persistNormalizedMessage({
           organizationId: account.organizationId,
           account,
+          bindings: input.bindings,
           raw: normalizedRaw,
           eventType: event.eventType,
           threadId: externalThreadId,
@@ -1681,7 +2394,7 @@ export async function sendMessagingReply(input: {
   attachmentIds?: string[];
   idempotencyKey: string;
 }) {
-  const thread = await getThreadWithRelated(input.auth, input.threadId);
+  let thread = await getThreadWithRelated(input.auth, input.threadId);
   if (!thread || !canUseAccount(thread.account, input.auth))
     throw new AppError(
       404,
@@ -1689,6 +2402,12 @@ export async function sendMessagingReply(input: {
       "Messaging thread not found",
     );
   assertNonEmailProvider(thread.account.provider);
+  const restoredAccount = await restoreMessagingAccountIfHealthy({
+    account: thread.account,
+    bindings: input.bindings,
+  });
+  if (restoredAccount !== thread.account)
+    thread = { ...thread, account: restoredAccount };
   assertActiveMessagingAccount(thread.account);
   if (!supportsCapability(thread.account.provider, "reply"))
     throw new AppError(
@@ -1747,18 +2466,25 @@ export async function sendMessagingReply(input: {
     attachmentIds: input.attachmentIds ?? [],
   });
   try {
-    const raw = await createUnipileClient(input.bindings).sendChatMessage({
-      accountId: thread.account.unipileAccountId,
-      chatId: thread.thread.externalThreadId,
+    const delivery = await sendChatMessageWithRecovery({
+      bindings: input.bindings,
+      thread,
       text: content.text ?? content.html ?? "",
       ...(attachments ? { attachments } : {}),
     });
+    const { raw } = delivery;
+    if (delivery.recoveredExternalThreadId)
+      await updateThreadExternalId(
+        input.auth.organizationId,
+        input.threadId,
+        delivery.recoveredExternalThreadId,
+      );
     const providerMessageId =
       typeof raw.message_id === "string"
         ? raw.message_id
         : Array.isArray(raw.message_id) && typeof raw.message_id[0] === "string"
           ? raw.message_id[0]
-          : typeof raw.id === "string"
+          : !delivery.recoveredExternalThreadId && typeof raw.id === "string"
             ? raw.id
             : null;
     const sent = await updateMessage(input.auth.organizationId, pending.id, {
@@ -1794,7 +2520,11 @@ export async function sendMessagingReply(input: {
       action: "messaging.message.sent",
       aggregateType: "message",
       aggregateId: pending.id,
-      metadata: { threadId: input.threadId, provider: thread.account.provider },
+      metadata: {
+        threadId: input.threadId,
+        provider: thread.account.provider,
+        recoveredStaleConversation: Boolean(delivery.recoveredExternalThreadId),
+      },
     });
     return { message: sent ?? pending, idempotent: false };
   } catch (error) {
@@ -1943,7 +2673,21 @@ export async function retryMessagingMessage(input: {
   bindings?: AppBindings;
   messageId: string;
 }) {
-  const reconciled = await reconcileMessagingMessage(input);
+  let reconciled: Awaited<ReturnType<typeof reconcileMessagingMessage>>;
+  try {
+    reconciled = await reconcileMessagingMessage(input);
+  } catch (error) {
+    // A stale Instagram chat cannot be searched for reconciliation. The
+    // recovery send below is safe because the provider confirms that the old
+    // conversation resource no longer exists.
+    if (
+      !(error instanceof UnipileProviderError) ||
+      (error.status !== 404 &&
+        error.providerCode !== "provider/resource_not_found")
+    )
+      throw error;
+    reconciled = { message: null, reconciled: false };
+  }
   if (reconciled.message)
     return { message: reconciled.message, reconciled: true, idempotent: true };
   const failed = await getMessageInOrganization(
@@ -1988,7 +2732,7 @@ export async function startMessagingConversation(input: {
   inmailSignature?: string | null;
   idempotencyKey: string;
 }) {
-  const account = await findMessagingAccount(
+  let account = await findMessagingAccount(
     input.auth.organizationId,
     input.accountId,
   );
@@ -1999,6 +2743,10 @@ export async function startMessagingConversation(input: {
       "Messaging account not found",
     );
   assertNonEmailProvider(account.provider);
+  account = await restoreMessagingAccountIfHealthy({
+    account,
+    bindings: input.bindings,
+  });
   assertActiveMessagingAccount(account);
   if (!supportsCapability(account.provider, "startConversation"))
     throw new AppError(
@@ -2228,16 +2976,12 @@ export async function markMessagingThreadRead(input: {
       "Messaging thread not found",
     );
   assertNonEmailProvider(thread.account.provider);
-  try {
-    if (supportsCapability(thread.account.provider, "readReceipts"))
-      await createUnipileClient(input.bindings).updateChat({
-        accountId: thread.account.unipileAccountId,
-        chatId: thread.thread.externalThreadId,
-        read: input.isRead,
-      });
-  } catch (error) {
-    if (input.isRead) throw providerError(error);
-  }
+
+  // The inbox read state belongs to Plucia and must not depend on an optional
+  // provider-side read receipt. Recovered/imported chats can legitimately have
+  // an external chat id that Unipile no longer accepts for update operations.
+  // Persist locally first so opening the conversation still clears its unread
+  // state even when the provider receipt cannot be synchronized.
   await setThreadReadState({
     organizationId: input.auth.organizationId,
     threadId: input.threadId,
@@ -2245,22 +2989,51 @@ export async function markMessagingThreadRead(input: {
     isRead: input.isRead,
     lastReadMessageId: input.lastMessageId,
   });
-  await createOutboxEvent({
-    organizationId: input.auth.organizationId,
-    eventType: "thread.read_changed",
-    aggregateType: "thread",
-    aggregateId: input.threadId,
-    payload: { threadId: input.threadId, isRead: input.isRead },
-  });
-  await createMessagingAuditEvent({
-    organizationId: input.auth.organizationId,
-    userId: input.auth.userId,
-    action: input.isRead
-      ? "messaging.thread.marked_read"
-      : "messaging.thread.marked_unread",
-    aggregateType: "thread",
-    aggregateId: input.threadId,
-  });
+
+  try {
+    const providerStateAlreadyMatches =
+      input.isRead && thread.thread.unreadCount === 0;
+    if (
+      !providerStateAlreadyMatches &&
+      supportsCapability(thread.account.provider, "readReceipts")
+    )
+      await createUnipileClient(input.bindings).updateChat({
+        accountId: thread.account.unipileAccountId,
+        chatId: thread.thread.externalThreadId,
+        read: input.isRead,
+      });
+  } catch (error) {
+    const mapped = providerError(error);
+    console.warn(
+      JSON.stringify({
+        level: "warn",
+        event: "messaging.read_receipt_sync_failed",
+        provider: thread.account.provider,
+        accountId: thread.account.id,
+        threadId: input.threadId,
+        isRead: input.isRead,
+        providerErrorCode: mapped.code,
+      }),
+    );
+  }
+  await Promise.all([
+    createOutboxEvent({
+      organizationId: input.auth.organizationId,
+      eventType: "thread.read_changed",
+      aggregateType: "thread",
+      aggregateId: input.threadId,
+      payload: { threadId: input.threadId, isRead: input.isRead },
+    }),
+    createMessagingAuditEvent({
+      organizationId: input.auth.organizationId,
+      userId: input.auth.userId,
+      action: input.isRead
+        ? "messaging.thread.marked_read"
+        : "messaging.thread.marked_unread",
+      aggregateType: "thread",
+      aggregateId: input.threadId,
+    }),
+  ]);
 }
 
 export async function archiveMessagingThread(input: {

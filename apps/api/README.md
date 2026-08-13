@@ -61,6 +61,8 @@ The API can run on Cloudflare Workers through `src/worker.ts`.
    pnpm --filter api exec wrangler secret put BETTER_AUTH_SECRET
    pnpm --filter api exec wrangler secret put BETTER_AUTH_URL
    pnpm --filter api exec wrangler secret put FRONTEND_ORIGINS
+   pnpm --filter api exec wrangler secret put UNIPILE_API_KEY
+   pnpm --filter api exec wrangler secret put UNIPILE_WEBHOOK_SECRET
    ```
 
    Add the Google/Apple credentials when those integrations are enabled. Set
@@ -94,25 +96,26 @@ files.
 
 ## Environment
 
-| Variable                                            | Required             | Purpose                                                                                         |
-| --------------------------------------------------- | -------------------- | ----------------------------------------------------------------------------------------------- |
-| `DATABASE_URL`                                      | yes                  | Neon/Postgres connection string                                                                 |
-| `BETTER_AUTH_SECRET`                                | yes                  | Random secret, at least 32 characters                                                           |
-| `BETTER_AUTH_URL`                                   | yes                  | Fallback public auth origin; allowlisted incoming frontend hosts are resolved per request       |
-| `FRONTEND_ORIGINS`                                  | yes                  | Exact comma-separated browser origins allowed by CORS and Better Auth                           |
-| `PORT`                                              | no                   | HTTP port, default `4000`                                                                       |
-| `COOKIE_CROSS_SITE`                                 | no                   | Use `Secure; SameSite=None` cookies when frontend and API are on different sites                |
-| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`          | together             | Enables Google sign-in                                                                          |
-| `APPLE_CLIENT_ID`, `APPLE_CLIENT_SECRET`            | together             | Enables optional social sign-in                                                                 |
-| `ORCHESTRATOR_URL`                                  | no                   | Internal agent service URL, default `http://localhost:8000`                                     |
-| `OUTBOUND_WEBHOOK_SECRET`                           | for service webhooks | Shared secret for orchestrator mail callbacks                                                   |
-| `UNIPILE_API_KEY`                                   | for messaging        | Application-scoped Unipile v2 API key; legacy v1 access tokens do not work with the v2 base URL |
-| `UNIPILE_BASE_URL`, `UNIPILE_API_VERSION`           | no                   | Unipile endpoint and version, default `https://api.unipile.com` / `v2`                          |
-| `UNIPILE_WEBHOOK_SECRET`                            | for webhooks         | Server-only raw-body webhook HMAC secret                                                        |
-| `UNIPILE_HOSTED_AUTH_DOMAIN`                        | no                   | Optional Unipile hosted-auth domain                                                             |
-| `MESSAGING_CALLBACK_URL`                            | no                   | Optional fixed hosted-auth callback                                                             |
-| `MESSAGING_ATTACHMENTS_BUCKET`                      | optional binding     | R2 bucket for browser/provider attachment storage                                               |
-| `MESSAGING_AI_ENABLED`, `MESSAGING_AI_PROVIDER_URL` | optional AI          | Feature flag and internal tenant-safe AI adapter endpoint                                       |
+| Variable                                            | Required             | Purpose                                                                                            |
+| --------------------------------------------------- | -------------------- | -------------------------------------------------------------------------------------------------- |
+| `DATABASE_URL`                                      | yes                  | Neon/Postgres connection string                                                                    |
+| `BETTER_AUTH_SECRET`                                | yes                  | Random secret, at least 32 characters                                                              |
+| `BETTER_AUTH_URL`                                   | yes                  | Fallback public auth origin; allowlisted incoming frontend hosts are resolved per request          |
+| `FRONTEND_ORIGINS`                                  | yes                  | Exact comma-separated browser origins allowed by CORS and Better Auth                              |
+| `PORT`                                              | no                   | HTTP port, default `4000`                                                                          |
+| `DEV_AUTH_BYPASS`, `DEV_AUTH_USER_ID`               | local development    | Uses one active database user for the dashboard without a real login; rejected outside development |
+| `COOKIE_CROSS_SITE`                                 | no                   | Use `Secure; SameSite=None` cookies when frontend and API are on different sites                   |
+| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`          | together             | Enables Google sign-in                                                                             |
+| `APPLE_CLIENT_ID`, `APPLE_CLIENT_SECRET`            | together             | Enables optional social sign-in                                                                    |
+| `ORCHESTRATOR_URL`                                  | no                   | Internal agent service URL, default `http://localhost:8000`                                        |
+| `OUTBOUND_WEBHOOK_SECRET`                           | for service webhooks | Shared secret for orchestrator mail callbacks                                                      |
+| `UNIPILE_API_KEY`                                   | for messaging        | Application-scoped Unipile v2 API key; legacy v1 access tokens do not work with the v2 base URL    |
+| `UNIPILE_BASE_URL`, `UNIPILE_API_VERSION`           | no                   | Unipile endpoint and version, default `https://api.unipile.com` / `v2`                             |
+| `UNIPILE_WEBHOOK_SECRET`                            | for webhooks         | Server-only raw-body webhook HMAC secret                                                           |
+| `UNIPILE_HOSTED_AUTH_DOMAIN`                        | no                   | Optional Unipile hosted-auth domain                                                                |
+| `MESSAGING_CALLBACK_URL`                            | no                   | Optional fixed hosted-auth callback                                                                |
+| `MESSAGING_ATTACHMENTS_BUCKET`                      | optional binding     | R2 bucket for browser/provider attachment storage                                                  |
+| `MESSAGING_AI_ENABLED`, `MESSAGING_AI_PROVIDER_URL` | optional AI          | Feature flag and internal tenant-safe AI adapter endpoint                                          |
 
 Wildcards are rejected in `FRONTEND_ORIGINS`. Never combine a wildcard origin
 with credentialed CORS. When `COOKIE_CROSS_SITE=true`, both the frontend and API
@@ -239,6 +242,47 @@ Authenticated agent proxy routes are mounted under `/api/v1/agent`. They cover
 conversations, contacts, turns, operator threads and commands, lead imports,
 draft approval/discard, and directory synchronization. Tenant and user
 identities are derived from the authenticated session.
+
+## Messaging history backfill
+
+Every successful WhatsApp, LinkedIn, Instagram, or Telegram connection starts
+an idempotent historical backfill. The API paginates through all available
+chats and each chat's messages, supporting both Unipile cursor and offset
+pagination. Chat shells are published to the dashboard before their deeper
+message history finishes, and realtime progress events refresh the inbox as
+history arrives.
+
+WhatsApp requires Unipile's own initial sync before complete history is
+queryable. Hosted Auth therefore requests `config.global.wait_initial_sync`,
+and `account.initial_sync.completed` webhooks enqueue another backfill as the
+durable fallback. Production should configure `UNIPILE_WEBHOOK_SECRET` and the
+scheduled messaging-job worker; local Hosted Auth can still complete through
+the wait-and-callback path.
+
+## Unipile v2 realtime setup
+
+Local messaging does not require a webhook secret. When
+`UNIPILE_WEBHOOK_SECRET` is absent, the accounts response advertises
+`realtime.mode = "polling"` and the open channel performs a bounded recent-chat
+sync every 20 seconds. Sending, history sync, read receipts, and reactions still
+use the Unipile v2 API directly.
+
+For production two-way realtime delivery:
+
+1. Deploy the API on a public HTTPS origin.
+2. In the Unipile dashboard, create a webhook whose URL is
+   `https://<api-origin>/api/v1/webhooks/unipile`.
+3. Subscribe it to the `message.*` events used by the inbox and the relevant
+   `account.*` lifecycle and initial-sync events.
+4. Copy that webhook endpoint's signing secret into
+   `UNIPILE_WEBHOOK_SECRET`. This is distinct from `UNIPILE_API_KEY`.
+5. Redeploy or restart the API. The accounts response then advertises
+   `realtime.mode = "webhook"`, disabling browser polling.
+
+The webhook route verifies `unipile-signature` against the exact raw request
+body before parsing JSON, durably accepts each event once, and publishes the
+result to authenticated browser SSE clients. Unipile cannot call a localhost
+URL directly; use an HTTPS tunnel only when testing webhook delivery locally.
 
 ## Security notes
 

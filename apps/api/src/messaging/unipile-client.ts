@@ -385,11 +385,43 @@ export class UnipileClient {
   async listChats(input: {
     accountId: string;
     cursor?: string;
+    offset?: number;
     limit?: number;
+    before?: string;
+    after?: string;
   }): Promise<unknown> {
     return this.request<unknown>(`/${encodePath(input.accountId)}/chats`, {
-      query: { cursor: input.cursor, limit: input.limit ?? 50 },
+      query: {
+        cursor: input.cursor,
+        offset: input.offset,
+        limit: input.limit ?? 50,
+        before: input.before,
+        after: input.after,
+      },
     });
+  }
+
+  async listInboxChats(input: {
+    accountId: string;
+    inboxId: string;
+    cursor?: string;
+    offset?: number;
+    limit?: number;
+    before?: string;
+    after?: string;
+  }): Promise<unknown> {
+    return this.request<unknown>(
+      `/${encodePath(input.accountId)}/inboxes/${encodePath(input.inboxId)}/chats`,
+      {
+        query: {
+          cursor: input.cursor,
+          offset: input.offset,
+          limit: input.limit ?? 25,
+          before: input.before,
+          after: input.after,
+        },
+      },
+    );
   }
 
   async getChat(input: {
@@ -405,12 +437,21 @@ export class UnipileClient {
     accountId: string;
     chatId: string;
     cursor?: string;
+    offset?: number;
     limit?: number;
+    before?: string;
+    after?: string;
   }): Promise<unknown> {
     return this.request<unknown>(
       `/${encodePath(input.accountId)}/chats/${encodePath(input.chatId)}/messages`,
       {
-        query: { cursor: input.cursor, limit: input.limit ?? 100 },
+        query: {
+          cursor: input.cursor,
+          offset: input.offset,
+          limit: input.limit ?? 100,
+          before: input.before,
+          after: input.after,
+        },
       },
     );
   }
@@ -428,7 +469,7 @@ export class UnipileClient {
     limit?: number;
   }): Promise<unknown> {
     return this.request<unknown>(
-      `/${encodePath(input.accountId)}/chats/${encodePath(input.chatId)}/attendees`,
+      `/${encodePath(input.accountId)}/chats/${encodePath(input.chatId)}/participants`,
       {
         query: { cursor: input.cursor, limit: input.limit ?? 100 },
       },
@@ -442,7 +483,7 @@ export class UnipileClient {
     attachments?: Array<Record<string, unknown>>;
   }): Promise<Record<string, unknown>> {
     return this.request<Record<string, unknown>>(
-      `/${encodePath(input.accountId)}/chats/${encodePath(input.chatId)}/messages`,
+      `/${encodePath(input.accountId)}/chats/${encodePath(input.chatId)}/messages/send`,
       {
         method: "POST",
         retry: false,
@@ -453,7 +494,10 @@ export class UnipileClient {
             ? { attachments: input.attachments }
             : {}),
         },
-        multipart: Boolean(input.attachments?.length),
+        // Messaging API v2 accepts JSON for this endpoint. The v1 adapter
+        // used multipart/form-data, which produces api/not_implemented or
+        // invalid-parameter responses against v2 accounts.
+        multipart: false,
       },
     );
   }
@@ -468,17 +512,13 @@ export class UnipileClient {
     specifics?: Record<string, unknown>;
   }): Promise<Record<string, unknown>> {
     const path = input.inboxId
-      ? `/${encodePath(input.accountId)}/inboxes/${encodePath(input.inboxId)}/chats`
-      : `/${encodePath(input.accountId)}/chats`;
+      ? `/${encodePath(input.accountId)}/inboxes/${encodePath(input.inboxId)}/chats/send`
+      : `/${encodePath(input.accountId)}/chats/send`;
     return this.request<Record<string, unknown>>(path, {
       method: "POST",
       retry: false,
       timeoutMs: OUTBOUND_TIMEOUT_MS,
       body: {
-        attendees_ids: input.participantIds,
-        // The v1 API called this field users_ids. Sending both lets a staged
-        // deployment use the same adapter while the configured API version is
-        // being upgraded; the provider ignores the unknown field.
         users_ids: input.participantIds,
         text: input.text,
         ...(input.title ? { name: input.title } : {}),
@@ -487,7 +527,7 @@ export class UnipileClient {
           ? { attachments: input.attachments }
           : {}),
       },
-      multipart: Boolean(input.attachments?.length),
+      multipart: false,
     });
   }
 
@@ -505,8 +545,8 @@ export class UnipileClient {
         body: {
           ...(input.archived === undefined
             ? {}
-            : { is_archived: input.archived }),
-          ...(input.read === undefined ? {} : { is_read: input.read }),
+            : { archive_status: input.archived }),
+          ...(input.read === undefined ? {} : { read_status: input.read }),
         },
       },
     );
