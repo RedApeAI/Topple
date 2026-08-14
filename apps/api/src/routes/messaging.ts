@@ -3,7 +3,6 @@ import { streamSSE } from "hono/streaming";
 import { z } from "zod";
 
 import { env } from "../lib/env.js";
-import { AppError } from "../lib/errors.js";
 import {
   jsonValidator,
   paramValidator,
@@ -23,9 +22,7 @@ import {
 } from "../messaging/authorization.js";
 import {
   createOutboxEvent,
-  consumeConnectionState,
   findMessagingAccount,
-  findPendingConnectionState,
   getThreadWithRelated,
   listOutboxEventsSince,
   listThreads,
@@ -41,7 +38,6 @@ import {
 } from "../messaging/contracts.js";
 import {
   archiveMessagingThread,
-  completeExistingMessagingConnection,
   completeMessagingConnection,
   completeMessagingAttachment,
   createMessagingConnectionLink,
@@ -52,10 +48,8 @@ import {
   presignMessagingAttachment,
   sendMessagingReply,
   retryMessagingMessage,
-  restoreMessagingAccountIfHealthy,
   startMessagingConversation,
   syncMessagingAccount,
-  syncRecentMessagingAccount,
   uploadMessagingAttachment,
 } from "../messaging/service.js";
 import { enqueueMessagingJob } from "../messaging/jobs.js";
@@ -64,7 +58,6 @@ import {
   listMessagingAiArtifacts,
   requestAiArtifact,
 } from "../messaging/ai.js";
-import { mapMessagingCallbackError } from "../messaging/callback-errors.js";
 import { processMessagingJobs } from "../messaging/job-runner.js";
 
 export const messagingRoutes = new Hono<AppEnv>();
@@ -85,60 +78,22 @@ function background(
   context: Parameters<typeof resolveMessagingContext>[0],
   promise: Promise<unknown>,
 ): void {
-  // Attach the rejection handler before reading executionCtx. Hono's Node
-  // adapter can throw when that Workers-only property is accessed; without a
-  // guard, the already-started promise becomes unhandled and crashes local dev.
-  const guarded = promise.catch((error) =>
-    console.error(
-      JSON.stringify({
-        level: "error",
-        event: "messaging.background_failed",
-        errorName: error instanceof Error ? error.name : "unknown",
-      }),
-    ),
-  );
-  try {
-    const executionContext = context.executionCtx;
-    if (executionContext && typeof executionContext.waitUntil === "function") {
-      executionContext.waitUntil(guarded);
-      return;
-    }
-  } catch {
-    // Node requests do not expose a Workers ExecutionContext.
+  const executionContext = context.executionCtx;
+  if (executionContext && typeof executionContext.waitUntil === "function") {
+    executionContext.waitUntil(
+      promise.catch((error) =>
+        console.error(
+          JSON.stringify({
+            level: "error",
+            event: "messaging.background_failed",
+            errorName: error instanceof Error ? error.name : "unknown",
+          }),
+        ),
+      ),
+    );
+  } else {
+    void promise.catch(() => undefined);
   }
-  void guarded;
-}
-
-type MessagingRequestContext = Parameters<typeof resolveMessagingContext>[0];
-
-function frontendOrigin(context: MessagingRequestContext): string {
-  const configuredOrigins = context.env.FRONTEND_ORIGINS?.split(",")
-    .map((value) => value.trim())
-    .filter(Boolean);
-  return (
-    configuredOrigins?.[0] ??
-    env.FRONTEND_ORIGINS[0] ??
-    new URL(context.req.url).origin
-  );
-}
-
-function channelDashboardPath(channel: string | undefined): string {
-  if (channel?.startsWith("linkedin")) return "/dashboard/linkedin";
-  if (["whatsapp", "instagram", "telegram"].includes(channel ?? ""))
-    return `/dashboard/${channel}`;
-  return "/dashboard/inbox";
-}
-
-function callbackRedirect(
-  context: MessagingRequestContext,
-  path: string,
-  params: Record<string, string>,
-) {
-  const safePath = path.startsWith("/dashboard/") ? path : "/dashboard/inbox";
-  const url = new URL(safePath, frontendOrigin(context));
-  for (const [key, value] of Object.entries(params))
-    url.searchParams.set(key, value);
-  return context.redirect(url.toString());
 }
 
 function encodeCursor(value: { activityAt: Date; id: string }): string {
@@ -207,13 +162,6 @@ function accountDto(
   };
 }
 
-function messagingRealtimeMode(context: MessagingRequestContext) {
-  const configured = Boolean(
-    context.env.UNIPILE_WEBHOOK_SECRET ?? env.UNIPILE_WEBHOOK_SECRET,
-  );
-  return configured ? ("webhook" as const) : ("polling" as const);
-}
-
 function threadDto(row: Awaited<ReturnType<typeof listThreads>>[number]) {
   return {
     ...row.thread,
@@ -226,15 +174,7 @@ messagingRoutes.get("/accounts", async (context) => {
   const accounts = await import("../messaging/repository.js").then(
     (repository) => repository.listMessagingAccounts(auth),
   );
-  const reconciled = await Promise.all(
-    accounts.map((account) =>
-      restoreMessagingAccountIfHealthy({ account, bindings: context.env }),
-    ),
-  );
-  return context.json({
-    data: reconciled.map(accountDto),
-    realtime: { mode: messagingRealtimeMode(context) },
-  });
+  return context.json({ data: accounts.map(accountDto) });
 });
 
 messagingRoutes.get(
@@ -307,113 +247,64 @@ messagingRoutes.post(
 
 messagingRoutes.get("/accounts/connect/callback", async (context) => {
   const auth = await resolveMessagingContext(context);
-  const pending = await findPendingConnectionState({
-    organizationId: auth.organizationId,
-    userId: auth.userId,
-  });
-  const fallbackPath = channelDashboardPath(pending?.requestedChannel);
-  const redirectError = async (error: AppError) => {
-    if (pending) {
-      await consumeConnectionState({
-        organizationId: auth.organizationId,
-        userId: auth.userId,
-        nonceHash: pending.nonceHash,
-      }).catch(() => null);
-    }
-    return callbackRedirect(context, fallbackPath, {
-      messaging: "error",
-      messagingCode: error.code,
-      messagingMessage: error.message,
-    });
-  };
   const query = z
     .object({
-      // Unipile's error callback may contain only error_type/title/detail and
-      // omit both state and account_id. State is required only for success.
-      state: z.string().min(1).max(4096).optional(),
+      state: z.string().min(1).max(4096),
       account_id: z.string().min(1).max(256).optional(),
       accountId: z.string().min(1).max(256).optional(),
       error: z.string().max(200).optional(),
       error_description: z.string().max(500).optional(),
-      error_type: z.string().max(200).optional(),
-      error_title: z.string().max(300).optional(),
-      error_detail: z.string().max(1000).optional(),
     })
     .safeParse(context.req.query());
-  if (!query.success) {
-    return redirectError(
-      new AppError(400, "INVALID_CALLBACK", "Invalid messaging callback"),
-    );
-  }
-  const providerErrorType = query.data.error_type ?? query.data.error;
-  const providerErrorDetail =
-    query.data.error_detail ?? query.data.error_description;
-  try {
-    let completed;
-    if (providerErrorType?.toLowerCase() === "api/already_exists") {
-      const existingAccountId = providerErrorDetail?.trim();
-      if (!existingAccountId || !/^acc_[a-zA-Z0-9]+$/.test(existingAccountId))
-        throw new AppError(
-          400,
-          "INVALID_CALLBACK",
-          "Unipile did not return the existing messaging account id",
-        );
-      completed = await completeExistingMessagingConnection({
-        auth,
-        bindings: context.env,
-        accountId: existingAccountId,
-      });
-    } else {
-      if (providerErrorType || query.data.error_title || providerErrorDetail)
-        throw mapMessagingCallbackError({
-          type: providerErrorType,
-          title: query.data.error_title,
-          detail: providerErrorDetail,
-        });
-
-      const accountId = query.data.account_id ?? query.data.accountId;
-      if (!query.data.state || !accountId)
-        throw new AppError(
-          400,
-          "INVALID_CALLBACK",
-          "The messaging callback is missing its state or account id",
-        );
-      completed = await completeMessagingConnection({
-        auth,
-        bindings: context.env,
-        state: query.data.state,
-        accountId,
-      });
-    }
-
-    background(
-      context,
-      syncMessagingAccount({
-        organizationId: auth.organizationId,
-        accountId: completed.account.id,
-        bindings: context.env,
-      }),
-    );
-    return callbackRedirect(
-      context,
-      channelDashboardPath(completed.account.provider),
+  if (!query.success)
+    return context.json(
       {
-        messaging: "connected",
-        channel: completed.account.provider,
-        accountId: completed.account.id,
+        error: {
+          code: "INVALID_CALLBACK",
+          message: "Invalid messaging callback",
+        },
       },
+      400,
     );
-  } catch (error) {
-    return redirectError(
-      error instanceof AppError
-        ? error
-        : new AppError(
-            500,
-            "MESSAGING_CONNECTION_FAILED",
-            "The messaging account could not be connected",
-          ),
+  const accountId = query.data.account_id ?? query.data.accountId;
+  if (query.data.error || !accountId) {
+    return context.json(
+      {
+        error: {
+          code: "MESSAGING_CONNECTION_FAILED",
+          message:
+            query.data.error_description ??
+            query.data.error ??
+            "The messaging account was not connected",
+        },
+      },
+      400,
     );
   }
+  const completed = await completeMessagingConnection({
+    auth,
+    bindings: context.env,
+    state: query.data.state,
+    accountId,
+  });
+  background(
+    context,
+    syncMessagingAccount({
+      organizationId: auth.organizationId,
+      accountId: completed.account.id,
+      bindings: context.env,
+    }),
+  );
+  const configuredOrigins = context.env.FRONTEND_ORIGINS?.split(",")
+    .map((value) => value.trim())
+    .filter(Boolean);
+  const origin =
+    configuredOrigins?.[0] ??
+    env.FRONTEND_ORIGINS[0] ??
+    new URL(context.req.url).origin;
+  return context.redirect(
+    `${origin}${completed.returnPath}?messaging=connected`,
+  );
 });
 
 messagingRoutes.post(
@@ -562,28 +453,6 @@ messagingRoutes.post(
       { data: { accountId: account.id, status: "syncing" } },
       202,
     );
-  },
-);
-
-messagingRoutes.post(
-  "/accounts/:id/poll",
-  rateLimit({ windowMs: 60_000, max: 6, keyPrefix: "messaging-poll" }),
-  paramValidator(idParam),
-  async (context) => {
-    const auth = await resolveMessagingContext(context);
-    const { id } = context.req.valid("param");
-    await requireAccountAccess(auth, id);
-    if (messagingRealtimeMode(context) === "webhook")
-      return context.json({
-        data: { accountId: id, skipped: true, reason: "webhook_configured" },
-      });
-    return context.json({
-      data: await syncRecentMessagingAccount({
-        auth,
-        bindings: context.env,
-        accountId: id,
-      }),
-    });
   },
 );
 

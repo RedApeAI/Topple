@@ -34,7 +34,6 @@ const channelCapabilities: Record<MessagingProvider, ChannelCapabilities> = {
     // LinkedIn attachments and new-chat behavior vary by account product. The
     // adapter still checks the account metadata before attempting the call.
     attachments: true,
-    readReceipts: true,
   },
   whatsapp: {
     ...chatDefaults,
@@ -43,8 +42,7 @@ const channelCapabilities: Record<MessagingProvider, ChannelCapabilities> = {
   },
   instagram: {
     ...chatDefaults,
-    attachments: true,
-    readReceipts: true,
+    attachments: false,
     archive: false,
   },
   telegram: {

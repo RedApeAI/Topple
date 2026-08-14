@@ -14,7 +14,6 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { accountNeedsReconnect } from "@/features/channels/types/messaging.types";
 import {
   Dialog,
   DialogContent,
@@ -460,7 +459,7 @@ export function MessagingAccountsPanel() {
                   </div>
                 ) : null}
                 <div className="mt-3 flex items-center gap-1.5 border-t border-border-subtle pt-2.5">
-                  {!accountNeedsReconnect(account) ? (
+                  {account.status === "connected" && account.enabled ? (
                     <Button
                       type="button"
                       variant="ghost"
@@ -591,9 +590,8 @@ export function MessagingAccountsPanel() {
             <DialogDescription>
               Use the provider identifier expected by the selected channel. For
               WhatsApp this is usually an international phone number; for
-              LinkedIn and Telegram use the provider participant identifier;
-              Instagram requires the recipient&apos;s messaging identifier (not
-              the public profile URL or display name).
+              LinkedIn, Instagram, and Telegram it is the provider participant
+              identifier.
             </DialogDescription>
           </DialogHeader>
           <form

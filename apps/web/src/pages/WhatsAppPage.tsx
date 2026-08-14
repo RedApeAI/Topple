@@ -9,7 +9,6 @@ import {
 import { WhatsAppIcon } from "@/components/shared/icons/brand-icons";
 import { DisconnectChannelDialog } from "@/features/channels/components/DisconnectChannelDialog";
 import { NewWhatsAppConversationDialog } from "@/features/channels/components/NewWhatsAppConversationDialog";
-import { accountNeedsReconnect } from "@/features/channels/types/messaging.types";
 import { InboxScreen } from "@/features/inbox/components/InboxScreen";
 import { useChannelStore } from "@/store/channel.store";
 import { useInboxStore } from "@/store/inbox.store";
@@ -40,7 +39,7 @@ export function WhatsAppPage() {
     <DashboardPage breadcrumb={["Dashboard", "WhatsApp"]}>
       {!status && loading ? (
         <ChannelConnectionLoading />
-      ) : account?.enabled ? (
+      ) : account?.status === "connected" && account.enabled ? (
         <>
           <InboxScreen
             lockedScope="whatsapp"
@@ -130,7 +129,7 @@ export function WhatsAppPage() {
           loading={loading}
           connecting={connecting === "whatsapp"}
           error={error}
-          reconnect={Boolean(account && accountNeedsReconnect(account))}
+          reconnect={Boolean(account && account.status !== "connected")}
           onConnect={() =>
             void (account ? reconnect(account) : connect("whatsapp")).catch(
               () => undefined,

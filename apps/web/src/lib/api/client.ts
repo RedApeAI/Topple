@@ -62,12 +62,6 @@ export function errorMessage(
     // not only a dead local backend or proxy.
     const responseMessage = bodyMessage(error.response?.data);
     if (responseMessage) return responseMessage;
-    if (
-      error.code === AxiosError.ECONNABORTED ||
-      error.code === AxiosError.ETIMEDOUT
-    ) {
-      return "The request timed out. It may still be processing—refresh the conversation before retrying.";
-    }
     if (isBackendUnreachable(error)) {
       return "Can't reach the server — check that it's running and try again.";
     }

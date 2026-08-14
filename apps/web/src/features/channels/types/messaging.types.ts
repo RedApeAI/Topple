@@ -17,28 +17,6 @@ export function accountIsConnected(account: MessagingAccount): boolean {
   return account.enabled && account.status === "connected";
 }
 
-const providerErrorsThatDoNotRequireReauthentication = new Set([
-  "PROVIDER_ACCOUNT_INTERRUPTED",
-  "PROVIDER_ACCOUNT_LOCKED",
-  "PROVIDER_ACCOUNT_NOT_READY",
-  "PROVIDER_INITIAL_SYNC_FAILED",
-  "PROVIDER_TEMPORARY_FAILURE",
-]);
-
-/** Keep transient provider interruptions distinct from lost authentication. */
-export function accountNeedsReconnect(account: MessagingAccount): boolean {
-  if (!account.enabled) return true;
-  if (["disconnected", "expired", "revoked"].includes(account.status)) {
-    return true;
-  }
-  return (
-    account.status === "failed" &&
-    !providerErrorsThatDoNotRequireReauthentication.has(
-      account.lastErrorCode ?? "",
-    )
-  );
-}
-
 export function accountMatchesChannel(
   account: MessagingAccount,
   channel: ConnectableChannel,

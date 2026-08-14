@@ -45,7 +45,6 @@ interface AuthStore {
   checkSession: () => Promise<void>;
   login: (email: string, password: string) => Promise<void>;
   register: (name: string, email: string, password: string) => Promise<void>;
-  devBypass: () => Promise<void>;
   logout: () => Promise<void>;
 }
 
@@ -135,11 +134,6 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
 
   register: async (name, email, password) => {
     await apiClient.post("/api/auth/sign-up/email", { name, email, password });
-    await get().checkSession();
-  },
-
-  devBypass: async () => {
-    await apiClient.post("/api/v1/auth/dev-bypass");
     await get().checkSession();
   },
 

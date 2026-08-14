@@ -1,8 +1,6 @@
 import { useEffect, useRef } from "react";
-import { useChannelStore } from "@/store/channel.store";
 import { useInboxStore } from "@/store/inbox.store";
-import { pollMessagingAccount } from "../services/messaging.service";
-import type { Conversation, InboxScope } from "../types/conversation.types";
+import type { Conversation } from "../types/conversation.types";
 
 const EVENT_TYPES = [
   "thread.created",
@@ -33,38 +31,12 @@ function eventsUrl(): string {
  * the browser can resume the stream. Each event is also deduplicated locally
  * before the normalized thread/message query is reconciled.
  */
-export function useMessagingRealtime(
-  active: Conversation | undefined,
-  scope: InboxScope,
-): void {
+export function useMessagingRealtime(active?: Conversation): void {
   const activeRef = useRef(active);
   const seen = useRef<Set<string>>(new Set());
   const refreshTimer = useRef<number | undefined>(undefined);
-  const pendingThreadIds = useRef<Set<string> | null>(new Set());
-  const reconcileInFlight = useRef(false);
-  const reconcileQueued = useRef(false);
   const refreshInbox = useInboxStore((state) => state.refreshInbox);
   const mergeChat = useInboxStore((state) => state.mergeChat);
-  const accounts = useChannelStore((state) => state.status?.accounts);
-
-  const provider =
-    scope === "linkedin" ||
-    scope === "whatsapp" ||
-    scope === "instagram" ||
-    scope === "telegram"
-      ? scope
-      : undefined;
-  const pollingAccount = accounts?.find(
-    (account) =>
-      account.id === active?.accountId ||
-      (!active && provider !== undefined && account.provider === provider),
-  );
-  const pollingAccountId =
-    pollingAccount?.enabled &&
-    ["connected", "syncing"].includes(pollingAccount.status) &&
-    pollingAccount.realtimeMode === "polling"
-      ? pollingAccount.id
-      : undefined;
 
   useEffect(() => {
     activeRef.current = active;
@@ -75,44 +47,15 @@ export function useMessagingRealtime(
     let disposed = false;
 
     const scheduleReconcile = (threadId?: string) => {
-      if (threadId) {
-        pendingThreadIds.current?.add(threadId);
-      } else {
-        // Events without a thread id (for example an account update) require
-        // a broad refresh, but still share the same debounce window.
-        pendingThreadIds.current = null;
-      }
       if (refreshTimer.current !== undefined)
         window.clearTimeout(refreshTimer.current);
       refreshTimer.current = window.setTimeout(() => {
         refreshTimer.current = undefined;
-        if (reconcileInFlight.current) {
-          reconcileQueued.current = true;
-          return;
-        }
-
-        const affectedThreadIds = pendingThreadIds.current;
-        pendingThreadIds.current = new Set();
-        reconcileInFlight.current = true;
-        void (async () => {
-          try {
-            await refreshInbox();
-            const current = activeRef.current;
-            if (
-              current &&
-              (affectedThreadIds === null || affectedThreadIds.has(current.id))
-            ) {
-              await mergeChat(current);
-            }
-          } finally {
-            reconcileInFlight.current = false;
-            if (reconcileQueued.current && !disposed) {
-              reconcileQueued.current = false;
-              scheduleReconcile();
-            }
-          }
-        })();
-      }, 400);
+        void refreshInbox();
+        const current = activeRef.current;
+        if (current && (!threadId || current.id === threadId))
+          void mergeChat(current);
+      }, 150);
     };
 
     const onEvent = (event: MessageEvent<string>) => {
@@ -153,48 +96,7 @@ export function useMessagingRealtime(
       disposed = true;
       if (refreshTimer.current !== undefined)
         window.clearTimeout(refreshTimer.current);
-      pendingThreadIds.current = new Set();
-      reconcileQueued.current = false;
       source?.close();
     };
   }, [mergeChat, refreshInbox]);
-
-  useEffect(() => {
-    if (!pollingAccountId) return;
-    let disposed = false;
-    let inFlight = false;
-
-    const poll = async () => {
-      if (disposed || inFlight || document.visibilityState === "hidden") return;
-      inFlight = true;
-      try {
-        const result = await pollMessagingAccount(pollingAccountId);
-        if (
-          !disposed &&
-          ((result.changedThreads ?? 0) > 0 ||
-            (result.insertedMessages ?? 0) > 0)
-        ) {
-          await refreshInbox();
-          const current = activeRef.current;
-          if (current?.accountId === pollingAccountId) await mergeChat(current);
-        }
-      } catch {
-        // This is a local-development fallback. The next interval retries,
-        // while provider and authentication errors remain visible through the
-        // connected-account status UI.
-      } finally {
-        inFlight = false;
-      }
-    };
-
-    void poll();
-    const interval = window.setInterval(() => void poll(), 20_000);
-    const onFocus = () => void poll();
-    window.addEventListener("focus", onFocus);
-    return () => {
-      disposed = true;
-      window.clearInterval(interval);
-      window.removeEventListener("focus", onFocus);
-    };
-  }, [mergeChat, pollingAccountId, refreshInbox]);
 }

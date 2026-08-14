@@ -34,12 +34,6 @@ function statusFrom(accounts: MessagingAccount[]): ChannelStatus {
   return { accounts };
 }
 
-function channelReturnPath(channel: ConnectableChannel): string {
-  return channel.startsWith("linkedin")
-    ? "/dashboard/linkedin"
-    : `/dashboard/${channel}`;
-}
-
 export const useChannelStore = create<ChannelStore>((set, get) => ({
   loading: false,
 
@@ -65,10 +59,7 @@ export const useChannelStore = create<ChannelStore>((set, get) => ({
   connect: async (channel) => {
     set({ connecting: channel, error: undefined });
     try {
-      const url = await connectMessagingAccount(
-        channel,
-        channelReturnPath(channel),
-      );
+      const url = await connectMessagingAccount(channel, "/dashboard/inbox");
       // The API completes the hosted-auth callback and redirects back to the
       // dashboard. There is no legacy provider popup/callback handshake here.
       window.location.assign(url);

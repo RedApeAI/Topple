@@ -1,12 +1,10 @@
-import { useEffect, useRef } from "react";
+import { useEffect } from "react";
 import { useInboxStore } from "@/store/inbox.store";
 import { markChatRead } from "../services/chat.service";
 import type { ChatDetail } from "../types/chat.types";
 import type { Conversation } from "../types/conversation.types";
 
 export function useChatDetail(conversation: Conversation | undefined) {
-  const markedReadThread = useRef<string | undefined>(undefined);
-  const dataRef = useRef<ChatDetail | undefined>(undefined);
   const conversationId = conversation?.id;
   const data = useInboxStore((state) =>
     conversationId ? state.chats[conversationId] : undefined,
@@ -30,19 +28,11 @@ export function useChatDetail(conversation: Conversation | undefined) {
     return () => window.removeEventListener("focus", refreshOnFocus);
   }, [conversation, load]);
 
-  const messagingThreadId = data?.source === "messaging" ? data.id : undefined;
-  dataRef.current = data;
-
   useEffect(() => {
-    const chat = dataRef.current;
-    if (!chat || !messagingThreadId) return;
-    if (markedReadThread.current === messagingThreadId) return;
-    markedReadThread.current = messagingThreadId;
-    void markChatRead(chat).catch(() => {
-      if (markedReadThread.current === messagingThreadId)
-        markedReadThread.current = undefined;
-    });
-  }, [messagingThreadId]);
+    if (data?.source === "messaging") {
+      void markChatRead(data).catch(() => undefined);
+    }
+  }, [data]);
 
   return { data, isLoading, isError: Boolean(error), error };
 }
@@ -56,8 +46,8 @@ export function useSendMessage(chat: ChatDetail | undefined) {
     isError: Boolean(error),
     error,
     mutate: (text: string, attachmentIds?: string[]) => {
-      if (!chat) return Promise.resolve();
-      return sendMessage(chat, text, attachmentIds);
+      if (!chat) return;
+      void sendMessage(chat, text, attachmentIds).catch(() => undefined);
     },
   };
 }

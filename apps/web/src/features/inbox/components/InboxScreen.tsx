@@ -39,9 +39,8 @@ export function InboxScreen({
     setScope(next);
     setActive(undefined);
   };
-  const handleCloseChat = React.useCallback(() => setActive(undefined), []);
 
-  useMessagingRealtime(active, scope);
+  useMessagingRealtime(active);
 
   const visibleConversations = conversations?.filter((conversation) => {
     const query = search.trim().toLowerCase();
@@ -91,7 +90,7 @@ export function InboxScreen({
           <ChatPane
             key={active.id}
             conversation={active}
-            onClose={handleCloseChat}
+            onClose={() => setActive(undefined)}
           />
         )}
       </div>

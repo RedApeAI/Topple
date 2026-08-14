@@ -60,7 +60,7 @@ export function Topbar({ breadcrumb, className, onCreateTask }: TopbarProps) {
         <button
           type="button"
           onClick={onCreateTask}
-          className="surface-primary-gradient flex items-center gap-1 rounded-lg px-3 py-2.5 text-[14px] font-medium text-primary-foreground shadow-sm transition-transform hover:-translate-y-px dark:!bg-none dark:!bg-white dark:!text-black dark:hover:!bg-white/90"
+          className="surface-primary-gradient flex items-center gap-1 rounded-lg px-3 py-2.5 text-[14px] font-medium text-primary-foreground shadow-sm transition-transform hover:-translate-y-px"
         >
           <Plus className="h-5 w-5" />
           Create Task

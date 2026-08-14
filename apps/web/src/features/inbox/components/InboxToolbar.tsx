@@ -95,7 +95,7 @@ export function InboxToolbar({
           </IconButton>
         </div>
         <DropdownMenu>
-          <DropdownMenuTrigger className="surface-primary-gradient flex items-center gap-1 rounded-lg py-1.5 pl-2.5 pr-1.5 text-primary-foreground shadow-sm transition-transform hover:-translate-y-px dark:!bg-none dark:!bg-white dark:!text-black dark:hover:!bg-white/90">
+          <DropdownMenuTrigger className="surface-primary-gradient flex items-center gap-1 rounded-lg py-1.5 pl-2.5 pr-1.5 text-primary-foreground shadow-sm transition-transform hover:-translate-y-px">
             <span className="border-r border-white/30 pr-1.5 text-[13px] font-medium">
               New
             </span>

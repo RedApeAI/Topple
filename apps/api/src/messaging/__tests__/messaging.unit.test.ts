@@ -18,7 +18,6 @@ import {
   verifyHostedState,
   verifyHmacSha256HexSafe,
 } from "../crypto.js";
-import { mapMessagingCallbackError } from "../callback-errors.js";
 import {
   normalizeEmail,
   normalizePhone,
@@ -32,7 +31,6 @@ import {
   normalizeMessageReaction,
   normalizeThread,
 } from "../normalizer.js";
-import { sendChatMessageWithRecovery } from "../service.js";
 import { UnipileClient, UnipileProviderError } from "../unipile-client.js";
 
 test("normalizes contact identifiers without over-merging", () => {
@@ -63,7 +61,7 @@ test("normalizes contact identifiers without over-merging", () => {
 
 test("resolves channel capabilities explicitly", () => {
   assert.equal(supportsCapability("whatsapp", "reply"), true);
-  assert.equal(supportsCapability("instagram", "attachments"), true);
+  assert.equal(supportsCapability("instagram", "attachments"), false);
   assert.equal(supportsCapability("whatsapp", "archive"), false);
   assert.equal(getChannelCapabilities("telegram").readReceipts, true);
   assert.equal(getChannelCapabilities("google").htmlEmail, true);
@@ -152,28 +150,6 @@ test("verifies Unipile-style HMAC signatures with constant-time Web Crypto", asy
   );
 });
 
-test("maps Unipile hosted-auth account restrictions to an actionable API error", () => {
-  const error = mapMessagingCallbackError({
-    type: "api/account_restricted",
-    title: "Account is restricted",
-    detail:
-      "This account is not allowed to be linked. Reason: free_trial_used.",
-  });
-
-  assert.equal(error.status, 403);
-  assert.equal(error.code, "MESSAGING_ACCOUNT_RESTRICTED");
-  assert.match(error.message, /free_trial_used/);
-});
-
-test("maps an error-only hosted-auth callback without requiring state", () => {
-  const error = mapMessagingCallbackError({
-    type: "api/expired_link",
-  });
-
-  assert.equal(error.status, 400);
-  assert.equal(error.code, "MESSAGING_CONNECTION_LINK_EXPIRED");
-});
-
 test("normalizes provider account, thread, and message payloads", async () => {
   const account = normalizeAccount({
     id: "account-1",
@@ -184,24 +160,6 @@ test("normalizes provider account, thread, and message payloads", async () => {
   });
   assert.equal(account.provider, "linkedin");
   assert.equal(account.providerAccountType, "sales_navigator");
-
-  assert.equal(
-    normalizeAccount({
-      id: "account-2",
-      provider: "instagram",
-      status: "degraded",
-    }).status,
-    "connected",
-  );
-  assert.equal(
-    normalizeAccount({
-      id: "account-3",
-      provider: "telegram",
-      status: "running",
-      is_locked: true,
-    }).status,
-    "failed",
-  );
 
   const thread = normalizeThread(
     {
@@ -214,24 +172,6 @@ test("normalizes provider account, thread, and message payloads", async () => {
   assert.equal(thread.externalThreadId, "chat-1");
   assert.equal(thread.preview, "latest");
   assert.equal(thread.participants[0]?.providerParticipantId, "lead-1");
-
-  const instagramThread = normalizeThread(
-    {
-      id: "instagram-chat-1",
-      name: "Instagram contact",
-      user_id: "instagram-user-1",
-      last_message_timestamp: "2026-08-12T10:02:00.000Z",
-    },
-    "instagram",
-  );
-  assert.equal(
-    instagramThread.participants[0]?.providerParticipantId,
-    "instagram-user-1",
-  );
-  assert.equal(
-    instagramThread.lastMessageAt?.toISOString(),
-    "2026-08-12T10:02:00.000Z",
-  );
 
   const message = await normalizeMessage(
     "account-1",
@@ -317,7 +257,7 @@ test("Unipile adapter sends account-scoped requests and preserves provider respo
   assert.equal(response.message_id, "provider-message-1");
   assert.equal(
     requests[0]?.url,
-    "https://api.unipile.test/v2/account%2F1/chats/chat%2F1/messages/send",
+    "https://api.unipile.test/v2/account%2F1/chats/chat%2F1/messages",
   );
   assert.equal(
     new Headers(requests[0]?.init?.headers).get("X-API-KEY"),
@@ -351,99 +291,6 @@ test("Unipile adapter preserves v2 problem types for actionable errors", async (
   });
 });
 
-test("recovers a stale Instagram chat with the recipient messaging identifier", async () => {
-  const started: Array<{
-    accountId: string;
-    participantIds: string[];
-    text: string;
-  }> = [];
-  const client = {
-    sendChatMessage: async () => {
-      throw new UnipileProviderError(
-        "gateway timeout",
-        504,
-        "UNIPILE_NETWORK_ERROR",
-      );
-    },
-    getChat: async () => {
-      throw new UnipileProviderError(
-        "provider/resource_not_found",
-        404,
-        "provider/resource_not_found",
-      );
-    },
-    startChat: async (input: {
-      accountId: string;
-      participantIds: string[];
-      text: string;
-    }) => {
-      started.push(input);
-      return { chat_id: "instagram-recipient-1", message_id: "message-1" };
-    },
-  };
-  const thread = {
-    account: { provider: "instagram", unipileAccountId: "account-1" },
-    thread: { externalThreadId: "stale-chat-1" },
-    participants: [
-      {
-        providerParticipantId: "instagram-recipient-1",
-        isSelf: false,
-      },
-    ],
-  } as Parameters<typeof sendChatMessageWithRecovery>[0]["thread"];
-
-  const result = await sendChatMessageWithRecovery({
-    client,
-    thread,
-    text: "Hello",
-  });
-
-  assert.equal(result.recoveredExternalThreadId, "instagram-recipient-1");
-  assert.equal(result.raw.message_id, "message-1");
-  assert.deepEqual(started, [
-    {
-      accountId: "account-1",
-      participantIds: ["instagram-recipient-1"],
-      text: "Hello",
-    },
-  ]);
-});
-
-test("Unipile adapter supports offset and time pagination for provider histories", async () => {
-  const requests: string[] = [];
-  const client = new UnipileClient(
-    { apiKey: "secret", baseUrl: "https://api.unipile.test", apiVersion: "v2" },
-    async (url) => {
-      requests.push(String(url));
-      return new Response(JSON.stringify({ data: [] }), {
-        status: 200,
-        headers: { "Content-Type": "application/json" },
-      });
-    },
-  );
-
-  await client.listChats({
-    accountId: "account-1",
-    offset: 50,
-    limit: 50,
-    after: "2026-08-13T10:00:00.000Z",
-  });
-  await client.listMessages({
-    accountId: "account-1",
-    chatId: "chat-1",
-    offset: 100,
-    limit: 100,
-    after: "2026-08-13T10:00:00.000Z",
-  });
-
-  assert.match(requests[0] ?? "", /offset=50/);
-  assert.match(requests[0] ?? "", /limit=50/);
-  assert.match(requests[0] ?? "", /after=2026-08-13T10%3A00%3A00.000Z/);
-  assert.match(requests[1] ?? "", /offset=100/);
-  assert.match(requests[1] ?? "", /limit=100/);
-  assert.match(requests[1] ?? "", /after=2026-08-13T10%3A00%3A00.000Z/);
-});
-
 test("Unipile adapter preserves LinkedIn product inbox specifics", async () => {
   const requests: Array<{ url: string; init?: RequestInit }> = [];
   const client = new UnipileClient(
@@ -467,14 +314,13 @@ test("Unipile adapter preserves LinkedIn product inbox specifics", async () => {
   });
   assert.equal(
     requests[0]?.url,
-    "https://api.unipile.test/v2/account-1/inboxes/SALES_NAVIGATOR_PRIMARY/chats/send",
+    "https://api.unipile.test/v2/account-1/inboxes/SALES_NAVIGATOR_PRIMARY/chats",
   );
   const body = JSON.parse(String(requests[0]?.init?.body)) as Record<
     string,
     unknown
   >;
   assert.deepEqual(body.users_ids, ["lead-1"]);
-  assert.equal("attendees_ids" in body, false);
   assert.deepEqual(body.specifics, {
     linkedin: { sales_navigator: { subject: "A useful subject" } },
   });
