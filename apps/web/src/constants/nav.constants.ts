@@ -1,5 +1,5 @@
 import type { LucideIcon } from "lucide-react";
-import { Activity, CalendarMinus2, GalleryVerticalEnd } from "lucide-react";
+import { Activity, CalendarMinus2, GalleryVerticalEnd, Plug } from "lucide-react";
 import {
   CallSparkIcon,
   CrmIcon,
@@ -86,5 +86,10 @@ export const bottomNavItems: NavItem[] = [
     label: "Calendar",
     href: "/dashboard/calendar",
     icon: CalendarMinus2,
+  },
+  {
+    label: "Connectors",
+    href: "/dashboard/connectors",
+    icon: Plug,
   },
 ];

@@ -19,6 +19,7 @@ import json
 import logging
 import re
 from datetime import datetime, timezone
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from bson import ObjectId
 from bson.errors import InvalidId
@@ -27,6 +28,7 @@ from ..engine import contacts as contacts_engine
 from ..engine import recipients as recipients_engine
 from ..engine.identity import channel_for_address, normalize
 from ..llm import gateway
+from ..mcp import client as mcp_client
 from ..llm.gateway import _parse_json_block
 from ..outbound import dispatcher
 from ..playbooks.loader import PlaybookNotFound, load_playbook
@@ -50,6 +52,43 @@ ACTION_CHANNELS = ("whatsapp", "email", "voice", "instagram")
 class ThreadNotFound(Exception):
     pass
 
+def _now_for_prompt(time_zone: str | None) -> str:
+    """Current time in the salesperson's zone, for resolving "tonight".
+
+    Without this the model has no clock and simply invents a date — one run
+    scheduled a meeting for January 2024. The offset is spelled out because a
+    naive timestamp is ambiguous to every calendar API.
+    """
+    zone = timezone.utc
+    label = "UTC"
+    if time_zone:
+        try:
+            zone = ZoneInfo(time_zone)
+            label = time_zone
+        except (ZoneInfoNotFoundError, ValueError):
+            logger.info("unknown time zone %r from client; using UTC", time_zone)
+
+    now = datetime.now(zone)
+    return f"{now.strftime('%A %d %B %Y, %H:%M')} ({now.isoformat(timespec='seconds')}, {label})"
+
+
+def _connector_tool_block(tools: list[dict]) -> str:
+    """Render discovered MCP tools into the same bullet shape as the built-ins,
+    so the model sees one uniform tool list rather than two conventions."""
+    lines = []
+    for tool in tools:
+        params = (tool.get("input_schema") or {}).get("properties") or {}
+        required = set((tool.get("input_schema") or {}).get("required") or [])
+        arg_desc = ", ".join(
+            f'"{name}"{"" if name in required else " (optional)"}'
+            for name in params
+        )
+        lines.append(
+            f"- {tool['name']} — args {{{arg_desc}}} → {tool.get('description', '')}"
+        )
+    return "\n".join(lines)
+
+
 SYSTEM_PROMPT = """\
 You are Plucia Operator, an AI sales operator working FOR a salesperson — you \
 are never talking to their customer directly. Read the salesperson's command, \
@@ -69,6 +108,7 @@ best match first, then most recently contacted. Each carries a "source" of \
 "crm" or "gmail"; only "crm" ones have a contact_id.
 - get_conversation — args {{"contact_id": "...", "channel": "<optional>"}} → that contact's conversation: stage, recent messages, lead profile
 - send_message — args {{"contact_id": "<id from find_recipient>" OR "to": "<email address or phone number>", "channel": "whatsapp|email|voice|instagram", "text": "<the message the customer will receive>", "subject": "<optional, email only>"}} → in copilot mode creates a DRAFT for the salesperson to approve; in autopilot mode sends it immediately. Returns the result.
+{connector_tools}
 
 How to act:
 - To contact someone you MUST call the send_message tool — a draft (copilot) or \
@@ -96,6 +136,15 @@ that channel: first person, no meta commentary, no placeholders, at most a \
 couple of sentences.
 - "operator_output" speaks to the salesperson: short and factual — what you \
 did or found, or the one question you need answered.
+- NEVER tell the salesperson that anyone was invited, emailed, notified or \
+contacted unless the tool result you just received says so. Tool results carry \
+this explicitly — e.g. "notified_attendees": false means NO invitation was \
+sent, and you must say so plainly rather than implying it went out. Reporting \
+an outward-facing action that did not happen is the worst mistake you can make.
+- Right now it is {now}. Resolve every relative time ("tonight", "tomorrow \
+at 3", "next Tuesday") against that, and pass timestamps as RFC3339 WITH the \
+offset shown there. Never invent a date — if you cannot work one out from the \
+command plus the current time, ask.
 - Mode is "{mode}": in copilot your send_message becomes a DRAFT awaiting \
 approval (report it that way); in autopilot it is sent immediately. The \
 salesperson's channel picker is currently "{preferred_channel}" — treat it as \
@@ -109,14 +158,18 @@ def _now() -> datetime:
 
 def _resolve_agent_model(runtime: RuntimeConfig | None) -> str:
     """The agent runs on the BASE instruct model — the sales LoRA adapter is
-    the buyer-facing voice, not an instruction-follower."""
+    the buyer-facing voice, not an instruction-follower.
+
+    Only vLLM has adapters to avoid; every other backend serves one model, and
+    `gateway.base_model()` is the single place that knows which.
+    """
     from ..config import settings
 
     if settings.llm_backend == "vllm":
         if runtime is None:
             raise ValueError("runtime (model_id) is required on the vllm backend")
         return runtime.model_id
-    return settings.ollama_model
+    return gateway.base_model()
 
 
 # --------------------------------------------------------------------------- #
@@ -197,6 +250,7 @@ async def _run_tool(
     args: dict,
     sent_keys: set[tuple],
     user_id: str | None = None,
+    connector_tools: frozenset[str] = frozenset(),
 ) -> dict:
     """Dispatch one tool call. `send_message` acts (mode-gated) and is deduped
     so a re-issued identical send returns the prior result instead of firing
@@ -224,9 +278,13 @@ async def _run_tool(
         return result
 
     tool = TOOLS.get(name)
-    if tool is None:
-        return {"error": f"unknown tool {name!r}"}
-    return await tool(db, tenant_id, args)
+    if tool is not None:
+        return await tool(db, tenant_id, args)
+
+    if name in connector_tools:
+        return await mcp_client.call_tool(user_id, name, args, mode)
+
+    return {"error": f"unknown tool {name!r}"}
 
 
 # --------------------------------------------------------------------------- #
@@ -482,6 +540,7 @@ async def run_command(
     client_ref: str | None = None,
     user_id: str | None = None,
     session_id: str | None = None,
+    time_zone: str | None = None,
 ) -> dict:
     """One salesperson command through the full loop. Returns the persisted
     operator reply (with steps + action result) and the thread id.
@@ -490,6 +549,12 @@ async def run_command(
     loop runs) back to the dashboard that issued the command, so it can show
     the reasoning happening in real time."""
     model = _resolve_agent_model(runtime)
+
+    # Whatever the user has connected becomes callable this run. Discovery is
+    # per command so a connector granted a moment ago is usable immediately,
+    # and a connector outage silently degrades to the built-in tools.
+    connectors = await mcp_client.list_tools(user_id, mode)
+    connector_names = frozenset(tool["name"] for tool in connectors)
 
     # -- thread + user message ------------------------------------------------
     if thread_id:
@@ -526,7 +591,10 @@ async def run_command(
 
     # -- the loop -------------------------------------------------------------
     system = SYSTEM_PROMPT.format(
-        mode=mode, preferred_channel=preferred_channel or "whatsapp"
+        mode=mode,
+        preferred_channel=preferred_channel or "whatsapp",
+        connector_tools=_connector_tool_block(connectors),
+        now=_now_for_prompt(time_zone),
     )
     convo: list[dict] = [{"role": "system", "content": system}]
     if prior_candidates:
@@ -580,7 +648,8 @@ async def run_command(
         if tool_name:
             args = data.get("args") or {}
             observation = await _run_tool(
-                db, tenant_id, mode, runtime, str(tool_name), args, sent_keys, user_id
+                db, tenant_id, mode, runtime, str(tool_name), args, sent_keys,
+                user_id, connector_names,
             )
             # send_message is the acting tool — its result drives the UI action
             if str(tool_name) == "find_recipient" and observation.get("matches"):

@@ -145,6 +145,7 @@ orchestratorRoutes.post(
       thread_id: z.string().trim().max(128).nullable().optional(),
       preferred_channel: z.string().trim().max(32).nullable().optional(),
       session_id: z.string().trim().max(128).nullable().optional(),
+      time_zone: z.string().trim().max(64).nullable().optional(),
     }),
   ),
   async (context) => {
