@@ -32,7 +32,9 @@ export const ACCEPTED_EXTENSIONS = [
 export const ACCEPT_ATTRIBUTE = ACCEPTED_EXTENSIONS.join(",");
 export const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
 
-export async function uploadKnowledgeFile(file: File): Promise<UploadedDocument> {
+export async function uploadKnowledgeFile(
+  file: File,
+): Promise<UploadedDocument> {
   const body = new FormData();
   body.append("file", file);
 

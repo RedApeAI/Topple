@@ -184,7 +184,8 @@ export function registerCalendarTools(
 
         for (const block of busy) {
           const blockStart = Date.parse(block.start);
-          if (blockStart - cursor >= needed) slots.push(slot(cursor, blockStart));
+          if (blockStart - cursor >= needed)
+            slots.push(slot(cursor, blockStart));
           cursor = Math.max(cursor, Date.parse(block.end));
         }
         if (windowEnd - cursor >= needed) slots.push(slot(cursor, windowEnd));

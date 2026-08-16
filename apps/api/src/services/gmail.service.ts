@@ -741,7 +741,7 @@ export function isUnreachable(email: string): boolean {
     .slice(0, at)
     .toLowerCase()
     .split("+")[0]!
-    .replace(/[._\-]/g, "");
+    .replace(/[._-]/g, "");
   if (!local) return false;
   if (UNREACHABLE_EXACT.has(local)) return true;
   return UNREACHABLE_SUBSTRINGS.some((marker) => local.includes(marker));

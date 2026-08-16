@@ -222,6 +222,7 @@ export function syncDirectory(scope: Scope) {
  * to change — today the web client hardcodes this same string, which is the
  * gap itself.
  */
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 export function knowledgeSourceFor(_scope: Scope): string {
   return env.KNOWLEDGE_COLLECTION ?? "plucia_re";
 }

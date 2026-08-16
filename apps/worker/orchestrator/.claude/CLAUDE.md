@@ -19,7 +19,7 @@ picking one.
 
 1. **Two top-level graphs, not one.** The turn graph is NOT a subgraph of the
    operator graph. Nothing invokes the turn graph except an inbound channel
-   webhook. Build it so it *can* be invoked as a subgraph later (fan-out
+   webhook. Build it so it _can_ be invoked as a subgraph later (fan-out
    campaigns), but do not nest it now.
 2. **Control flow ownership is the dividing line.** In the turn graph the
    playbook YAML owns control flow and the LLM only produces data — so the graph
@@ -77,8 +77,9 @@ docker-compose service), not mongomock. Say so explicitly if you cannot.
 ## Scope fences
 
 Do NOT, unless a phase prompt says otherwise:
+
 - Modify `apps/api` or `apps/web`.
-- Change any prompt text, system prompt, or playbook YAML *content* or schema.
+- Change any prompt text, system prompt, or playbook YAML _content_ or schema.
   Parity checking depends on these being fixed.
 - Fix the items in HLD §8 "Known gaps" — with one exception, gap 3
   (`merge_identities` unbatched writes), which is in scope where a phase says so.

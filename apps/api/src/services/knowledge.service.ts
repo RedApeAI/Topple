@@ -45,7 +45,18 @@ export interface KnowledgeChunk {
  * that would be embedded and retrieved as though it were the document. A clear
  * refusal is better than silent nonsense in the knowledge base.
  */
-const TEXT_EXTENSIONS = new Set(["txt", "md", "markdown", "csv", "tsv", "json", "yaml", "yml", "html", "htm"]);
+const TEXT_EXTENSIONS = new Set([
+  "txt",
+  "md",
+  "markdown",
+  "csv",
+  "tsv",
+  "json",
+  "yaml",
+  "yml",
+  "html",
+  "htm",
+]);
 
 const NEEDS_A_PARSER: Record<string, string> = {
   pdf: "PDF",
@@ -93,7 +104,8 @@ export function extractText(filename: string, bytes: Uint8Array): string {
   }
 
   const raw = new TextDecoder("utf-8", { fatal: false }).decode(bytes);
-  const text = extension === "html" || extension === "htm" ? stripHtml(raw) : raw;
+  const text =
+    extension === "html" || extension === "htm" ? stripHtml(raw) : raw;
 
   // A binary file renamed to .txt decodes to replacement characters. Embedding
   // that would fill the knowledge base with junk that still matches queries.
@@ -145,7 +157,10 @@ function splitLongBlock(block: string): string[] {
  * costs nothing and keeps chunks about one thing.
  */
 export function chunkText(text: string): string[] {
-  const normalised = text.replace(/\r\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
+  const normalised = text
+    .replace(/\r\n/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
   if (!normalised) return [];
 
   // Keep a Markdown heading attached to the section it introduces — on its own
@@ -155,7 +170,11 @@ export function chunkText(text: string): string[] {
     const trimmed = block.trim();
     if (!trimmed) continue;
     const previous = blocks[blocks.length - 1];
-    if (previous !== undefined && /^#{1,6}\s/.test(previous) && previous.length < 120) {
+    if (
+      previous !== undefined &&
+      /^#{1,6}\s/.test(previous) &&
+      previous.length < 120
+    ) {
       blocks[blocks.length - 1] = `${previous}\n\n${trimmed}`;
     } else {
       blocks.push(trimmed);
@@ -178,7 +197,9 @@ export function chunkText(text: string): string[] {
         flush();
         // Overlap: a price and the property it belongs to often straddle a
         // boundary, and one of the two chunks needs both.
-        current = tail.includes("\n") ? tail.slice(tail.indexOf("\n") + 1).trim() : "";
+        current = tail.includes("\n")
+          ? tail.slice(tail.indexOf("\n") + 1).trim()
+          : "";
       }
       current += (current ? "\n\n" : "") + piece;
     }
@@ -204,7 +225,10 @@ export function docIdFor(filename: string): string {
   return slug || "document";
 }
 
-export function toChunks(filename: string, bytes: Uint8Array): KnowledgeChunk[] {
+export function toChunks(
+  filename: string,
+  bytes: Uint8Array,
+): KnowledgeChunk[] {
   const text = extractText(filename, bytes);
   const pieces = chunkText(text);
   if (pieces.length === 0) {
