@@ -270,6 +270,29 @@ class ContactNotFound(Exception):
     pass
 
 
+#: "This deployment cannot open a session at all", as distinct from "this
+#: transaction failed". Only ever consulted for the failure to *open* a
+#: session, before any write — see `merge_identities`.
+#:
+#: Matched on type and message because the sources differ: mongomock raises
+#: NotImplementedError, a driver without session support raises AttributeError,
+#: and a replica-set-less mongod reports it in the message.
+_NO_SESSION_TYPES = (AttributeError, NotImplementedError)
+_NO_SESSION_MARKERS = (
+    "transaction numbers are only allowed on a replica set",
+    "transactions are not supported",
+    "sessions are not supported",
+    "start_session",
+)
+
+
+def _transactions_unsupported(exc: Exception) -> bool:
+    if isinstance(exc, _NO_SESSION_TYPES):
+        return True
+    text = f"{exc}".lower()
+    return any(marker in text for marker in _NO_SESSION_MARKERS)
+
+
 async def merge_identities(db, primary_contact_id, duplicate_contact_id) -> dict:
     """Fold `duplicate` into `primary`: union identities, fill lead/profile
     gaps (primary's known values win), repoint conversations/messages/turns,
@@ -304,18 +327,61 @@ async def merge_identities(db, primary_contact_id, duplicate_contact_id) -> dict
     profile = dict(duplicate.get("profile", {}))
     profile.update({k: v for k, v in primary.get("profile", {}).items() if v not in NULLISH})
 
-    # delete the duplicate FIRST so the unique identity index never sees the
-    # same identity on two docs
-    await db.contacts.delete_one({"_id": duplicate_id})
-    await db.contacts.update_one(
-        {"_id": primary_id},
-        {"$set": {"identities": identities, "lead": lead, "profile": profile, "updated_at": _now()}},
-    )
-    await db.conversations.update_many(
-        {"contact_id": duplicate_id}, {"$set": {"contact_id": primary_id}}
-    )
-    await db.turns.update_many(
-        {"contact_id": duplicate_id}, {"$set": {"contact_id": primary_id}}
-    )
+    merged = {
+        "identities": identities,
+        "lead": lead,
+        "profile": profile,
+        "updated_at": _now(),
+    }
+
+    async def _apply(session=None) -> None:
+        # The duplicate goes FIRST so the unique identity index never sees the
+        # same identity on two documents.
+        await db.contacts.delete_one({"_id": duplicate_id}, session=session)
+        await db.contacts.update_one(
+            {"_id": primary_id}, {"$set": merged}, session=session
+        )
+        await db.conversations.update_many(
+            {"contact_id": duplicate_id},
+            {"$set": {"contact_id": primary_id}},
+            session=session,
+        )
+        await db.turns.update_many(
+            {"contact_id": duplicate_id},
+            {"$set": {"contact_id": primary_id}},
+            session=session,
+        )
+
+    # Four writes across three collections. Un-transacted, a crash after the
+    # delete loses the duplicate's profile outright and orphans its
+    # conversations against a contact_id that no longer exists — HLD §8 gap 3.
+    #
+    # Support is probed by opening the session, *before* anything is written.
+    # Catching broadly around the writes instead would risk re-running them on
+    # top of a partially-applied merge, which is worse than the bug being fixed.
+    session = None
+    try:
+        session = await db.client.start_session()
+    except Exception as exc:  # noqa: BLE001 — see `_transactions_unsupported`
+        if not _transactions_unsupported(exc):
+            raise
+
+    if session is None:
+        # Standalone MongoDB (and mongomock) have no transactions. Degrading is
+        # right for a hand-triggered admin merge — refusing to merge at all on
+        # a single-node deployment would be worse than the window we are
+        # narrowing — but it must be loud, because the guarantee is gone.
+        logger.warning(
+            "merging %s into %s WITHOUT a transaction — no session support on "
+            "this deployment, so a crash mid-merge is unrecoverable",
+            duplicate_id, primary_id,
+        )
+        await _apply()
+    else:
+        # Anything raised in here propagates, and the transaction rolls back.
+        async with session:
+            async with session.start_transaction():
+                await _apply(session)
+
     logger.info("merged contact %s into %s", duplicate_id, primary_id)
     return await db.contacts.find_one({"_id": primary_id})

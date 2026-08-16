@@ -299,5 +299,12 @@ __marimo__/
 # Streamlit
 .streamlit/secrets.toml
 seeds/
-docs/
+# `docs/*` rather than `docs/`: an ignored *directory* is never descended into,
+# so a negation beneath it can never match. Excluding the contents instead
+# leaves room to re-include one subtree — the migration record is a
+# deliverable, not build output. (Same class of rule as the
+# `apps/*/src/**/lib/` carve-out near the top, which swallowed ten source
+# files before it was caught.)
+/docs
+!docs/graph-migration/
 HLD.md

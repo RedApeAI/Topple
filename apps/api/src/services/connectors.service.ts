@@ -97,7 +97,11 @@ export async function connectorStatuses(
     const missingScopes = connector.scopes.filter(
       (scope) => !granted.has(scope),
     );
-    return { ...connector, missingScopes, connected: missingScopes.length === 0 };
+    return {
+      ...connector,
+      missingScopes,
+      connected: missingScopes.length === 0,
+    };
   });
 }
 

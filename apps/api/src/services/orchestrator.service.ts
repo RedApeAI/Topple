@@ -209,3 +209,45 @@ export function syncDirectory(scope: Scope) {
     }),
   });
 }
+
+// --------------------------------------------------------------------------
+// Knowledge base
+// --------------------------------------------------------------------------
+/**
+ * The collection a scope's knowledge lives in.
+ *
+ * One collection for the deployment; isolation inside it is the orchestrator's
+ * `(tenant_id, user_id)` payload filter, not the name. Kept as a function so
+ * the day a tenant runtime registry exists (HLD §8 gap 4) there is one place
+ * to change — today the web client hardcodes this same string, which is the
+ * gap itself.
+ */
+export function knowledgeSourceFor(_scope: Scope): string {
+  return env.KNOWLEDGE_COLLECTION ?? "plucia_re";
+}
+
+export function ingestKnowledge(
+  scope: Scope,
+  documents: { text: string; doc_id: string; chunk_id: string }[],
+) {
+  return call<{ chunks_written: number }>("/v1/knowledge/documents", {
+    method: "POST",
+    body: JSON.stringify({
+      tenant_id: scope.tenant.id,
+      user_id: scope.userId,
+      knowledge_source_id: knowledgeSourceFor(scope),
+      documents,
+    }),
+  });
+}
+
+export function forgetKnowledgeDocument(scope: Scope) {
+  return call<Record<string, unknown>>("/v1/knowledge/documents", {
+    method: "DELETE",
+    query: {
+      tenant_id: scope.tenant.id,
+      user_id: scope.userId,
+      knowledge_source_id: knowledgeSourceFor(scope),
+    },
+  });
+}

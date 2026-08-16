@@ -703,6 +703,50 @@ export interface Correspondent {
  * The mailbox owner is excluded: they appear on every single message and would
  * otherwise rank first for every query.
  */
+/**
+ * Addresses that structurally cannot receive a reply.
+ *
+ * Deliberately narrow: `support@`, `sales@`, `hello@` and `billing@` are real
+ * mailboxes real people answer, and excluding them would break ordinary sales
+ * correspondence. Mirrors `app/engine/addressability.py` in the orchestrator —
+ * both ends filter, because this cache has a 24h TTL and is already warm with
+ * entries harvested before the rule existed.
+ */
+const UNREACHABLE_SUBSTRINGS = [
+  "noreply",
+  "donotreply",
+  "mailerdaemon",
+  "autoreply",
+  "autoresponder",
+];
+
+const UNREACHABLE_EXACT = new Set([
+  "postmaster",
+  "bounce",
+  "bounces",
+  "notification",
+  "notifications",
+  "notify",
+  "automated",
+  "daemon",
+  "unsubscribe",
+]);
+
+export function isUnreachable(email: string): boolean {
+  const at = email.indexOf("@");
+  if (at <= 0) return false;
+  // `no-reply`, `no_reply` and `no.reply` are one intent spelled three ways;
+  // a `+tag` is dropped so `noreply+123@` still matches.
+  const local = email
+    .slice(0, at)
+    .toLowerCase()
+    .split("+")[0]!
+    .replace(/[._\-]/g, "");
+  if (!local) return false;
+  if (UNREACHABLE_EXACT.has(local)) return true;
+  return UNREACHABLE_SUBSTRINGS.some((marker) => local.includes(marker));
+}
+
 export async function listCorrespondents(
   token: string,
   options: { limit?: number } = {},
@@ -738,6 +782,12 @@ export async function listCorrespondents(
   ) => {
     const email = address.email.trim().toLowerCase();
     if (!email || !email.includes("@") || email === self) return;
+    // Automated senders are not correspondents. Google Drive sends
+    // "X shared a document with you" from `drive-shares-dm-noreply@google.com`
+    // with X's display name in the From header, so without this the directory
+    // learns a real person's name against an address that discards mail — and
+    // the agent will happily offer it as somebody to email.
+    if (isUnreachable(email)) return;
 
     const seen = new Date(at).toISOString();
     const existing = directory.get(email);

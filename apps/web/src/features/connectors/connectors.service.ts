@@ -23,7 +23,10 @@ export async function fetchConnectors(): Promise<Connector[]> {
  * decides how to send the user — and so a failure surfaces as an error in the
  * UI instead of a half-finished redirect.
  */
-export async function connectUrl(id: string, returnTo: string): Promise<string> {
+export async function connectUrl(
+  id: string,
+  returnTo: string,
+): Promise<string> {
   const { data } = await apiClient.post<{ data: { url: string } }>(
     `/api/v1/connectors/${encodeURIComponent(id)}/connect`,
     { returnTo },

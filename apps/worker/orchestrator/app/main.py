@@ -14,20 +14,27 @@ from typing import Any, Literal
 
 from bson import ObjectId
 from bson.errors import InvalidId
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import BackgroundTasks, FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, ConfigDict
 
 from .config import settings
 from .engine import contacts as contacts_engine
-from .engine.pipeline import ScopeDenied, TurnInProgress, run_turn
+from .engine.background import Background
+from .engine.pipeline import (
+    ScopeDenied,
+    TurnInProgress,
+    recover_incomplete_turns,
+    run_turn,
+)
 from .llm import gateway
 from .llm.gateway import LLMUnavailable
 from .operator import agent as operator_agent
 from .outbound import dispatcher
 from .schemas.envelope import OrchestratorInput, OrchestratorResult, RuntimeConfig
 from .stores import directory, events, mongo, qdrant
+from .stores.knowledge import KnowledgeScope
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -39,6 +46,13 @@ async def lifespan(_app: FastAPI):
         await mongo.init_indexes()
     except Exception as exc:  # noqa: BLE001 — /health will report the outage
         logger.error("index bootstrap failed (is Mongo up?): %s", exc)
+    try:
+        # Turns whose post-response work never ran because the process died
+        # between the response and the drain. Their result is already
+        # persisted, so this finishes the paperwork and sends anything owed.
+        await recover_incomplete_turns(mongo.get_db())
+    except Exception as exc:  # noqa: BLE001 — never block startup on recovery
+        logger.error("turn recovery sweep failed: %s", exc)
     yield
 
 
@@ -98,26 +112,37 @@ def _oid(value: str, what: str) -> ObjectId:
 # The main endpoint
 # --------------------------------------------------------------------------- #
 @app.post("/v1/turns", response_model=OrchestratorResult)
-async def post_turn(envelope: OrchestratorInput):
+async def post_turn(envelope: OrchestratorInput, background_tasks: BackgroundTasks):
     if envelope.message.type != "text":
         raise HTTPException(
             status_code=422,
             detail=f"message.type {envelope.message.type!r} is not implemented yet — only 'text' is supported",
         )
-    result = await run_turn(envelope)
+
+    # The outbound dispatch, the turn document write and the completion event
+    # all happen after the response is on the wire. None of them is something
+    # the caller waits on for a correct answer, and the dispatch alone is a
+    # BFF-to-Gmail round trip.
+    deferred = Background()
+    result = await run_turn(envelope, background=deferred)
+
     # one consolidated event per turn — covers the reply, stage change, and
     # threads list on every success path (including dedupe replays)
-    await events.publish(
-        envelope.tenant_id,
+    deferred.defer(
         "turn.completed",
-        {
-            "conversation_id": result.conversation_id,
-            "contact_id": result.contact_id,
-            "channel": envelope.channel.value,
-            "reply_status": result.reply.status,
-            "stage_out": result.stage_out,
-        },
+        lambda: events.publish(
+            envelope.tenant_id,
+            "turn.completed",
+            {
+                "conversation_id": result.conversation_id,
+                "contact_id": result.contact_id,
+                "channel": envelope.channel.value,
+                "reply_status": result.reply.status,
+                "stage_out": result.stage_out,
+            },
+        ),
     )
+    background_tasks.add_task(deferred.drain)
     return result
 
 
@@ -687,6 +712,93 @@ async def metrics_summary(
 # --------------------------------------------------------------------------- #
 # Events (SSE) — the dashboard's live feed off the Dragonfly bus
 # --------------------------------------------------------------------------- #
+# --------------------------------------------------------------------------- #
+# Knowledge base (RAG)
+# --------------------------------------------------------------------------- #
+class KnowledgeDocument(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    text: str
+    doc_id: str
+    chunk_id: str | None = None
+    source_uri: str | None = None
+    version: int | None = None
+    effective_date: str | None = None
+
+
+class KnowledgeIngestRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    tenant_id: str
+    #: Required, not optional. Knowledge is isolated per user, and an
+    #: un-owned document would be invisible to every query — so there is no
+    #: sensible default and asking for one would only hide the mistake.
+    user_id: str
+    knowledge_source_id: str
+    documents: list[KnowledgeDocument]
+
+
+@app.post("/v1/knowledge/documents")
+async def ingest_knowledge(body: KnowledgeIngestRequest):
+    """Add documents to one user's knowledge base.
+
+    Replaces hand-seeding YAML into a shared collection. Every chunk is stamped
+    with (tenant_id, user_id) on the way in, which is what makes it retrievable
+    at all — the query filter is mandatory, so an unstamped chunk matches
+    nothing forever.
+    """
+    scope = KnowledgeScope(tenant_id=body.tenant_id, user_id=body.user_id)
+    try:
+        written = await qdrant.ingest(
+            body.knowledge_source_id,
+            scope,
+            [doc.model_dump() for doc in body.documents],
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return {
+        "tenant_id": body.tenant_id,
+        "user_id": body.user_id,
+        "knowledge_source_id": body.knowledge_source_id,
+        "chunks_written": written,
+    }
+
+
+@app.delete("/v1/knowledge/documents")
+async def forget_knowledge(
+    tenant_id: str = Query(...),
+    knowledge_source_id: str = Query(...),
+    user_id: str | None = Query(None),
+):
+    """Delete a user's knowledge, or a whole tenant's when `user_id` is absent.
+
+    The deletion half of isolation: a boundary you cannot delete along is not
+    really a boundary, and this is what an offboarding or erasure request runs.
+    """
+    if user_id:
+        await qdrant.forget_user(
+            knowledge_source_id, KnowledgeScope(tenant_id=tenant_id, user_id=user_id)
+        )
+    else:
+        await qdrant.forget_tenant(knowledge_source_id, tenant_id)
+    return {"forgotten": {"tenant_id": tenant_id, "user_id": user_id}}
+
+
+@app.get("/v1/knowledge/status")
+async def knowledge_status(knowledge_source_id: str = Query(...)):
+    """Health of one collection, including how much of it is unreachable.
+
+    `unscoped_points` counts chunks with no `user_id` — anything seeded before
+    per-user isolation existed. They match no filter, so they retrieve nothing
+    and are pure storage cost. A non-zero number here is the answer to "why is
+    my migrated knowledge base silent?".
+    """
+    return {
+        "knowledge_source_id": knowledge_source_id,
+        "unscoped_points": await qdrant.count_unscoped(knowledge_source_id),
+    }
+
+
 @app.get("/v1/events")
 async def stream_events(tenant_id: str = Query(...)):
     async def event_stream():

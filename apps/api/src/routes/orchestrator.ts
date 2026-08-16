@@ -4,6 +4,7 @@ import { z } from "zod";
 import { jsonValidator } from "../lib/validation.js";
 import { requireAuth } from "../middleware/require-auth.js";
 import { rateLimit } from "../middleware/rate-limit.js";
+import * as knowledge from "../services/knowledge.service.js";
 import * as orchestrator from "../services/orchestrator.service.js";
 import { resolveTenant } from "../services/tenant.service.js";
 import type { AppEnv } from "../types.js";
@@ -31,6 +32,64 @@ async function scopeFor(context: Context<AppEnv>): Promise<orchestrator.Scope> {
 }
 
 const idParam = z.string().trim().min(1).max(128);
+
+// --------------------------------------------------------------------------
+// Knowledge base
+// --------------------------------------------------------------------------
+/**
+ * Upload a file into the signed-in user's knowledge base.
+ *
+ * Bytes stop here. The orchestrator's ingest endpoint takes `tenant_id` and
+ * `user_id` as plain body fields and trusts them, so the browser must never
+ * reach it — and file parsing is a large surface for untrusted input, which
+ * belongs in the tier that already handles it.
+ */
+orchestratorRoutes.post(
+  "/knowledge/upload",
+  rateLimit({ windowMs: 60_000, max: 20, keyPrefix: "knowledge-upload" }),
+  async (context) => {
+    const form = await context.req.formData().catch(() => null);
+    const file = form?.get("file");
+    if (!(file instanceof File)) {
+      return context.json(
+        { error: { code: "NO_FILE", message: "Attach a file to upload." } },
+        400,
+      );
+    }
+    if (file.size === 0) {
+      return context.json(
+        { error: { code: "EMPTY_FILE", message: "That file is empty." } },
+        400,
+      );
+    }
+    if (file.size > knowledge.MAX_UPLOAD_BYTES) {
+      return context.json(
+        {
+          error: {
+            code: "FILE_TOO_LARGE",
+            message: `Files must be under ${Math.floor(knowledge.MAX_UPLOAD_BYTES / 1024 / 1024)} MB.`,
+          },
+        },
+        413,
+      );
+    }
+
+    const chunks = knowledge.toChunks(
+      file.name,
+      new Uint8Array(await file.arrayBuffer()),
+    );
+    const scope = await scopeFor(context);
+    const result = await orchestrator.ingestKnowledge(scope, chunks);
+
+    return context.json({
+      data: {
+        filename: file.name,
+        doc_id: chunks[0]!.doc_id,
+        chunks: result.chunks_written,
+      },
+    });
+  },
+);
 
 // --------------------------------------------------------------------------
 // Inbox / CRM reads

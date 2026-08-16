@@ -87,9 +87,10 @@ class FakeRetrieval:
         self.flag: str | None = None
         self.calls: list[dict] = []
 
-    async def retrieve(self, collection, query_text, top_k, min_score):
+    async def retrieve(self, collection, query_text, top_k, min_score, *, scope=None):
         self.calls.append(
-            {"collection": collection, "query": query_text, "top_k": top_k, "min_score": min_score}
+            {"collection": collection, "query": query_text, "top_k": top_k,
+             "min_score": min_score, "scope": scope}
         )
         return list(self.hits), self.flag
 

@@ -136,7 +136,9 @@ mcpRoutes.post("/", async (context) => {
   // Mode governs whether tools may notify anyone. Header, not tool argument —
   // see the note in mcp/server.ts.
   const mode =
-    context.req.header("X-Plucia-Mode") === "autopilot" ? "autopilot" : "copilot";
+    context.req.header("X-Plucia-Mode") === "autopilot"
+      ? "autopilot"
+      : "copilot";
 
   const body = await context.req.json().catch(() => null);
 
