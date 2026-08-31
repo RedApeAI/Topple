@@ -313,3 +313,66 @@ async def test_completed_send_stores_no_candidates(db, agent_llm, sent):
     )
     stored = await db.operator_messages.find_one({"_id": result["message"]["_id"]})
     assert stored["candidates"] is None
+
+
+# --------------------------------------------------------------------------- #
+# Time context — regression cover
+# --------------------------------------------------------------------------- #
+# Without a clock in the prompt the model invents one: a real run scheduled
+# "10PM tonight" for 2024-01-15, two and a half years off, with no UTC offset.
+def test_prompt_states_the_current_time_in_the_user_zone():
+    from app.operator.agent import _now_for_prompt
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+
+    rendered = _now_for_prompt("Asia/Dubai")
+    expected_year = str(datetime.now(ZoneInfo("Asia/Dubai")).year)
+    assert expected_year in rendered
+    assert "Asia/Dubai" in rendered
+    # An offset must be present — a naive timestamp is ambiguous to any calendar.
+    assert "+04:00" in rendered
+
+
+def test_unknown_zone_falls_back_to_utc_rather_than_failing():
+    from app.operator.agent import _now_for_prompt
+
+    rendered = _now_for_prompt("Mars/Olympus_Mons")
+    assert "UTC" in rendered
+
+
+def test_missing_zone_still_gives_the_model_a_clock():
+    from app.operator.agent import _now_for_prompt
+
+    assert "UTC" in _now_for_prompt(None)
+
+
+async def test_run_command_puts_the_clock_in_the_system_prompt(db, agent_llm):
+    import json
+
+    agent_llm.outputs = [json.dumps({"thought": "ok", "operator_output": "Done."})]
+    await agent.run_command(
+        db,
+        tenant_id="t",
+        user_id="u",
+        text="what time is it",
+        mode="copilot",
+        time_zone="Asia/Dubai",
+    )
+    system_prompt = agent_llm.calls[0][0]["content"]
+    assert "Asia/Dubai" in system_prompt
+    assert "Never invent a date" in system_prompt
+
+
+# The agent once reported "Invitation sent to ariyaman@plucia.com" when the tool
+# had returned notified_attendees: false — a claimed outward-facing action that
+# never happened. The prompt must forbid that explicitly.
+async def test_prompt_forbids_claiming_unsent_notifications(db, agent_llm):
+    import json
+
+    agent_llm.outputs = [json.dumps({"thought": "ok", "operator_output": "Done."})]
+    await agent.run_command(
+        db, tenant_id="t", user_id="u", text="hello", mode="copilot"
+    )
+    system_prompt = agent_llm.calls[0][0]["content"]
+    assert "notified_attendees" in system_prompt
+    assert "NEVER tell the salesperson" in system_prompt

@@ -44,6 +44,9 @@ export async function postOperatorCommand(
         ? toApiChannel(input.preferredChannel)
         : null,
       session_id: sessionId(),
+      // The agent resolves "tonight" against this; without it the model has no
+      // clock and guesses a date.
+      time_zone: Intl.DateTimeFormat().resolvedOptions().timeZone,
     },
   );
   return data.data;

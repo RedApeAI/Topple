@@ -29,6 +29,10 @@ function AvatarImage({ className, ...props }: AvatarPrimitive.Image.Props) {
   return (
     <AvatarPrimitive.Image
       data-slot="avatar-image"
+      // Google serves profile pictures from lh3.googleusercontent.com, which
+      // can 403 on an unexpected Referer. Sending none is free insurance and
+      // avoids leaking which page the user is on to Google on every render.
+      referrerPolicy="no-referrer"
       className={cn(
         "aspect-square size-full rounded-full object-cover",
         className,

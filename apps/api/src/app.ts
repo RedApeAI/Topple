@@ -9,6 +9,7 @@ import { getSecurityHeaders } from "./lib/security.js";
 import { errorHandler } from "./middleware/error-handler.js";
 import { requestContext } from "./middleware/request-context.js";
 import { authRoutes } from "./routes/auth.js";
+import { connectorRoutes, mcpRoutes } from "./routes/connectors.js";
 import { mailRoutes, mailWebhookRoutes } from "./routes/mail.js";
 import { orchestratorRoutes } from "./routes/orchestrator.js";
 import { zernioRoutes, zernioWebhookRoutes } from "./routes/zernio.js";
@@ -71,6 +72,12 @@ app.route("/api/v1/mail", mailRoutes);
 // The agent, proxied. The dashboard never reaches the orchestrator directly —
 // tenant and user come from the session here, not from the caller.
 app.route("/api/v1/agent", orchestratorRoutes);
+
+// Connectors: what the user has granted, and the incremental consent to grant
+// more. The MCP endpoint is the agent's window onto those grants — secret
+// authenticated, never reachable from a browser.
+app.route("/api/v1/connectors", connectorRoutes);
+app.route("/api/v1/mcp", mcpRoutes);
 
 // Better Auth validates its own payloads and owns all auth/OAuth callbacks.
 app.on(["GET", "POST"], "/api/auth/*", (context) =>

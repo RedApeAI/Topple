@@ -136,6 +136,7 @@ export function postOperatorCommand(
     thread_id?: string | null;
     preferred_channel?: string | null;
     session_id?: string | null;
+    time_zone?: string | null;
   },
 ) {
   return call<Record<string, unknown>>("/v1/operator/messages", {

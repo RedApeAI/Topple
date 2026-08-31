@@ -7,6 +7,10 @@ One OpenAI-compatible endpoint serves everything. Backend semantics:
 - `ollama` (local dev): no per-request adapters — `model` is always the
   configured `OLLAMA_MODEL`; a warning is logged that adapter selection is
   bypassed.
+- `bedrock` (managed): Amazon Bedrock's `bedrock-mantle` endpoint, which speaks
+  the OpenAI Chat Completions API, so the same client works with only a
+  base URL and key change. Bedrock serves whole models rather than LoRA
+  adapters, so `adapter_id` is bypassed exactly as on ollama.
 
 Every call: 30s timeout, one transport retry, then `LLMUnavailable` (the API
 maps it to HTTP 503 after the error turn document is written).
@@ -46,6 +50,11 @@ _client: AsyncOpenAI | None = None
 def _thinking_off_body() -> dict:
     if settings.llm_backend == "ollama":
         return {"reasoning_effort": "none"}
+    if settings.llm_backend == "bedrock":
+        # Bedrock exposes no portable thinking switch, and MiniMax M2 reasons
+        # by design. Send nothing and let the `<think>` stripper downstream
+        # handle the output — an unknown field here is a 400, not a no-op.
+        return {}
     return {"chat_template_kwargs": {"enable_thinking": False}}
 
 
@@ -60,30 +69,70 @@ class LLMUnavailable(Exception):
     """Total LLM failure after retry — surfaces as HTTP 503."""
 
 
+def _endpoint() -> tuple[str, str]:
+    """(base_url, api_key) for the configured backend."""
+    if settings.llm_backend == "bedrock":
+        if not settings.bedrock_api_key:
+            raise LLMUnavailable(
+                "LLM_BACKEND=bedrock but BEDROCK_API_KEY is not set — "
+                "generate a long-term API key in the Bedrock console."
+            )
+        # `bedrock-mantle` is the OpenAI-compatible endpoint AWS recommends;
+        # `bedrock-runtime` also serves Chat Completions but expects SigV4.
+        return (
+            f"https://bedrock-mantle.{settings.bedrock_region}.api.aws/v1",
+            settings.bedrock_api_key,
+        )
+    return settings.llm_base_url, settings.llm_api_key
+
+
 def get_client() -> AsyncOpenAI:
     global _client
     if _client is None:
+        base_url, api_key = _endpoint()
         _client = AsyncOpenAI(
-            base_url=settings.llm_base_url,
-            api_key=settings.llm_api_key,
+            base_url=base_url,
+            api_key=api_key,
             timeout=settings.llm_timeout_seconds,
             max_retries=0,  # retries are counted explicitly below
         )
     return _client
 
 
+def reset_client() -> None:
+    """Drop the cached client so a settings change takes effect. Tests only."""
+    global _client
+    _client = None
+
+
+def base_model() -> str:
+    """The single model a non-adapter backend serves.
+
+    Shared by both planes deliberately. The Operator agent used to decide this
+    for itself and defaulted to `ollama_model` for every non-vllm backend, so
+    adding a backend here silently left the agent talking to the old one.
+    """
+    if settings.llm_backend == "bedrock":
+        return settings.bedrock_model_id
+    return settings.ollama_model
+
+
 def resolve_model(runtime: RuntimeConfig) -> str:
     """What goes into the request's `model` field for this tenant turn."""
     if settings.llm_backend == "vllm":
         return runtime.adapter_id or runtime.model_id
-    # ollama: no multi-LoRA — always the configured local model
+
+    # Neither managed Bedrock nor local ollama serves per-request LoRA
+    # adapters, so a tenant's fine-tune is silently not in play — say so.
+    served = base_model()
     if runtime.adapter_id:
         logger.warning(
-            "LLM_BACKEND=ollama: adapter selection bypassed (adapter_id=%r); using local model %r",
+            "LLM_BACKEND=%s: adapter selection bypassed (adapter_id=%r); using model %r",
+            settings.llm_backend,
             runtime.adapter_id,
-            settings.ollama_model,
+            served,
         )
-    return settings.ollama_model
+    return served
 
 
 async def _chat(
@@ -99,8 +148,12 @@ async def _chat(
     for attempt in range(1 + settings.llm_max_retries):
         retries = attempt
         kwargs: dict = {}
+        if settings.llm_max_output_tokens:
+            kwargs["max_tokens"] = settings.llm_max_output_tokens
         if disable_thinking and _thinking_kwarg_ok:
-            kwargs["extra_body"] = _thinking_off_body()
+            thinking_off = _thinking_off_body()
+            if thinking_off:
+                kwargs["extra_body"] = thinking_off
         try:
             resp = await client.chat.completions.create(
                 model=model, messages=messages, temperature=temperature, **kwargs
@@ -110,9 +163,10 @@ async def _chat(
                 # runtime rejected chat_template_kwargs — fall back without it
                 logger.warning("runtime rejected thinking-disable kwarg, retrying without: %s", exc)
                 _thinking_kwarg_ok = False
+                kwargs.pop("extra_body")
                 try:
                     resp = await client.chat.completions.create(
-                        model=model, messages=messages, temperature=temperature
+                        model=model, messages=messages, temperature=temperature, **kwargs
                     )
                 except _TRANSIENT as exc2:
                     last_exc = exc2

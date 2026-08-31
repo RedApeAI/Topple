@@ -389,6 +389,9 @@ class OperatorCommandRequest(BaseModel):
     mode: Literal["copilot", "autopilot"] = "copilot"
     thread_id: str | None = None
     preferred_channel: str | None = None
+    # IANA zone from the dashboard, so "tonight" resolves to the salesperson's
+    # evening rather than UTC's.
+    time_zone: str | None = None
     # Correlates live `operator.step` events back to the issuing dashboard.
     client_ref: str | None = None
     # Same upstream-resolved runtime as /v1/turns; used to pick the agent's
@@ -412,6 +415,7 @@ async def post_operator_command(body: OperatorCommandRequest):
             client_ref=body.client_ref,
             user_id=body.user_id,
             session_id=body.session_id,
+            time_zone=body.time_zone,
         )
     except operator_agent.ThreadNotFound:
         raise HTTPException(status_code=404, detail="operator thread not found") from None

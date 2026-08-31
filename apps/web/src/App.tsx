@@ -45,6 +45,11 @@ const AiCallingPage = lazy(() =>
     default: module.AiCallingPage,
   })),
 );
+const ConnectorsPage = lazy(() =>
+  import("@/pages/ConnectorsPage").then((module) => ({
+    default: module.ConnectorsPage,
+  })),
+);
 const CalendarPage = lazy(() =>
   import("@/pages/CalendarPage").then((module) => ({
     default: module.CalendarPage,
@@ -111,6 +116,7 @@ export default function App() {
                 <Route path="campaigns" element={<CampaignsPage />} />
                 <Route path="ai-calling" element={<AiCallingPage />} />
                 <Route path="calendar" element={<CalendarPage />} />
+                <Route path="connectors" element={<ConnectorsPage />} />
                 <Route path="instagram" element={<InstagramPage />} />
               </Route>
             </Routes>
