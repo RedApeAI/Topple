@@ -1,4 +1,4 @@
-# Plucia — Design System
+# RedApeAI — Design System
 
 > Source of truth: Figma file `abhi | TV File` (fileKey `KoGKyrJFudZYnm3ecY6K88`).
 > This document is derived directly from the following frames and will be extended every time a new frame is inspected or a new component is built.
@@ -16,7 +16,7 @@ Values below were read directly from Figma's exported layout/style data. The raw
 
 ## 1. Design philosophy
 
-Plucia is an operator workspace, not a marketing app: density, speed, and legibility beat decoration. The visual language borrows the same instincts as Linear, Superhuman and Cursor:
+RedApeAI is an operator workspace, not a marketing app: density, speed, and legibility beat decoration. The visual language borrows the same instincts as Linear, Superhuman and Cursor:
 
 - **Neutral, warm-gray canvas.** The app background is never pure white or pure black (`#f1f0ee`), so the single-color brand gradient and channel colors (WhatsApp green, LinkedIn blue, Instagram gradient) read as the only "loud" colors on screen.
 - **One accent gesture, reused everywhere.** The 4-stop brand gradient (red → orange → violet → magenta) appears exactly three places: the logo mark, the logo's inner glow, and the ring around the Operator's floating action button. It is a signature, not a theme color — never use it for arbitrary UI accents.
@@ -67,7 +67,7 @@ Header: avatar + name (bold), icon actions (analytics, phone, overflow, close) r
 - Incoming: white bubble, `1px` border, left-aligned, `12px` radius (sharper corner on the avatar side), timestamp below in muted `12px`.
 - Outgoing (agent/user): **pale mint-green** bubble (`#DCF7C5`-family), right-aligned, same radius convention mirrored.
 - A subtle repeating diagonal watermark pattern sits behind the whole thread at very low opacity (WhatsApp-style paper texture) — decorative only, do not let it reduce text contrast.
-  Composer: attachment (paperclip) + emoji icon, single-line input `Type a message or /Plucia let agent chat`, circular dark send button.
+  Composer: attachment (paperclip) + emoji icon, single-line input `Type a message or /RedApeAI let agent chat`, circular dark send button.
 
 ## 3. Color tokens
 
@@ -127,7 +127,7 @@ Two families, deliberately mixed by role — this split is a strong, repeated pa
 | Role                                                       | Family      | Weight                                               | Size                     | Tracking                    | Line height                      |
 | ---------------------------------------------------------- | ----------- | ---------------------------------------------------- | ------------------------ | --------------------------- | -------------------------------- |
 | Contact / person names (inbox rows, chat header)           | **Poppins** | Regular (name rows) / SemiBold (account card)        | 16px                     | `-0.16px`                   | 1 (none)                         |
-| All other UI text (nav, buttons, breadcrumb, body, badges) | **Inter**   | Medium (default), SemiBold (brand wordmark "Plucia") | 12 / 13 / 14 / 15 / 16px | 0 to `-0.7px` on dense rows | 1.5 (UI) / 1.3 (message preview) |
+| All other UI text (nav, buttons, breadcrumb, body, badges) | **Inter**   | Medium (default), SemiBold (brand wordmark "RedApeAI") | 12 / 13 / 14 / 15 / 16px | 0 to `-0.7px` on dense rows | 1.5 (UI) / 1.3 (message preview) |
 
 ### Type scale
 
@@ -189,7 +189,7 @@ Framer Motion, durations restricted to **150 / 200 / 250 / 300ms**, `ease-out` f
 | List row hover             | Background fade, 150ms                                                                                                                                          |
 | New inbox item arrival     | Fade + 4px slide-down, 200ms                                                                                                                                    |
 | FAB press                  | Scale to 0.96, 150ms, spring back                                                                                                                               |
-| Operator "thinking" state  | Looping opacity pulse on the status line (e.g. "Running Plucia on all whatsapp leads…"), 1.2s ease-in-out, no layout shift                                      |
+| Operator "thinking" state  | Looping opacity pulse on the status line (e.g. "Running RedApeAI on all whatsapp leads…"), 1.2s ease-in-out, no layout shift                                      |
 | Streaming AI reply         | Text reveals progressively (typewriter/segment fade), no skeleton block — the Operator never shows a generic spinner for text, only for the leading status line |
 
 Avoid excessive motion: no bouncing, no parallax, no full-page transitions between sidebar states.
@@ -245,6 +245,6 @@ The Operator is modeled as a **persistent, resumable side-channel**, not a one-o
 
 - **Two tabs, one panel:** _Threads Running_ (live/queued tasks with a running-count badge) and _History_ (completed). Switching tabs never closes the panel.
 - **Task rows are status-first:** every row is `Title` + `Timestamp` + `• StatusLabel`, where the status is plain colored text next to a small dot — not a heavy chip/badge. Statuses seen: _Waiting for meta approval, In progress, Scheduled, Pending, Planned, Researching, In development, Ongoing, Brainstorming, Drafting, Outreach._ Treat this as an open enum — new agent workflows will add new statuses; the component must not hardcode a closed list.
-- **Conversational mode ("New Chat")** replaces the thread list with a transcript: user turns are right-aligned with the user's avatar; Operator turns are left-aligned with the Plucia glyph in a dark circular chip. A muted, present-tense status line (e.g. _"Running Plucia on all whatsapp leads…"_) communicates in-flight work — this is the only "loading" affordance the Operator uses; there is no spinner/skeleton pattern in the source design.
+- **Conversational mode ("New Chat")** replaces the thread list with a transcript: user turns are right-aligned with the user's avatar; Operator turns are left-aligned with the RedApeAI glyph in a dark circular chip. A muted, present-tense status line (e.g. _"Running RedApeAI on all whatsapp leads…"_) communicates in-flight work — this is the only "loading" affordance the Operator uses; there is no spinner/skeleton pattern in the source design.
 - **Composer affordances are inline, not a toolbar:** the same text field surfaces `/` for command suggestions and `@` for mentioning a person as placeholder-style hint text, collapsing once the user starts typing. Below the field: attachment, a **channel-scope selector** chip (e.g. "WhatsApp ▾" — the channel the Operator will act through), and mic/send.
 - **Backend is mocked, contract is real:** every Operator surface consumes the `services/operator.ts`-style interfaces (`generateSummary`, `generateReply`, `qualifyLead`, `createTask`, `analyzeConversation`, `searchKnowledge`, `executeWorkflow`) — components must be built against these interfaces now so swapping in real model calls later touches zero UI code.

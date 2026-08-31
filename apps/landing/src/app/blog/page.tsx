@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 export const metadata: Metadata = {
-  title: "Blog — Plucia",
+  title: "Blog — RedApeAI",
   description: "Our blog is coming soon.",
 };
 
@@ -30,12 +30,12 @@ export default function Page() {
         className="absolute flex gap-[7px] items-center left-[28px] sm:left-[52px] top-[32px] sm:top-[38px]"
       >
         <img
-          alt="Plucia logo"
+          alt="RedApeAI logo"
           className="size-[23px]"
-          src="/assets/icons/plucia-logo.svg"
+          src="/assets/icons/redape-logo.svg"
         />
         <span className="font-geist font-medium text-[#202020] text-[23px] tracking-[-0.58px]">
-          Plucia
+          RedApeAI
         </span>
       </Link>
 

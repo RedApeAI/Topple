@@ -95,7 +95,7 @@ function firstName(user: AuthUser): string {
 /**
  * The team name implied by an email address.
  *
- * `vasu@plucia.com` → "Plucia". `joe@gmail.com` → "Joe's Team", because a
+ * `vasu@redape.com` → "RedApeAI". `joe@gmail.com` → "Joe's Team", because a
  * public mailbox domain identifies a provider, not an employer.
  */
 export function teamNameFromEmail(email: string, user: AuthUser): string {
@@ -105,8 +105,8 @@ export function teamNameFromEmail(email: string, user: AuthUser): string {
   }
 
   // Peel generic and country-code labels off the right, never consuming the
-  // last one — `plucia.com` → `plucia`, `nsut.ac.in` → `nsut`, `acme.co.uk`
-  // → `acme`. Then take the final label, so `mail.plucia.com` is still Plucia.
+  // last one — `redape.com` → `redape`, `nsut.ac.in` → `nsut`, `acme.co.uk`
+  // → `acme`. Then take the final label, so `mail.redape.com` is still RedApeAI.
   const labels = domain.split(".").filter(Boolean);
   while (
     labels.length > 1 &&

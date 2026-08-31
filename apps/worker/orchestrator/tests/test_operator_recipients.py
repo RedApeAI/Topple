@@ -74,7 +74,7 @@ async def test_emails_a_stranger_and_adds_them_to_the_crm(db, agent_llm, sent):
                 "thought": "The command carries an address, so send straight there.",
                 "tool": "send_message",
                 "args": {
-                    "to": "Ariyaman@Plucia.com",
+                    "to": "Ariyaman@RedApe.com",
                     "channel": "email",
                     "text": "hello test email",
                 },
@@ -85,8 +85,8 @@ async def test_emails_a_stranger_and_adds_them_to_the_crm(db, agent_llm, sent):
 
     result = await agent.run_command(
         db,
-        tenant_id="plucia",
-        text='Send an email to ariyaman@plucia.com saying "hello test email"',
+        tenant_id="redape",
+        text='Send an email to ariyaman@redape.com saying "hello test email"',
         mode="autopilot",
         user_id="user-1",
     )
@@ -95,14 +95,14 @@ async def test_emails_a_stranger_and_adds_them_to_the_crm(db, agent_llm, sent):
 
     # The address was canonicalised on the way out.
     assert len(sent) == 1
-    assert sent[0]["to"] == "ariyaman@plucia.com"
+    assert sent[0]["to"] == "ariyaman@redape.com"
     assert sent[0]["channel"] == "email"
     assert sent[0]["user_id"] == "user-1"
     assert sent[0]["subject"], "email dispatch must carry a subject"
 
     # ...and they are now in the CRM, attributed and marked as agent-created.
     contact = await db.contacts.find_one(
-        {"identities.external_id": "ariyaman@plucia.com"}
+        {"identities.external_id": "ariyaman@redape.com"}
     )
     assert contact is not None
     assert contact["source"] == "agent"
@@ -112,7 +112,7 @@ async def test_emails_a_stranger_and_adds_them_to_the_crm(db, agent_llm, sent):
 
 async def test_second_send_reuses_the_same_contact(db, agent_llm, sent):
     """Differently-formatted addresses must not fork the contact."""
-    for address in ("ariyaman@plucia.com", "Ariyaman@Plucia.COM"):
+    for address in ("ariyaman@redape.com", "Ariyaman@RedApe.COM"):
         agent_llm.outputs = [
             json.dumps(
                 {
@@ -124,11 +124,11 @@ async def test_second_send_reuses_the_same_contact(db, agent_llm, sent):
             json.dumps({"thought": "done", "operator_output": "Sent."}),
         ]
         await agent.run_command(
-            db, tenant_id="plucia", text="email them", mode="autopilot"
+            db, tenant_id="redape", text="email them", mode="autopilot"
         )
 
     matches = await db.contacts.find(
-        {"identities.external_id": "ariyaman@plucia.com"}
+        {"identities.external_id": "ariyaman@redape.com"}
     ).to_list(length=10)
     assert len(matches) == 1
 
@@ -145,7 +145,7 @@ async def test_send_without_any_recipient_fails_clearly(db, agent_llm, sent):
         json.dumps({"thought": "failed", "operator_output": "I need an address."}),
     ]
     await agent.run_command(
-        db, tenant_id="plucia", text="send an email", mode="autopilot"
+        db, tenant_id="redape", text="send an email", mode="autopilot"
     )
     assert sent == []
 
@@ -162,7 +162,7 @@ async def test_unresolvable_name_does_not_send(db, agent_llm, sent):
         json.dumps({"thought": "failed", "operator_output": "Who?"}),
     ]
     result = await agent.run_command(
-        db, tenant_id="plucia", text="email Someone Unknown", mode="autopilot"
+        db, tenant_id="redape", text="email Someone Unknown", mode="autopilot"
     )
     assert result["message"]["action"]["status"] == "failed"
     assert sent == []
@@ -176,7 +176,7 @@ async def test_find_recipient_surfaces_a_mailbox_contact(db, agent_llm, monkeypa
         monkeypatch,
         [
             {
-                "email": "ariyaman@plucia.com",
+                "email": "ariyaman@redape.com",
                 "name": "Ariyaman",
                 "sent": 3,
                 "received": 1,
@@ -195,7 +195,7 @@ async def test_find_recipient_surfaces_a_mailbox_contact(db, agent_llm, monkeypa
         json.dumps({"thought": "found", "operator_output": "Found them."}),
     ]
     result = await agent.run_command(
-        db, tenant_id="plucia", text="who is Ariyaman", mode="copilot", user_id="u1"
+        db, tenant_id="redape", text="who is Ariyaman", mode="copilot", user_id="u1"
     )
     observation = result["message"]["steps"][1]["observation"]
     assert observation["matches"][0]["name"] == "Ariyaman"
@@ -214,7 +214,7 @@ async def test_empty_result_tells_the_model_it_may_send_direct(db, agent_llm):
         json.dumps({"thought": "none", "operator_output": "Not found."}),
     ]
     result = await agent.run_command(
-        db, tenant_id="plucia", text="find nobody", mode="copilot", user_id="u1"
+        db, tenant_id="redape", text="find nobody", mode="copilot", user_id="u1"
     )
     observation = result["message"]["steps"][1]["observation"]
     assert observation["matches"] == []
@@ -230,7 +230,7 @@ async def test_old_tool_name_still_dispatches(db, agent_llm):
         json.dumps({"thought": "none", "operator_output": "Nothing."}),
     ]
     result = await agent.run_command(
-        db, tenant_id="plucia", text="find Ada", mode="copilot", user_id="u1"
+        db, tenant_id="redape", text="find Ada", mode="copilot", user_id="u1"
     )
     assert "error" not in result["message"]["steps"][1]["observation"]
 
@@ -243,14 +243,14 @@ async def test_offered_candidates_persist_for_the_next_turn(db, agent_llm, monke
         monkeypatch,
         [
             {
-                "email": "ariyaman.a@plucia.com",
+                "email": "ariyaman.a@redape.com",
                 "name": "Ariyaman A",
                 "sent": 1,
                 "received": 0,
                 "lastSeen": "2026-08-01T10:00:00+00:00",
             },
             {
-                "email": "ariyaman.b@plucia.com",
+                "email": "ariyaman.b@redape.com",
                 "name": "Ariyaman B",
                 "sent": 1,
                 "received": 0,
@@ -270,7 +270,7 @@ async def test_offered_candidates_persist_for_the_next_turn(db, agent_llm, monke
         ),
     ]
     first = await agent.run_command(
-        db, tenant_id="plucia", text="email Ariyaman", mode="copilot", user_id="u1"
+        db, tenant_id="redape", text="email Ariyaman", mode="copilot", user_id="u1"
     )
 
     stored = await db.operator_messages.find_one({"_id": first["message"]["_id"]})
@@ -283,7 +283,7 @@ async def test_offered_candidates_persist_for_the_next_turn(db, agent_llm, monke
     ]
     await agent.run_command(
         db,
-        tenant_id="plucia",
+        tenant_id="redape",
         text="the first one",
         mode="copilot",
         thread_id=first["thread_id"],
@@ -292,8 +292,8 @@ async def test_offered_candidates_persist_for_the_next_turn(db, agent_llm, monke
     replayed = "\n".join(
         message["content"] for message in agent_llm.calls[-1] if message["role"] == "system"
     )
-    assert "ariyaman.a@plucia.com" in replayed
-    assert "ariyaman.b@plucia.com" in replayed
+    assert "ariyaman.a@redape.com" in replayed
+    assert "ariyaman.b@redape.com" in replayed
 
 
 async def test_completed_send_stores_no_candidates(db, agent_llm, sent):
@@ -309,7 +309,7 @@ async def test_completed_send_stores_no_candidates(db, agent_llm, sent):
         json.dumps({"thought": "sent", "operator_output": "Sent."}),
     ]
     result = await agent.run_command(
-        db, tenant_id="plucia", text="email ada@example.com", mode="autopilot"
+        db, tenant_id="redape", text="email ada@example.com", mode="autopilot"
     )
     stored = await db.operator_messages.find_one({"_id": result["message"]["_id"]})
     assert stored["candidates"] is None
@@ -363,7 +363,7 @@ async def test_run_command_puts_the_clock_in_the_system_prompt(db, agent_llm):
     assert "Never invent a date" in system_prompt
 
 
-# The agent once reported "Invitation sent to ariyaman@plucia.com" when the tool
+# The agent once reported "Invitation sent to ariyaman@redape.com" when the tool
 # had returned notified_attendees: false — a claimed outward-facing action that
 # never happened. The prompt must forbid that explicitly.
 async def test_prompt_forbids_claiming_unsent_notifications(db, agent_llm):

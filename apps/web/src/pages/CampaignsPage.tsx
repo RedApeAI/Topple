@@ -5,7 +5,7 @@ import { ComingSoon } from "@/components/shared/ComingSoon";
 
 export function CampaignsPage() {
   useEffect(() => {
-    document.title = "AI Agent Campaigns — Plucia";
+    document.title = "AI Agent Campaigns — RedApeAI";
   }, []);
 
   return (

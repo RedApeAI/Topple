@@ -11,7 +11,7 @@ class Settings(BaseSettings):
         env_file=".env", env_file_encoding="utf-8", extra="ignore"
     )
 
-    app_name: str = "plucia-orchestrator"
+    app_name: str = "redape-orchestrator"
 
     # --- LLM (OpenAI-compatible endpoint) ---
     # Backend `vllm` (self-hosted): multi-LoRA, per-request `model` = adapter_id

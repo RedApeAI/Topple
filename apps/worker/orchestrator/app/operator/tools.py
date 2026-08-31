@@ -185,7 +185,7 @@ def _subject_for(action: dict, contact: dict) -> str | None:
     if supplied:
         return supplied
     name = (contact.get("profile") or {}).get("name")
-    return f"Message from Plucia{f' for {name}' if name else ''}"
+    return f"Message from RedApeAI{f' for {name}' if name else ''}"
 
 
 async def execute_send_message(

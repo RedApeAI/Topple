@@ -36,7 +36,7 @@ export function DisconnectChannelDialog({
           <DialogTitle>Disconnect {label}?</DialogTitle>
           <DialogDescription>
             {accountName ? `${accountName} will` : `This account will`} stop
-            receiving and sending messages through Plucia. You can connect it
+            receiving and sending messages through RedApeAI. You can connect it
             again later.
           </DialogDescription>
         </DialogHeader>

@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { motion, useInView, useReducedMotion } from "framer-motion";
 
 /**
- * The prompt card inside the "Just Tell Plucia" dark motion card, animated:
+ * The prompt card inside the "Just Tell RedApeAI" dark motion card, animated:
  * the instruction types out character by character behind a blinking caret,
  * a mouse pointer glides in from below, clicks the send arrow (the button
  * presses down), the text clears, and the loop restarts. Markup/classes are

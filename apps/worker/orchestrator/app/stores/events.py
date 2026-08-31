@@ -30,7 +30,7 @@ logger = logging.getLogger(__name__)
 _client: redis.Redis | None = None
 _warned_down = False
 
-CHANNEL_PREFIX = "plucia:events"
+CHANNEL_PREFIX = "redape:events"
 
 # A publish/ping must never hang a request, but the client carries NO socket
 # read timeout — a pub/sub subscriber blocks waiting for events, and any read

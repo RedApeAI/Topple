@@ -56,7 +56,7 @@ export default function SubscribeSection() {
             </span>
           </p>
           <p className="font-inter font-normal leading-[normal] relative shrink-0 text-[16px] sm:text-[18px] tracking-[-0.05em] w-full">
-            Type a simple instruction in natural language, and Plucia instantly
+            Type a simple instruction in natural language, and RedApeAI instantly
             understands your intent.
           </p>
         </div>

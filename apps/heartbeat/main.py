@@ -6,7 +6,7 @@ except ModuleNotFoundError as exc:
         "the real heartbeat API server."
     ) from exc
 
-app = FastAPI(title="Plucia Heartbeat API")
+app = FastAPI(title="RedApeAI Heartbeat API")
 
 
 @app.get("/health")

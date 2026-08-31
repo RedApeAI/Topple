@@ -113,10 +113,10 @@ mcpRoutes.post("/", async (context) => {
     );
   }
 
-  const userId = context.req.header("X-Plucia-User-Id");
+  const userId = context.req.header("X-RedApeAI-User-Id");
   if (!userId) {
     return context.json(
-      { error: { code: "NO_USER", message: "X-Plucia-User-Id is required" } },
+      { error: { code: "NO_USER", message: "X-RedApeAI-User-Id is required" } },
       400,
     );
   }
@@ -136,7 +136,7 @@ mcpRoutes.post("/", async (context) => {
   // Mode governs whether tools may notify anyone. Header, not tool argument —
   // see the note in mcp/server.ts.
   const mode =
-    context.req.header("X-Plucia-Mode") === "autopilot"
+    context.req.header("X-RedApeAI-Mode") === "autopilot"
       ? "autopilot"
       : "copilot";
 

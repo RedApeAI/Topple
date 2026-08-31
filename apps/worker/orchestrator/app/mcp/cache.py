@@ -29,7 +29,7 @@ from ..stores import events
 
 logger = logging.getLogger(__name__)
 
-KEY_PREFIX = "plucia:mcp:tools"
+KEY_PREFIX = "redape:mcp:tools"
 #: Short on purpose. This trades "a connector connected in the last minute may
 #: not appear yet" for removing a network round trip from every command.
 TTL_SECONDS = 60

@@ -49,7 +49,7 @@ def test_turns_can_be_listed_by_user(db, llm, retrieval):
             "/v1/turns",
             json=envelope_dict(request_id="req-attrib-3", user_id="u-42", session_id="s-99"),
         )
-        listed = client.get("/v1/turns", params={"tenant_id": "plucia", "user_id": "u-42"})
+        listed = client.get("/v1/turns", params={"tenant_id": "redape", "user_id": "u-42"})
 
     assert listed.status_code == 200
     rows = listed.json()

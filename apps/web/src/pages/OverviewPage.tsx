@@ -5,7 +5,7 @@ import { ComingSoon } from "@/components/shared/ComingSoon";
 
 export function OverviewPage() {
   useEffect(() => {
-    document.title = "Overview — Plucia";
+    document.title = "Overview — RedApeAI";
   }, []);
 
   return (

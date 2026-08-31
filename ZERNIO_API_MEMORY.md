@@ -107,7 +107,7 @@ Official SDKs documented for Node (`@zernio/node`), Python (`zernio-sdk`), Go, R
 - A flat $12 monthly credit covers the equivalent of the first two tier-one account units. Charges occur as usage accrues with a fraud-protection threshold beginning at $10 and increasing over time.
 - SMS is billed per segment/destination; phone-number, calls, ads, X API operations, WhatsApp, KYC/registration, and other product-specific prices have dedicated tables. Never hard-code these values without rechecking current pricing pages.
 
-## Plucia implementation update (2026-08-02)
+## RedApeAI implementation update (2026-08-02)
 
 - `apps/api` exposes authenticated `/api/v1/zernio` connection status,
   hosted OAuth initiation, and tenant-checked WhatsApp inbox/message routes.
@@ -129,11 +129,11 @@ Official SDKs documented for Node (`@zernio/node`), Python (`zernio-sdk`), Go, R
   optional six-digit two-step verification PIN. The Meta token is a permanent
   System User token with `whatsapp_business_management` and
   `whatsapp_business_messaging`, not a Zernio API key.
-- Plucia exposes this as authenticated
+- RedApeAI exposes this as authenticated
   `POST /api/v1/zernio/channels/whatsapp/credentials`. The API derives
   `profileId` from the active Better Auth organization, forwards the secret
   once to Zernio, does not persist or log it, and resyncs accounts afterward.
-- The Plucia frontend intentionally has no WhatsApp Facebook JS SDK, popup,
+- The RedApeAI frontend intentionally has no WhatsApp Facebook JS SDK, popup,
   redirect, or hostname-dependent branch. This makes development and
   deployment use the same headless contract.
 - Zernio's WhatsApp sandbox can validate messaging and webhooks without a

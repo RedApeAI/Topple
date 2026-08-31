@@ -1,6 +1,6 @@
 [project]
-name = "plucia-db-mongo"
+name = "redape-db-mongo"
 version = "0.0.0"
-description = "MongoDB helpers for Plucia Python services."
+description = "MongoDB helpers for RedApeAI Python services."
 requires-python = ">=3.11"
 dependencies = []

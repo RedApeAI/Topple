@@ -147,7 +147,7 @@ activemq-data/
 # SageMath parsed files
 *.sage.py
 
-# plucia-orchestrator: local scratch data
+# redape-orchestrator: local scratch data
 /data/
 *.db
 *.db-journal

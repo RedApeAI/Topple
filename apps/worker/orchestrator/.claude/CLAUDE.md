@@ -1,7 +1,7 @@
 ## Project
 
 You are working in `apps/worker/orchestrator`, a FastAPI service that is the
-agent runtime for Plucia, an AI sales platform. It has two planes:
+agent runtime for RedApeAI, an AI sales platform. It has two planes:
 
 - **Turn pipeline** (`app/engine/pipeline.py::run_turn`) — reacts to an inbound
   buyer message, speaks AS the salesperson TO the buyer. Currently a fixed

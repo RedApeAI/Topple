@@ -1,6 +1,6 @@
 {
   "info": {
-    "name": "plucia blackbox orchestrator",
+    "name": "redape blackbox orchestrator",
     "description": "Two full journeys through POST /v1/turns (real-estate tenant with a LoRA adapter, insurance tenant without), plus dedupe, wrong-scope 403, the copilot drafts loop, and observability reads.\n\nPrereqs: docker compose up -d, python seeds/seed_qdrant.py, Ollama running, uvicorn app.main:app.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
@@ -59,7 +59,7 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"request_id\": \"{{$guid}}\",\n  \"received_at\": \"{{$isoTimestamp}}\",\n  \"tenant_id\": \"plucia\",\n  \"channel\": \"whatsapp\",\n  \"granted_scopes\": [\"channel:whatsapp\"],\n  \"runtime\": {\n    \"playbook_id\": \"real-estate-v1\",\n    \"knowledge_source_id\": \"plucia_re\",\n    \"model_id\": \"qwen3.5-9b-base\",\n    \"adapter_id\": \"real-estate-v2\",\n    \"playbook_version\": 8,\n    \"prompt_version\": \"2026-06-01\"\n  },\n  \"message\": {\n    \"external_contact_id\": \"+971501234567\",\n    \"type\": \"text\",\n    \"text\": \"Hi! I saw your ad about apartments in Dubai Marina\",\n    \"media\": [],\n    \"channel_timestamp\": \"{{$isoTimestamp}}\",\n    \"raw_ref\": null\n  },\n  \"mode\": \"autopilot\"\n}"
+              "raw": "{\n  \"request_id\": \"{{$guid}}\",\n  \"received_at\": \"{{$isoTimestamp}}\",\n  \"tenant_id\": \"redape\",\n  \"channel\": \"whatsapp\",\n  \"granted_scopes\": [\"channel:whatsapp\"],\n  \"runtime\": {\n    \"playbook_id\": \"real-estate-v1\",\n    \"knowledge_source_id\": \"redape_re\",\n    \"model_id\": \"qwen3.5-9b-base\",\n    \"adapter_id\": \"real-estate-v2\",\n    \"playbook_version\": 8,\n    \"prompt_version\": \"2026-06-01\"\n  },\n  \"message\": {\n    \"external_contact_id\": \"+971501234567\",\n    \"type\": \"text\",\n    \"text\": \"Hi! I saw your ad about apartments in Dubai Marina\",\n    \"media\": [],\n    \"channel_timestamp\": \"{{$isoTimestamp}}\",\n    \"raw_ref\": null\n  },\n  \"mode\": \"autopilot\"\n}"
             }
           },
           "event": [
@@ -93,7 +93,7 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"request_id\": \"{{$guid}}\",\n  \"received_at\": \"{{$isoTimestamp}}\",\n  \"tenant_id\": \"plucia\",\n  \"channel\": \"whatsapp\",\n  \"granted_scopes\": [\"channel:whatsapp\"],\n  \"runtime\": {\n    \"playbook_id\": \"real-estate-v1\",\n    \"knowledge_source_id\": \"plucia_re\",\n    \"model_id\": \"qwen3.5-9b-base\",\n    \"adapter_id\": \"real-estate-v2\",\n    \"playbook_version\": 8,\n    \"prompt_version\": \"2026-06-01\"\n  },\n  \"message\": {\n    \"external_contact_id\": \"+971501234567\",\n    \"type\": \"text\",\n    \"text\": \"Budget is around 2 million dirhams, I want a 2 bedroom in Dubai Marina ideally\",\n    \"media\": [],\n    \"channel_timestamp\": \"{{$isoTimestamp}}\",\n    \"raw_ref\": null\n  },\n  \"mode\": \"autopilot\"\n}"
+              "raw": "{\n  \"request_id\": \"{{$guid}}\",\n  \"received_at\": \"{{$isoTimestamp}}\",\n  \"tenant_id\": \"redape\",\n  \"channel\": \"whatsapp\",\n  \"granted_scopes\": [\"channel:whatsapp\"],\n  \"runtime\": {\n    \"playbook_id\": \"real-estate-v1\",\n    \"knowledge_source_id\": \"redape_re\",\n    \"model_id\": \"qwen3.5-9b-base\",\n    \"adapter_id\": \"real-estate-v2\",\n    \"playbook_version\": 8,\n    \"prompt_version\": \"2026-06-01\"\n  },\n  \"message\": {\n    \"external_contact_id\": \"+971501234567\",\n    \"type\": \"text\",\n    \"text\": \"Budget is around 2 million dirhams, I want a 2 bedroom in Dubai Marina ideally\",\n    \"media\": [],\n    \"channel_timestamp\": \"{{$isoTimestamp}}\",\n    \"raw_ref\": null\n  },\n  \"mode\": \"autopilot\"\n}"
             }
           },
           "event": [
@@ -124,7 +124,7 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"request_id\": \"{{$guid}}\",\n  \"received_at\": \"{{$isoTimestamp}}\",\n  \"tenant_id\": \"plucia\",\n  \"channel\": \"whatsapp\",\n  \"granted_scopes\": [\"channel:whatsapp\"],\n  \"runtime\": {\n    \"playbook_id\": \"real-estate-v1\",\n    \"knowledge_source_id\": \"plucia_re\",\n    \"model_id\": \"qwen3.5-9b-base\",\n    \"adapter_id\": \"real-estate-v2\",\n    \"playbook_version\": 8,\n    \"prompt_version\": \"2026-06-01\"\n  },\n  \"message\": {\n    \"external_contact_id\": \"+971501234567\",\n    \"type\": \"text\",\n    \"text\": \"What is the exact price of the 2 bedroom in Marina Crest? And when is handover?\",\n    \"media\": [],\n    \"channel_timestamp\": \"{{$isoTimestamp}}\",\n    \"raw_ref\": null\n  },\n  \"mode\": \"autopilot\"\n}"
+              "raw": "{\n  \"request_id\": \"{{$guid}}\",\n  \"received_at\": \"{{$isoTimestamp}}\",\n  \"tenant_id\": \"redape\",\n  \"channel\": \"whatsapp\",\n  \"granted_scopes\": [\"channel:whatsapp\"],\n  \"runtime\": {\n    \"playbook_id\": \"real-estate-v1\",\n    \"knowledge_source_id\": \"redape_re\",\n    \"model_id\": \"qwen3.5-9b-base\",\n    \"adapter_id\": \"real-estate-v2\",\n    \"playbook_version\": 8,\n    \"prompt_version\": \"2026-06-01\"\n  },\n  \"message\": {\n    \"external_contact_id\": \"+971501234567\",\n    \"type\": \"text\",\n    \"text\": \"What is the exact price of the 2 bedroom in Marina Crest? And when is handover?\",\n    \"media\": [],\n    \"channel_timestamp\": \"{{$isoTimestamp}}\",\n    \"raw_ref\": null\n  },\n  \"mode\": \"autopilot\"\n}"
             }
           },
           "event": [
@@ -158,7 +158,7 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"request_id\": \"{{$guid}}\",\n  \"received_at\": \"{{$isoTimestamp}}\",\n  \"tenant_id\": \"plucia\",\n  \"channel\": \"whatsapp\",\n  \"granted_scopes\": [\"channel:whatsapp\"],\n  \"runtime\": {\n    \"playbook_id\": \"real-estate-v1\",\n    \"knowledge_source_id\": \"plucia_re\",\n    \"model_id\": \"qwen3.5-9b-base\",\n    \"adapter_id\": \"real-estate-v2\",\n    \"playbook_version\": 8,\n    \"prompt_version\": \"2026-06-01\"\n  },\n  \"message\": {\n    \"external_contact_id\": \"+971501234567\",\n    \"type\": \"text\",\n    \"text\": \"Hmm that feels expensive for Dubai Marina honestly, other projects are cheaper\",\n    \"media\": [],\n    \"channel_timestamp\": \"{{$isoTimestamp}}\",\n    \"raw_ref\": null\n  },\n  \"mode\": \"autopilot\"\n}"
+              "raw": "{\n  \"request_id\": \"{{$guid}}\",\n  \"received_at\": \"{{$isoTimestamp}}\",\n  \"tenant_id\": \"redape\",\n  \"channel\": \"whatsapp\",\n  \"granted_scopes\": [\"channel:whatsapp\"],\n  \"runtime\": {\n    \"playbook_id\": \"real-estate-v1\",\n    \"knowledge_source_id\": \"redape_re\",\n    \"model_id\": \"qwen3.5-9b-base\",\n    \"adapter_id\": \"real-estate-v2\",\n    \"playbook_version\": 8,\n    \"prompt_version\": \"2026-06-01\"\n  },\n  \"message\": {\n    \"external_contact_id\": \"+971501234567\",\n    \"type\": \"text\",\n    \"text\": \"Hmm that feels expensive for Dubai Marina honestly, other projects are cheaper\",\n    \"media\": [],\n    \"channel_timestamp\": \"{{$isoTimestamp}}\",\n    \"raw_ref\": null\n  },\n  \"mode\": \"autopilot\"\n}"
             }
           },
           "event": [
@@ -186,7 +186,7 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"request_id\": \"{{$guid}}\",\n  \"received_at\": \"{{$isoTimestamp}}\",\n  \"tenant_id\": \"plucia\",\n  \"channel\": \"whatsapp\",\n  \"granted_scopes\": [\"channel:whatsapp\"],\n  \"runtime\": {\n    \"playbook_id\": \"real-estate-v1\",\n    \"knowledge_source_id\": \"plucia_re\",\n    \"model_id\": \"qwen3.5-9b-base\",\n    \"adapter_id\": \"real-estate-v2\",\n    \"playbook_version\": 8,\n    \"prompt_version\": \"2026-06-01\"\n  },\n  \"message\": {\n    \"external_contact_id\": \"+971501234567\",\n    \"type\": \"text\",\n    \"text\": \"Ok fine. Can I come see the Marina Crest show apartment this weekend?\",\n    \"media\": [],\n    \"channel_timestamp\": \"{{$isoTimestamp}}\",\n    \"raw_ref\": null\n  },\n  \"mode\": \"autopilot\"\n}"
+              "raw": "{\n  \"request_id\": \"{{$guid}}\",\n  \"received_at\": \"{{$isoTimestamp}}\",\n  \"tenant_id\": \"redape\",\n  \"channel\": \"whatsapp\",\n  \"granted_scopes\": [\"channel:whatsapp\"],\n  \"runtime\": {\n    \"playbook_id\": \"real-estate-v1\",\n    \"knowledge_source_id\": \"redape_re\",\n    \"model_id\": \"qwen3.5-9b-base\",\n    \"adapter_id\": \"real-estate-v2\",\n    \"playbook_version\": 8,\n    \"prompt_version\": \"2026-06-01\"\n  },\n  \"message\": {\n    \"external_contact_id\": \"+971501234567\",\n    \"type\": \"text\",\n    \"text\": \"Ok fine. Can I come see the Marina Crest show apartment this weekend?\",\n    \"media\": [],\n    \"channel_timestamp\": \"{{$isoTimestamp}}\",\n    \"raw_ref\": null\n  },\n  \"mode\": \"autopilot\"\n}"
             }
           },
           "event": [
@@ -349,7 +349,7 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"request_id\": \"{{$guid}}\",\n  \"received_at\": \"{{$isoTimestamp}}\",\n  \"tenant_id\": \"plucia\",\n  \"channel\": \"whatsapp\",\n  \"granted_scopes\": [\"channel:whatsapp\"],\n  \"runtime\": {\n    \"playbook_id\": \"real-estate-v1\",\n    \"knowledge_source_id\": \"plucia_re\",\n    \"model_id\": \"qwen3.5-9b-base\",\n    \"adapter_id\": \"real-estate-v2\",\n    \"playbook_version\": 8,\n    \"prompt_version\": \"2026-06-01\"\n  },\n  \"message\": {\n    \"external_contact_id\": \"+971501234567\",\n    \"type\": \"text\",\n    \"text\": \"Also what are the amenities like at Marina Crest?\",\n    \"media\": [],\n    \"channel_timestamp\": \"{{$isoTimestamp}}\",\n    \"raw_ref\": null\n  },\n  \"mode\": \"copilot\"\n}"
+              "raw": "{\n  \"request_id\": \"{{$guid}}\",\n  \"received_at\": \"{{$isoTimestamp}}\",\n  \"tenant_id\": \"redape\",\n  \"channel\": \"whatsapp\",\n  \"granted_scopes\": [\"channel:whatsapp\"],\n  \"runtime\": {\n    \"playbook_id\": \"real-estate-v1\",\n    \"knowledge_source_id\": \"redape_re\",\n    \"model_id\": \"qwen3.5-9b-base\",\n    \"adapter_id\": \"real-estate-v2\",\n    \"playbook_version\": 8,\n    \"prompt_version\": \"2026-06-01\"\n  },\n  \"message\": {\n    \"external_contact_id\": \"+971501234567\",\n    \"type\": \"text\",\n    \"text\": \"Also what are the amenities like at Marina Crest?\",\n    \"media\": [],\n    \"channel_timestamp\": \"{{$isoTimestamp}}\",\n    \"raw_ref\": null\n  },\n  \"mode\": \"copilot\"\n}"
             }
           },
           "event": [
@@ -370,10 +370,10 @@
           "request": {
             "method": "GET",
             "url": {
-              "raw": "{{base_url}}/v1/drafts?tenant_id=plucia",
+              "raw": "{{base_url}}/v1/drafts?tenant_id=redape",
               "host": ["{{base_url}}"],
               "path": ["v1", "drafts"],
-              "query": [{ "key": "tenant_id", "value": "plucia" }]
+              "query": [{ "key": "tenant_id", "value": "redape" }]
             }
           },
           "event": [
@@ -434,7 +434,7 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"request_id\": \"{{dedupe_request_id}}\",\n  \"received_at\": \"{{$isoTimestamp}}\",\n  \"tenant_id\": \"plucia\",\n  \"channel\": \"whatsapp\",\n  \"granted_scopes\": [\"channel:whatsapp\"],\n  \"runtime\": {\n    \"playbook_id\": \"real-estate-v1\",\n    \"knowledge_source_id\": \"plucia_re\",\n    \"model_id\": \"qwen3.5-9b-base\",\n    \"adapter_id\": \"real-estate-v2\",\n    \"playbook_version\": 8,\n    \"prompt_version\": \"2026-06-01\"\n  },\n  \"message\": {\n    \"external_contact_id\": \"+971500000001\",\n    \"type\": \"text\",\n    \"text\": \"Hi, do you have anything in JVC?\",\n    \"media\": [],\n    \"channel_timestamp\": \"{{$isoTimestamp}}\",\n    \"raw_ref\": null\n  },\n  \"mode\": \"autopilot\"\n}"
+              "raw": "{\n  \"request_id\": \"{{dedupe_request_id}}\",\n  \"received_at\": \"{{$isoTimestamp}}\",\n  \"tenant_id\": \"redape\",\n  \"channel\": \"whatsapp\",\n  \"granted_scopes\": [\"channel:whatsapp\"],\n  \"runtime\": {\n    \"playbook_id\": \"real-estate-v1\",\n    \"knowledge_source_id\": \"redape_re\",\n    \"model_id\": \"qwen3.5-9b-base\",\n    \"adapter_id\": \"real-estate-v2\",\n    \"playbook_version\": 8,\n    \"prompt_version\": \"2026-06-01\"\n  },\n  \"message\": {\n    \"external_contact_id\": \"+971500000001\",\n    \"type\": \"text\",\n    \"text\": \"Hi, do you have anything in JVC?\",\n    \"media\": [],\n    \"channel_timestamp\": \"{{$isoTimestamp}}\",\n    \"raw_ref\": null\n  },\n  \"mode\": \"autopilot\"\n}"
             }
           }
         },
@@ -450,7 +450,7 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"request_id\": \"{{dedupe_request_id}}\",\n  \"received_at\": \"{{$isoTimestamp}}\",\n  \"tenant_id\": \"plucia\",\n  \"channel\": \"whatsapp\",\n  \"granted_scopes\": [\"channel:whatsapp\"],\n  \"runtime\": {\n    \"playbook_id\": \"real-estate-v1\",\n    \"knowledge_source_id\": \"plucia_re\",\n    \"model_id\": \"qwen3.5-9b-base\",\n    \"adapter_id\": \"real-estate-v2\",\n    \"playbook_version\": 8,\n    \"prompt_version\": \"2026-06-01\"\n  },\n  \"message\": {\n    \"external_contact_id\": \"+971500000001\",\n    \"type\": \"text\",\n    \"text\": \"Hi, do you have anything in JVC?\",\n    \"media\": [],\n    \"channel_timestamp\": \"{{$isoTimestamp}}\",\n    \"raw_ref\": null\n  },\n  \"mode\": \"autopilot\"\n}"
+              "raw": "{\n  \"request_id\": \"{{dedupe_request_id}}\",\n  \"received_at\": \"{{$isoTimestamp}}\",\n  \"tenant_id\": \"redape\",\n  \"channel\": \"whatsapp\",\n  \"granted_scopes\": [\"channel:whatsapp\"],\n  \"runtime\": {\n    \"playbook_id\": \"real-estate-v1\",\n    \"knowledge_source_id\": \"redape_re\",\n    \"model_id\": \"qwen3.5-9b-base\",\n    \"adapter_id\": \"real-estate-v2\",\n    \"playbook_version\": 8,\n    \"prompt_version\": \"2026-06-01\"\n  },\n  \"message\": {\n    \"external_contact_id\": \"+971500000001\",\n    \"type\": \"text\",\n    \"text\": \"Hi, do you have anything in JVC?\",\n    \"media\": [],\n    \"channel_timestamp\": \"{{$isoTimestamp}}\",\n    \"raw_ref\": null\n  },\n  \"mode\": \"autopilot\"\n}"
             }
           },
           "event": [
@@ -477,7 +477,7 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"request_id\": \"{{$guid}}\",\n  \"received_at\": \"{{$isoTimestamp}}\",\n  \"tenant_id\": \"plucia\",\n  \"channel\": \"whatsapp\",\n  \"granted_scopes\": [\"channel:email\"],\n  \"runtime\": {\n    \"playbook_id\": \"real-estate-v1\",\n    \"knowledge_source_id\": \"plucia_re\",\n    \"model_id\": \"qwen3.5-9b-base\",\n    \"adapter_id\": \"real-estate-v2\",\n    \"playbook_version\": 8,\n    \"prompt_version\": \"2026-06-01\"\n  },\n  \"message\": {\n    \"external_contact_id\": \"+971500000002\",\n    \"type\": \"text\",\n    \"text\": \"This should be rejected\",\n    \"media\": [],\n    \"channel_timestamp\": \"{{$isoTimestamp}}\",\n    \"raw_ref\": null\n  },\n  \"mode\": \"autopilot\"\n}"
+              "raw": "{\n  \"request_id\": \"{{$guid}}\",\n  \"received_at\": \"{{$isoTimestamp}}\",\n  \"tenant_id\": \"redape\",\n  \"channel\": \"whatsapp\",\n  \"granted_scopes\": [\"channel:email\"],\n  \"runtime\": {\n    \"playbook_id\": \"real-estate-v1\",\n    \"knowledge_source_id\": \"redape_re\",\n    \"model_id\": \"qwen3.5-9b-base\",\n    \"adapter_id\": \"real-estate-v2\",\n    \"playbook_version\": 8,\n    \"prompt_version\": \"2026-06-01\"\n  },\n  \"message\": {\n    \"external_contact_id\": \"+971500000002\",\n    \"type\": \"text\",\n    \"text\": \"This should be rejected\",\n    \"media\": [],\n    \"channel_timestamp\": \"{{$isoTimestamp}}\",\n    \"raw_ref\": null\n  },\n  \"mode\": \"autopilot\"\n}"
             }
           },
           "event": [
@@ -498,14 +498,14 @@
       "name": "5 · Metrics",
       "item": [
         {
-          "name": "GET /v1/metrics/summary (plucia, by adapter)",
+          "name": "GET /v1/metrics/summary (redape, by adapter)",
           "request": {
             "method": "GET",
             "url": {
-              "raw": "{{base_url}}/v1/metrics/summary?tenant_id=plucia",
+              "raw": "{{base_url}}/v1/metrics/summary?tenant_id=redape",
               "host": ["{{base_url}}"],
               "path": ["v1", "metrics", "summary"],
-              "query": [{ "key": "tenant_id", "value": "plucia" }]
+              "query": [{ "key": "tenant_id", "value": "redape" }]
             }
           }
         },

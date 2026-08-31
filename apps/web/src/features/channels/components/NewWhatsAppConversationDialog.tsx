@@ -108,7 +108,7 @@ export function NewWhatsAppConversationDialog({
             <p className="text-[13px] leading-5 text-muted-foreground">
               Ask the customer to message your business number first, or create
               and approve a WhatsApp template in Zernio before starting the
-              conversation from Plucia.
+              conversation from RedApeAI.
             </p>
             <Button
               render={

@@ -23,6 +23,16 @@ from dataclasses import dataclass
 #: Payload keys. `user_id` is the partition key — see `ensure_collection`.
 TENANT_KEY = "tenant_id"
 USER_KEY = "user_id"
+#: Which kind of memory a point holds.
+MEMORY_KEY = "memory_type"
+
+#: Verbatim document text. Quotable: the numeric-grounding guardrail compares a
+#: generated reply against these, so they must be the author's own words.
+SEMANTIC = "semantic"
+#: Compressed 100-word extractions — decisions, entities, intent. Emphatically
+#: NOT quotable: a summary has been through a model, so a figure in one may be
+#: rounded or invented and must never be offered to a buyer as a fact.
+EPISODIC = "episodic"
 
 
 @dataclass(frozen=True)
@@ -37,6 +47,9 @@ class KnowledgeScope:
 
     tenant_id: str
     user_id: str | None = None
+    #: None means "both kinds" — the turn pipeline reads semantic memory only,
+    #: because episodic summaries cannot ground a number.
+    memory_type: str | None = None
 
     @property
     def is_complete(self) -> bool:
@@ -50,7 +63,15 @@ class KnowledgeScope:
 
     def as_payload(self) -> dict:
         """Stamped onto every ingested point."""
-        return {TENANT_KEY: self.tenant_id, USER_KEY: self.user_id}
+        payload = {TENANT_KEY: self.tenant_id, USER_KEY: self.user_id}
+        if self.memory_type:
+            payload[MEMORY_KEY] = self.memory_type
+        return payload
+
+    def for_memory(self, memory_type: str) -> "KnowledgeScope":
+        from dataclasses import replace
+
+        return replace(self, memory_type=memory_type)
 
     def as_filter(self):
         """The Qdrant filter every query must carry.
@@ -67,6 +88,16 @@ class KnowledgeScope:
                 ),
                 models.FieldCondition(
                     key=USER_KEY, match=models.MatchValue(value=self.user_id)
+                ),
+                *(
+                    [
+                        models.FieldCondition(
+                            key=MEMORY_KEY,
+                            match=models.MatchValue(value=self.memory_type),
+                        )
+                    ]
+                    if self.memory_type
+                    else []
                 ),
             ]
         )

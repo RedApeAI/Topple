@@ -11,6 +11,7 @@ import {
   type MailFilter,
   type MailMessage,
   type MailQuery,
+  type MailView,
 } from "../types/mail.types";
 
 /** One reversible batch, kept so the toast can put the messages back. */
@@ -21,8 +22,88 @@ interface MailUndo {
   revert?: () => Promise<unknown>;
 }
 
+/**
+ * Which Gmail box backs each sidebar view.
+ *
+ * `reminders` and `scheduled` have no Gmail counterpart — snooze is local to
+ * this session — so they read off the pages already loaded rather than asking
+ * for a box that does not exist.
+ */
+const VIEW_BOX: Record<MailView, mailApi.MailboxBox | null> = {
+  all: "inbox",
+  starred: "starred",
+  reminders: null,
+  scheduled: null,
+  drafts: "drafts",
+  sent: "sent",
+  done: "archive",
+  trash: "trash",
+  spam: "spam",
+};
+
+/** Cache identity of a page: one per sidebar destination. */
+function keyFor(filter: MailFilter): string {
+  return `${filter.kind}:${filter.value}`;
+}
+
+/** What to ask the BFF for, or null when the view is local-only. */
+function requestFor(filter: MailFilter): mailApi.MailboxRequest | null {
+  if (filter.kind === "label") {
+    // Quotes delimit the label name in Gmail search syntax, so a name
+    // containing one would end the term early.
+    return {
+      box: "active",
+      search: `label:"${filter.value.replace(/"/g, "")}"`,
+    };
+  }
+  const box = VIEW_BOX[filter.value];
+  return box ? { box } : null;
+}
+
+/**
+ * Fold a freshly fetched page into the union the store keeps.
+ *
+ * The union exists because the sidebar counts every destination and mutations
+ * touch rows outside the view on screen — both need messages the current page
+ * does not carry. But a refetch has to be a resync rather than an append: a
+ * message this destination used to hold and no longer does has moved or been
+ * deleted in Gmail, so it is dropped unless another loaded page still lists it.
+ */
+function absorb(
+  messages: MailMessage[],
+  pages: Record<string, string[]>,
+  key: string,
+  page: MailMessage[],
+): { messages: MailMessage[]; pages: Record<string, string[]> } {
+  const previously = new Set(pages[key] ?? []);
+  const current = new Set(page.map((message) => message.id));
+  const heldElsewhere = new Set(
+    Object.entries(pages)
+      .filter(([other]) => other !== key)
+      .flatMap(([, ids]) => ids),
+  );
+  const fresh = new Map(page.map((message) => [message.id, message]));
+
+  const kept = messages
+    .filter(
+      (message) =>
+        !previously.has(message.id) ||
+        current.has(message.id) ||
+        heldElsewhere.has(message.id),
+    )
+    .map((message) => fresh.get(message.id) ?? message);
+
+  const known = new Set(kept.map((message) => message.id));
+  return {
+    messages: [...kept, ...page.filter((message) => !known.has(message.id))],
+    pages: { ...pages, [key]: page.map((message) => message.id) },
+  };
+}
+
 interface MailState {
   messages: MailMessage[];
+  /** Message ids per destination already fetched — see `absorb`. */
+  pages: Record<string, string[]>;
   status: "idle" | "loading" | "ready" | "error";
   error: string | null;
   labels: string[];
@@ -144,8 +225,20 @@ export const useMailStore = create<MailState>((set, get) => {
     }));
   };
 
+  /** Forget cached pages so the next visit refetches them. */
+  const invalidate = (...keys: string[]) =>
+    set((state) => ({
+      pages: Object.fromEntries(
+        Object.entries(state.pages).filter(([key]) => !keys.includes(key)),
+      ),
+    }));
+
+  // The recipient directory is warmed once per session, not once per view.
+  let directoryWarmed = false;
+
   return {
     messages: [],
+    pages: {},
     status: "idle",
     error: null,
     labels: [],
@@ -160,16 +253,40 @@ export const useMailStore = create<MailState>((set, get) => {
     composeInitial: null,
     undo: null,
 
+    /** Fetch the destination currently on screen, unless it is already held. */
     load: async (force = false) => {
-      if (!force && get().status !== "idle") return;
+      const filter = get().filter;
+      const key = keyFor(filter);
+      const request = requestFor(filter);
+
+      // Local-only views have nothing to fetch; they read off the union.
+      if (!request || (!force && key in get().pages)) {
+        if (get().status !== "ready") set({ status: "ready", error: null });
+        return;
+      }
+
       set({ status: "loading", error: null });
       try {
-        const { messages, labels, account } = await mailApi.fetchMailbox();
-        set({ messages, labels, account, status: "ready" });
+        const { messages, labels, account } =
+          await mailApi.fetchMailbox(request);
+        // The user may have moved on while this was in flight. The page is
+        // still worth keeping, but it must not clear the spinner belonging to
+        // whichever view they are now looking at.
+        const stillShowing = keyFor(get().filter) === key;
+        set((state) => ({
+          ...absorb(state.messages, state.pages, key, messages),
+          labels,
+          account,
+          ...(stillShowing ? { status: "ready" as const } : {}),
+        }));
+
         // Opening mail is the first moment the mailbox is known to be
         // connected. Warm the agent's recipient directory in the background —
         // a failure here must never affect the inbox the user is looking at.
-        void syncDirectory().catch(() => undefined);
+        if (!directoryWarmed) {
+          directoryWarmed = true;
+          void syncDirectory().catch(() => undefined);
+        }
       } catch (error) {
         set({
           status: "error",
@@ -178,8 +295,10 @@ export const useMailStore = create<MailState>((set, get) => {
       }
     },
 
-    setFilter: (filter) =>
-      set({ filter, selectedIds: [], openId: null, undo: null }),
+    setFilter: (filter) => {
+      set({ filter, selectedIds: [], openId: null, undo: null });
+      void get().load();
+    },
     setQuery: (patchQuery) =>
       set((state) => ({ query: { ...state.query, ...patchQuery } })),
     resetQuery: () => set({ query: EMPTY_MAIL_QUERY }),
@@ -327,6 +446,9 @@ export const useMailStore = create<MailState>((set, get) => {
       try {
         await mailApi.sendMail(toOutgoing(draft));
         set({ undo: { label: "Message sent", snapshot: [] } });
+        // Sent now holds one more message than the cached page does; drop it so
+        // opening Sent fetches rather than showing a stale list.
+        invalidate("view:sent", "view:drafts");
         await get().load(true);
       } catch (error) {
         set({ error: errorMessage(error, "Couldn't send that message") });
@@ -338,6 +460,7 @@ export const useMailStore = create<MailState>((set, get) => {
       try {
         await mailApi.saveDraft(toOutgoing(draft));
         set({ undo: { label: "Draft saved", snapshot: [] } });
+        invalidate("view:drafts");
         await get().load(true);
       } catch (error) {
         set({ error: errorMessage(error, "Couldn't save that draft") });

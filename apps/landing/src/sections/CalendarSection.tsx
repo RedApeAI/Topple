@@ -72,7 +72,7 @@ export default function CalendarSection() {
           <DistortText text="From Conversation to Calendar, Automatically." />
         </p>
         <p className="font-inter font-normal relative shrink-0 text-[17px] sm:text-[21px] text-[#202020] tracking-[-0.05em] w-full">
-          Plucia qualifies leads, handles follow-ups, answers questions, and
+          RedApeAI qualifies leads, handles follow-ups, answers questions, and
           schedules meetings when prospects are ready, keeping your pipeline
           moving while your team focuses on closing deals.
         </p>

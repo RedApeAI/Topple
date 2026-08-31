@@ -8,19 +8,19 @@
   {
     "id": "user-2",
     "name": "Sarah Lee",
-    "email": "sarah@plucia.com",
+    "email": "sarah@redape.com",
     "role": "Sales Lead"
   },
   {
     "id": "user-3",
     "name": "Marcus Chen",
-    "email": "marcus@plucia.com",
+    "email": "marcus@redape.com",
     "role": "Ops"
   },
   {
     "id": "user-4",
     "name": "Priya Nair",
-    "email": "priya@plucia.com",
+    "email": "priya@redape.com",
     "role": "Support"
   }
 ]

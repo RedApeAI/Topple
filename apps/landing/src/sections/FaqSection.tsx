@@ -8,28 +8,28 @@ import DistortText from "@/components/DistortText";
 
 const FAQS = [
   {
-    q: "How is Plucia different from a normal inbox?",
-    a: "Regular inboxes show you messages ordered by your latest notifications, on a singular platform. Plucia combines multiple inboxes, learns what matters to you and automatically ranks messages according to their priority.",
+    q: "How is RedApeAI different from a normal inbox?",
+    a: "Regular inboxes show you messages ordered by your latest notifications, on a singular platform. RedApeAI combines multiple inboxes, learns what matters to you and automatically ranks messages according to their priority.",
   },
   {
     q: "How do Auto-Drafted Replies work?",
-    a: "Plucia automatically drafts replies that sound like you. It learns your tone, language, and context across platforms, then writes responses based on your past conversations and priorities. When a new message arrives, you'll see a ready-to-send reply that you can edit, approve, or ignore. It's the fastest way to stay personal without wasting time typing.",
+    a: "RedApeAI automatically drafts replies that sound like you. It learns your tone, language, and context across platforms, then writes responses based on your past conversations and priorities. When a new message arrives, you'll see a ready-to-send reply that you can edit, approve, or ignore. It's the fastest way to stay personal without wasting time typing.",
   },
   {
-    q: "Can you still message outside of Plucia on connected accounts?",
-    a: "Yes. Any messages sent on Plucia are received natively by your contacts on the platforms you're communicating with them on. You can send a message on Plucia to a contact on WhatsApp, and continue that conversation on WhatsApp, and vice versa. Your message chain will be linked so the messaging experience of all your recipients remains unchanged.",
+    q: "Can you still message outside of RedApeAI on connected accounts?",
+    a: "Yes. Any messages sent on RedApeAI are received natively by your contacts on the platforms you're communicating with them on. You can send a message on RedApeAI to a contact on WhatsApp, and continue that conversation on WhatsApp, and vice versa. Your message chain will be linked so the messaging experience of all your recipients remains unchanged.",
   },
   {
-    q: "How does Plucia learn my goals and priorities?",
-    a: "When you connect your accounts, Plucia analyses message patterns and relationships to understand who and what matters most. You can adjust priorities anytime. Plucia keeps learning from your activity so its ranking stays accurate.",
+    q: "How does RedApeAI learn my goals and priorities?",
+    a: "When you connect your accounts, RedApeAI analyses message patterns and relationships to understand who and what matters most. You can adjust priorities anytime. RedApeAI keeps learning from your activity so its ranking stays accurate.",
   },
   {
     q: "Is my data private and secure?",
-    a: "Yes. Your data never leaves your account without encryption. Plucia uses secure, enterprise-grade protocols and does not sell or share your information. AI models only process context to serve your messages, not to train external systems.",
+    a: "Yes. Your data never leaves your account without encryption. RedApeAI uses secure, enterprise-grade protocols and does not sell or share your information. AI models only process context to serve your messages, not to train external systems.",
   },
   {
-    q: "How does Gmail connect with Plucia?",
-    a: "Plucia brings your emails, messages, contacts, and calendars into one smart workspace. To deliver this experience, Plucia connects to your Google account with your explicit permission.",
+    q: "How does Gmail connect with RedApeAI?",
+    a: "RedApeAI brings your emails, messages, contacts, and calendars into one smart workspace. To deliver this experience, RedApeAI connects to your Google account with your explicit permission.",
   },
 ];
 

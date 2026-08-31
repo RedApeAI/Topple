@@ -64,7 +64,7 @@ const rawEnvSchema = z
     // The Qdrant collection uploaded knowledge lands in. One collection for
     // the deployment — isolation inside it is the orchestrator's
     // (tenant_id, user_id) payload filter, not the collection name.
-    KNOWLEDGE_COLLECTION: z.string().min(1).default("plucia_re"),
+    KNOWLEDGE_COLLECTION: z.string().min(1).default("redape_re"),
     // Shared secret the orchestrator presents on /api/v1/mail/outbound. That
     // endpoint sends mail as an arbitrary user_id and has no session cookie to
     // check, so without this configured it refuses every request.

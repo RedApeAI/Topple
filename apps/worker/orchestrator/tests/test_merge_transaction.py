@@ -18,7 +18,7 @@ import pytest
 from app.engine import contacts
 
 
-async def _pair(db, tenant="plucia"):
+async def _pair(db, tenant="redape"):
     primary = await contacts.resolve_or_create(db, tenant, "whatsapp", "+971500000001")
     duplicate = await contacts.resolve_or_create(db, tenant, "email", "dup@example.com")
     await db.contacts.update_one(

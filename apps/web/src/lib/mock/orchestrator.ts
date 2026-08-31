@@ -52,14 +52,14 @@ async function post<T>(path: string, body?: unknown): Promise<T> {
  */
 const DEMO_RUNTIME = {
   playbook_id: "real-estate-v1",
-  knowledge_source_id: "plucia_re",
+  knowledge_source_id: "redape_re",
   model_id: "qwen3.5-9b-base",
   adapter_id: "real-estate-v2",
   playbook_version: 8,
   prompt_version: "2026-06-01",
 } as const;
 
-const SESSION_STORAGE_KEY = "plucia:orchestrator-session-id";
+const SESSION_STORAGE_KEY = "redape:orchestrator-session-id";
 
 /**
  * The eval grouping key.

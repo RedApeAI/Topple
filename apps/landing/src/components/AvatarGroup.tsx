@@ -52,7 +52,7 @@ export default function AvatarGroup({ light = false }: { light?: boolean }) {
       >
         <span className="font-bold leading-[normal]">7,136 </span>
         <span className="leading-[normal]">
-          people already Subscribe to Plucia's updates
+          people already Subscribe to RedApeAI's updates
         </span>
       </p>
     </div>

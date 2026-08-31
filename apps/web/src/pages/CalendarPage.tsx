@@ -5,7 +5,7 @@ import { ComingSoon } from "@/components/shared/ComingSoon";
 
 export function CalendarPage() {
   useEffect(() => {
-    document.title = "Calendar — Plucia";
+    document.title = "Calendar — RedApeAI";
   }, []);
 
   return (

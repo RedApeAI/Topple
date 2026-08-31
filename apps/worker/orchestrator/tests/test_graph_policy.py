@@ -182,7 +182,7 @@ async def test_operator_stops_at_the_step_budget(db, monkeypatch):
     monkeypatch.setattr(gateway, "chat_text", never_finishes)
 
     result = await agent.run_command(
-        db, tenant_id="plucia", text="find someone", mode="copilot"
+        db, tenant_id="redape", text="find someone", mode="copilot"
     )
 
     assert calls["n"] == agent.MAX_STEPS

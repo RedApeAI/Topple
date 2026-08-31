@@ -14,7 +14,7 @@ from typing import Any, Literal
 
 from bson import ObjectId
 from bson.errors import InvalidId
-from fastapi import BackgroundTasks, FastAPI, HTTPException, Query
+from fastapi import BackgroundTasks, FastAPI, File, Form, HTTPException, Query, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, ConfigDict
@@ -34,7 +34,13 @@ from .operator import agent as operator_agent
 from .outbound import dispatcher
 from .schemas.envelope import OrchestratorInput, OrchestratorResult, RuntimeConfig
 from .stores import directory, events, mongo, qdrant
+from .documents.ingest import ingest_document
+from .documents.parse import UnreadableDocument, UnsupportedDocument
 from .stores.knowledge import KnowledgeScope
+
+#: Matches the BFF's ceiling. Enforced both sides — the BFF stops a
+#: hostile browser, this stops a bug in the BFF.
+MAX_UPLOAD_BYTES = 10 * 1024 * 1024
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -56,7 +62,7 @@ async def lifespan(_app: FastAPI):
     yield
 
 
-app = FastAPI(title="plucia-orchestrator", version="2.0.0", lifespan=lifespan)
+app = FastAPI(title="redape-orchestrator", version="2.0.0", lifespan=lifespan)
 
 # The dashboard talks REST through its own proxy, but SSE (/v1/events)
 # connects straight to this origin — that cross-origin hop needs CORS.
@@ -782,6 +788,64 @@ async def forget_knowledge(
     else:
         await qdrant.forget_tenant(knowledge_source_id, tenant_id)
     return {"forgotten": {"tenant_id": tenant_id, "user_id": user_id}}
+
+
+@app.post("/v1/knowledge/upload")
+async def upload_document(
+    file: UploadFile = File(...),
+    tenant_id: str = Form(...),
+    user_id: str = Form(...),
+    knowledge_source_id: str = Form(...),
+    question: str | None = Form(None),
+    session_id: str | None = Form(None),
+    store_verbatim: bool = Form(False),
+):
+    """Ingest an uploaded document. The bytes never reach a disk.
+
+    Read straight into memory, parsed, answered against, compressed to ~100-word
+    episodic summaries, stored, and dropped. `store_verbatim` additionally keeps
+    the author's own words as semantic memory — required if the agent is ever to
+    *quote* the document, because a summary has been through a model and its
+    figures cannot ground a reply.
+    """
+    data = await file.read()
+    if not data:
+        raise HTTPException(status_code=400, detail="empty file")
+    if len(data) > MAX_UPLOAD_BYTES:
+        raise HTTPException(
+            status_code=413,
+            detail=f"file exceeds {MAX_UPLOAD_BYTES // 1024 // 1024} MB",
+        )
+
+    try:
+        state = await ingest_document(
+            tenant_id=tenant_id,
+            user_id=user_id,
+            filename=file.filename or "document",
+            data=data,
+            collection=knowledge_source_id,
+            question=question,
+            session_id=session_id,
+            store_verbatim=store_verbatim,
+        )
+    except UnsupportedDocument as exc:
+        raise HTTPException(status_code=415, detail=str(exc)) from None
+    except UnreadableDocument as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from None
+    finally:
+        # Belt and braces with the graph's own purge: drop the request-scoped
+        # copy too, so nothing survives this handler.
+        del data
+
+    return {
+        "filename": state.filename,
+        "doc_id": state.doc_id,
+        "answer": state.answer,
+        "chunks_seen": state.chunks_seen,
+        "summaries_stored": state.chunks_stored,
+        "verbatim_stored": state.verbatim_stored,
+        "purged": state.purged,
+    }
 
 
 @app.get("/v1/knowledge/status")

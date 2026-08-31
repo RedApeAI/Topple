@@ -53,7 +53,7 @@
   --color-channel-instagram-to: var(--channel-instagram-to);
 
   /* Mail client surface — the Gmail-style screen keeps its own neutral ramp
-     so it reads as a real mail client inside the Plucia canvas. */
+     so it reads as a real mail client inside the RedApeAI canvas. */
   --color-mail-surface: var(--mail-surface);
   --color-mail-rail: var(--mail-rail);
   --color-mail-rail-active: var(--mail-rail-active);

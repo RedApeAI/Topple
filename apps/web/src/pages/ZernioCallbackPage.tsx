@@ -30,7 +30,7 @@ export function ZernioCallbackPage() {
   useEffect(() => {
     const finish = (result: Omit<ZernioOAuthResult, "type" | "timestamp">) => {
       publishOAuthResult({
-        type: "plucia:zernio-oauth",
+        type: "redape:zernio-oauth",
         timestamp: Date.now(),
         ...result,
       });
@@ -104,7 +104,7 @@ export function ZernioCallbackPage() {
               Finishing your connection
             </h1>
             <p className="mt-2 text-[14px] text-muted-foreground">
-              Verifying the account with Zernio and bringing you back to Plucia…
+              Verifying the account with Zernio and bringing you back to RedApeAI…
             </p>
           </>
         )}

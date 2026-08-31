@@ -1,4 +1,4 @@
-# Plucia Monorepo
+# RedApeAI Monorepo
 
 This repo is wired as a pnpm + Turborepo workspace.
 

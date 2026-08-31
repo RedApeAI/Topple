@@ -432,16 +432,42 @@ async function labelIdForName(token: string, name: string): Promise<string> {
 // --------------------------------------------------------------------------
 // Reads
 // --------------------------------------------------------------------------
-/** Gmail search syntax per mailbox view. */
-const BOX_QUERY: Record<string, string> = {
-  inbox: "in:inbox",
-  sent: "in:sent",
-  drafts: "in:drafts",
-  archive: "-in:inbox -in:sent -in:trash -in:spam",
-  trash: "in:trash",
-  spam: "in:spam",
-  starred: "is:starred",
-  all: "in:anywhere",
+/**
+ * How each mailbox view is addressed on Gmail's side.
+ *
+ * System boxes go through `labelIds`, which is an exact match on the label
+ * Gmail itself assigns — `deriveBox` reads those same labels back, so the two
+ * directions cannot drift. Only the two views with no label of their own fall
+ * back to search syntax: "archive" is the *absence* of INBOX, and "all" is
+ * everything.
+ *
+ * `spamTrash` is not optional decoration. `messages.list` drops SPAM and TRASH
+ * from every response unless `includeSpamTrash` is set, and it does so even
+ * when the query names them explicitly — so `q=in:trash` on its own returns an
+ * empty page, which is exactly what the Trash view used to show.
+ */
+interface BoxLookup {
+  labelIds?: string[];
+  q?: string;
+  spamTrash?: boolean;
+}
+
+const BOX_LOOKUP: Record<string, BoxLookup> = {
+  inbox: { labelIds: ["INBOX"] },
+  sent: { labelIds: ["SENT"] },
+  drafts: { labelIds: ["DRAFT"] },
+  starred: { labelIds: ["STARRED"] },
+  trash: { labelIds: ["TRASH"], spamTrash: true },
+  spam: { labelIds: ["SPAM"], spamTrash: true },
+  // Anything filed away: not in the inbox, not something this mailbox wrote or
+  // is still writing, and not a Hangouts/Chat record.
+  archive: { q: "-in:inbox -in:sent -in:draft -in:chats" },
+  // Live mail wherever it sits — inbox, sent or filed away. Backs the label
+  // views, since a label can be on any of those, while leaving
+  // `includeSpamTrash` off is what keeps a labelled message in the bin out of
+  // them.
+  active: { q: "-in:chats" },
+  all: { q: "in:anywhere", spamTrash: true },
 };
 
 export interface ListOptions {
@@ -459,13 +485,16 @@ export async function listMessages(
   nextPageToken?: string;
   labels: string[];
 }> {
-  const parts = [BOX_QUERY[options.box ?? "inbox"] ?? "in:inbox"];
-  if (options.search?.trim()) parts.push(options.search.trim());
+  const lookup = BOX_LOOKUP[options.box ?? "inbox"] ?? BOX_LOOKUP.inbox!;
 
   const params = new URLSearchParams({
-    q: parts.join(" "),
     maxResults: String(Math.min(options.limit ?? 30, 100)),
   });
+  for (const labelId of lookup.labelIds ?? []) params.append("labelIds", labelId);
+
+  const search = [lookup.q, options.search?.trim()].filter(Boolean).join(" ");
+  if (search) params.set("q", search);
+  if (lookup.spamTrash) params.set("includeSpamTrash", "true");
   if (options.pageToken) params.set("pageToken", options.pageToken);
 
   const page = await gmailFetch<{

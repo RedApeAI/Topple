@@ -30,7 +30,7 @@ export function WhatsAppPage() {
   );
 
   useEffect(() => {
-    document.title = "WhatsApp — Plucia";
+    document.title = "WhatsApp — RedApeAI";
     void load().catch(() => undefined);
   }, [load]);
 

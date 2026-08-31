@@ -76,9 +76,9 @@ const SWIPE_MS = 550;
 const TOAST_MS = 1700;
 
 /**
- * The "Just Tell Plucia" chat-notification stack, animated as an infinite
+ * The "Just Tell RedApeAI" chat-notification stack, animated as an infinite
  * 3-card carousel: the front card swipes away to the right (with a
- * "Plucia replied to the message" toast), and the other two cards advance
+ * "RedApeAI replied to the message" toast), and the other two cards advance
  * forward one slot. All three cards keep cycling through front/middle/back
  * forever — needs real state/timers, hence a client component.
  */
@@ -205,7 +205,7 @@ export default function NotificationCarousel() {
               />
             </svg>
             <p className="font-inter font-medium text-[12.5px] text-white">
-              Plucia replied to the message
+              RedApeAI replied to the message
             </p>
           </motion.div>
         )}

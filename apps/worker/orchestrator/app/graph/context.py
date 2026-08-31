@@ -24,9 +24,25 @@ from typing import Any
 class GraphContext:
     """Dependencies for one graph run."""
 
-    db: Any
+    db: Any = None
     #: Post-response work collected during the turn. Nodes that perform
     #: outward-facing I/O hand it here rather than awaiting it, so "this is
     #: off the response path" is declared at the node that knows, not
     #: rediscovered by whoever reads the handler.
     background: Any = None
+
+    # ---- document ingest -------------------------------------------------
+    #: The uploaded bytes. Carried on the context rather than on state so they
+    #: are never a serialisable field — `forget_upload` drops the reference,
+    #: and nothing that dumps state can take them along.
+    upload: bytes = b""
+    #: The tenant runtime, for model resolution during ingest.
+    runtime: Any = None
+    #: Also keep the author's own words as semantic memory. Off by default:
+    #: episodic summaries are the requested behaviour, and verbatim storage is
+    #: what makes a document quotable, which is a separate decision.
+    store_verbatim: bool = False
+
+    def forget_upload(self) -> None:
+        """Drop the raw bytes. Called by the purge node."""
+        self.upload = b""

@@ -26,7 +26,7 @@ from . import events
 
 logger = logging.getLogger(__name__)
 
-KEY_PREFIX = "plucia:directory"
+KEY_PREFIX = "redape:directory"
 TTL_SECONDS = 24 * 60 * 60
 OP_TIMEOUT_SECONDS = 5.0
 FETCH_TIMEOUT_SECONDS = 120.0  # a cold harvest is hundreds of Gmail round trips

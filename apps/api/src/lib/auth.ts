@@ -17,7 +17,7 @@ import { env } from "./env.js";
 import { validatePassword } from "./security.js";
 
 /**
- * Signing in with Google also grants Plucia the user's mailbox, so the mail
+ * Signing in with Google also grants RedApeAI the user's mailbox, so the mail
  * feature is a real client rather than a fixture.
  *
  * `gmail.modify` is a Google *restricted* scope — it needs an app verification
@@ -62,8 +62,8 @@ const authAllowedHosts = [
 ];
 
 export const auth = betterAuth({
-  appName: "Plucia",
-  // Plucia is accessed directly on localhost and through HTTPS development
+  appName: "RedApeAI",
+  // RedApeAI is accessed directly on localhost and through HTTPS development
   // tunnels. Resolve callbacks from the incoming, allowlisted host so OAuth
   // state cookies are created and verified on the same browser origin.
   baseURL: {

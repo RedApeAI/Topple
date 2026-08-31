@@ -11,7 +11,7 @@ from __future__ import annotations
 from scripts.normalize_identities import plan_changes
 
 
-def _contact(contact_id, identities, name=None, name_lower=..., tenant="plucia"):
+def _contact(contact_id, identities, name=None, name_lower=..., tenant="redape"):
     profile = {"name": name}
     if name_lower is not ...:
         profile["name_lower"] = name_lower
@@ -78,8 +78,8 @@ def test_case_variant_emails_collide_and_neither_is_written():
             _contact("b", [("email", "ada@example.com")], name="Ada L"),
         ]
     )
-    assert list(collisions) == [("plucia", "email", "ada@example.com")]
-    assert sorted(collisions[("plucia", "email", "ada@example.com")]) == ["a", "b"]
+    assert list(collisions) == [("redape", "email", "ada@example.com")]
+    assert sorted(collisions[("redape", "email", "ada@example.com")]) == ["a", "b"]
     assert updates == [], "writing either half would violate the unique index"
 
 
@@ -98,7 +98,7 @@ def test_collision_only_excludes_the_contacts_involved():
 def test_same_tenant_required_for_a_collision():
     _, collisions = plan_changes(
         [
-            _contact("a", [("email", "ada@example.com")], tenant="plucia"),
+            _contact("a", [("email", "ada@example.com")], tenant="redape"),
             _contact("b", [("email", "ada@example.com")], tenant="acme"),
         ]
     )
@@ -123,7 +123,7 @@ def test_none_external_id_becomes_empty_and_is_dropped():
         [
             {
                 "_id": "a",
-                "tenant_id": "plucia",
+                "tenant_id": "redape",
                 "identities": [{"channel": "email", "external_id": None}],
                 "profile": {"name": "Ada"},
             }

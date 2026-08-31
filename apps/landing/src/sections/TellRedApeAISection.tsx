@@ -6,7 +6,7 @@ import PromptCardAnimated from "@/components/PromptCardAnimated";
 import PulseGlow from "@/components/PulseGlow";
 
 /**
- * "Just Tell Plucia What You Need." — Figma 2877:21319.
+ * "Just Tell RedApeAI What You Need." — Figma 2877:21319.
  * Right side is a dark card holding a "svg motion section": chat notifications,
  * an AI orb, connected lines and channel icons. All connector pulses share
  * delay 0 so the three lines fire in perfect sync.
@@ -49,15 +49,15 @@ function ChannelBubble({
   );
 }
 
-export default function TellPluciaSection() {
+export default function TellRedApeAISection() {
   return (
     <section className="flex flex-col lg:flex-row gap-[105px] lg:gap-[60px] xl:gap-[117px] items-center mt-[165px] lg:mt-[174px] mx-auto px-[20px] sm:px-[40px] relative w-full max-w-[1272px]">
       <div className="order-2 lg:order-none flex flex-col gap-[20px] lg:gap-[28px] items-start leading-[normal] relative w-full lg:min-w-0 max-w-[558px]">
         <p className="font-manrope font-semibold relative shrink-0 text-[clamp(32px,5vw,50px)] text-black tracking-[-0.05em] w-full">
-          <DistortText text="Just Tell Plucia What You Need." />
+          <DistortText text="Just Tell RedApeAI What You Need." />
         </p>
         <p className="font-inter font-normal relative shrink-0 text-[17px] sm:text-[21px] text-[#202020] tracking-[-0.05em] w-full">
-          Type a simple instruction in natural language, and Plucia instantly
+          Type a simple instruction in natural language, and RedApeAI instantly
           understands your intent, connects every relevant channel, gathers
           customer context, and begins executing the work just like an
           experienced business operator.
@@ -76,7 +76,7 @@ export default function TellPluciaSection() {
       >
         <div className="bg-[#333] h-[499px] relative rounded-[24px] shrink-0 w-[517px] overflow-visible">
           <div
-            data-motion-section="tell-plucia"
+            data-motion-section="tell-redape"
             className="-translate-x-1/2 absolute h-[609.184px] left-1/2 top-[-55.28px] w-[469.613px]"
           >
             {/* connected lines — pulse travels up through each toward the orb/notification */}

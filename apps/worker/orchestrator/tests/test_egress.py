@@ -24,7 +24,7 @@ from app.stores import directory
 
 PLAYBOOK = load_playbook("real-estate-v1", 8)
 RUNTIME = RuntimeConfig.model_validate({
-    "playbook_id": "real-estate-v1", "knowledge_source_id": "plucia_re",
+    "playbook_id": "real-estate-v1", "knowledge_source_id": "redape_re",
     "model_id": "m", "adapter_id": None, "playbook_version": 8,
     "prompt_version": "2026-06-01",
 })
@@ -127,7 +127,7 @@ async def test_operator_autopilot_cannot_send_a_forbidden_phrase(db, monkeypatch
     _scripted(monkeypatch, FORBIDDEN)
 
     result = await agent.run_command(
-        db, tenant_id="plucia", text="tell them about the returns",
+        db, tenant_id="redape", text="tell them about the returns",
         mode="autopilot", runtime=RUNTIME,
     )
 
@@ -143,7 +143,7 @@ async def test_a_clean_operator_message_still_sends(db, monkeypatch, sent):
     _scripted(monkeypatch, "Happy to help — shall I book you a viewing?")
 
     result = await agent.run_command(
-        db, tenant_id="plucia", text="ask about a viewing",
+        db, tenant_id="redape", text="ask about a viewing",
         mode="autopilot", runtime=RUNTIME,
     )
 
@@ -157,7 +157,7 @@ async def test_operator_without_a_runtime_still_sanitises(db, monkeypatch, sent)
     _scripted(monkeypatch, "Message from send_message tool")
 
     result = await agent.run_command(
-        db, tenant_id="plucia", text="say hi", mode="autopilot", runtime=None,
+        db, tenant_id="redape", text="say hi", mode="autopilot", runtime=None,
     )
 
     action = result["message"]["action"]

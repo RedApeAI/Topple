@@ -16,8 +16,8 @@ from app.stores.knowledge import TENANT_KEY, USER_KEY, KnowledgeScope
 
 from .conftest import make_envelope
 
-ALICE = KnowledgeScope(tenant_id="plucia", user_id="alice")
-BOB = KnowledgeScope(tenant_id="plucia", user_id="bob")
+ALICE = KnowledgeScope(tenant_id="redape", user_id="alice")
+BOB = KnowledgeScope(tenant_id="redape", user_id="bob")
 OTHER_ORG = KnowledgeScope(tenant_id="acme", user_id="alice")
 
 
@@ -137,7 +137,7 @@ async def test_a_missing_user_returns_nothing_not_everything(fake):
     """The whole point. Unfiltered results here would be a breach; no facts is
     merely a worse answer."""
     hits, flag = await qdrant.retrieve(
-        "kb", "price sheet", 10, 0.3, scope=KnowledgeScope(tenant_id="plucia")
+        "kb", "price sheet", 10, 0.3, scope=KnowledgeScope(tenant_id="redape")
     )
     assert hits == []
     assert flag == "knowledge_scope_missing"
@@ -178,7 +178,7 @@ async def test_ingestion_refuses_an_incomplete_scope(fake):
     """An unstamped point can never match a filter, so it would be invisible
     forever — better to refuse than to write dead data."""
     with pytest.raises(ValueError, match="complete scope"):
-        await qdrant.ingest("kb", KnowledgeScope(tenant_id="plucia"), [{"text": "x"}])
+        await qdrant.ingest("kb", KnowledgeScope(tenant_id="redape"), [{"text": "x"}])
 
 
 async def test_forgetting_a_user_leaves_everyone_else_intact(fake):
@@ -191,7 +191,7 @@ async def test_forgetting_a_user_leaves_everyone_else_intact(fake):
 
 
 async def test_forgetting_a_tenant_takes_its_users_with_it(fake):
-    await qdrant.forget_tenant("kb", "plucia")
+    await qdrant.forget_tenant("kb", "redape")
 
     for scope in (ALICE, BOB):
         hits, _ = await qdrant.retrieve("kb", "price", 10, 0.3, scope=scope)
@@ -239,7 +239,7 @@ async def test_a_turn_retrieves_only_the_signed_in_user_s_knowledge(
     await run_turn(make_envelope(request_id="kb-2", user_id="alice"))
 
     assert seen, "retrieval must have been reached"
-    assert all(s.user_id == "alice" and s.tenant_id == "plucia" for s in seen)
+    assert all(s.user_id == "alice" and s.tenant_id == "redape" for s in seen)
 
 
 # --------------------------------------------------------------------------- #

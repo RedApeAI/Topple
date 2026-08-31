@@ -21,12 +21,12 @@ export function AuthHeader({
     <header className="flex items-center justify-between mx-auto max-w-[1440px] px-[20px] sm:px-[48px] py-[24px] w-full">
       <Link href="/" className="flex gap-[7px] items-center">
         <img
-          alt="Plucia logo"
+          alt="RedApeAI logo"
           className="size-[23px]"
-          src="/assets/icons/plucia-logo.svg"
+          src="/assets/icons/redape-logo.svg"
         />
         <span className="font-geist font-medium text-[#202020] text-[23px] tracking-[-0.58px]">
-          Plucia
+          RedApeAI
         </span>
       </Link>
       <p className="font-inter text-[14px] text-[#606060]">

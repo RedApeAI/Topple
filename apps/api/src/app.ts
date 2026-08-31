@@ -54,7 +54,7 @@ app.use(
 );
 
 app.get("/", (context) =>
-  context.json({ ok: true, service: "plucia-api", version: 1 }),
+  context.json({ ok: true, service: "redape-api", version: 1 }),
 );
 app.get("/healthz", (context) => context.json({ ok: true }));
 

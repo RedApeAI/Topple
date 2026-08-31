@@ -1,7 +1,7 @@
 """Robot addresses are never offered as people, and never messaged.
 
 The failure this exists for: asked to schedule with "Ariyaman", the agent
-offered two candidates — the real `ariyaman@plucia.com`, and "Ariyaman Debnath"
+offered two candidates — the real `ariyaman@redape.com`, and "Ariyaman Debnath"
 at `drive-shares-dm-noreply@google.com`. The second is Google Drive's
 share-notification sender; Drive puts the *sharer's* display name in the From
 header, so the mailbox harvest learned a real person's name against an address
@@ -54,7 +54,7 @@ def test_automated_senders_are_unreachable(address):
 @pytest.mark.parametrize(
     "address",
     [
-        "ariyaman@plucia.com",
+        "ariyaman@redape.com",
         # Shared mailboxes real people answer — filtering these would break
         # ordinary sales correspondence, which is why the rule is narrow.
         "support@acme.com",
@@ -80,8 +80,8 @@ def test_malformed_input_is_not_unreachable():
 
 
 def test_reachable_filters_a_directory():
-    entries = [{"email": "a@plucia.com"}, {"email": DRIVE_NOREPLY}]
-    assert [e["email"] for e in reachable(entries)] == ["a@plucia.com"]
+    entries = [{"email": "a@redape.com"}, {"email": DRIVE_NOREPLY}]
+    assert [e["email"] for e in reachable(entries)] == ["a@redape.com"]
 
 
 # --------------------------------------------------------------------------- #
@@ -93,30 +93,30 @@ async def test_the_drive_robot_is_not_offered_as_a_candidate(db, monkeypatch):
         return [
             {"email": DRIVE_NOREPLY, "name": "Ariyaman Debnath",
              "sent": 0, "received": 4, "lastSeen": "2026-08-15T10:00:00+00:00"},
-            {"email": "ariyaman@plucia.com", "name": "Ariyaman",
+            {"email": "ariyaman@redape.com", "name": "Ariyaman",
              "sent": 2, "received": 1, "lastSeen": "2026-08-10T10:00:00+00:00"},
         ]
 
     monkeypatch.setattr(directory, "entries_for", harvested)
-    found = await recipients.find_recipients(db, "plucia", "u1", "Ariyaman")
+    found = await recipients.find_recipients(db, "redape", "u1", "Ariyaman")
 
     addresses = [c["id"] for m in found for c in m["channels"]]
     assert DRIVE_NOREPLY not in addresses
-    assert addresses == ["ariyaman@plucia.com"], "one real Ariyaman, no ambiguity"
+    assert addresses == ["ariyaman@redape.com"], "one real Ariyaman, no ambiguity"
 
 
 async def test_a_genuine_ambiguity_is_still_offered(db, monkeypatch):
     """The filter must not collapse real choices into a false certainty."""
     async def harvested(tenant_id, user_id):
         return [
-            {"email": "ariyaman.a@plucia.com", "name": "Ariyaman A",
+            {"email": "ariyaman.a@redape.com", "name": "Ariyaman A",
              "sent": 1, "received": 0, "lastSeen": "2026-08-15T10:00:00+00:00"},
             {"email": "ariyaman.b@acme.com", "name": "Ariyaman B",
              "sent": 1, "received": 0, "lastSeen": "2026-08-14T10:00:00+00:00"},
         ]
 
     monkeypatch.setattr(directory, "entries_for", harvested)
-    found = await recipients.find_recipients(db, "plucia", "u1", "Ariyaman")
+    found = await recipients.find_recipients(db, "redape", "u1", "Ariyaman")
     assert len(found) == 2
 
 
@@ -150,7 +150,7 @@ async def test_sending_to_a_noreply_address_fails_rather_than_silently_vanishing
     monkeypatch.setattr(gateway, "chat_text", chat)
 
     result = await agent.run_command(
-        db, tenant_id="plucia", text=f"email {DRIVE_NOREPLY}", mode="autopilot"
+        db, tenant_id="redape", text=f"email {DRIVE_NOREPLY}", mode="autopilot"
     )
 
     action = result["message"]["action"]

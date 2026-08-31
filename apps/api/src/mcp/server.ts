@@ -9,7 +9,7 @@ import {
 } from "../services/connectors.service.js";
 
 /**
- * Plucia's MCP server: the agent's window onto a user's connected accounts.
+ * RedApeAI's MCP server: the agent's window onto a user's connected accounts.
  *
  * Built per request and bound to one user. That binding is the point — MCP
  * servers are normally single-user desktop processes reading credentials off
@@ -323,7 +323,7 @@ export async function buildMcpServer(
   mode: AgentMode = "copilot",
 ): Promise<McpServer> {
   const server = new McpServer(
-    { name: "plucia", version: "1.0.0" },
+    { name: "redape", version: "1.0.0" },
     {
       instructions:
         "Tools for the signed-in salesperson's connected accounts. Every tool acts as that person; never assume access to anyone else's data.",

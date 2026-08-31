@@ -44,7 +44,7 @@ class NodeTimeout(Exception):
 
 #: Stamped onto a propagating exception by `@critical` so the run's caller can
 #: fill in `error.step` without wrapping the exception in another type.
-_NODE_ATTR = "_plucia_failed_node"
+_NODE_ATTR = "_redape_failed_node"
 
 
 class NodeError(BaseModel):

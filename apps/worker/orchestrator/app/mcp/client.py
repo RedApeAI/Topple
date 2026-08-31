@@ -41,11 +41,11 @@ def _endpoint() -> str | None:
 
 
 def _headers(user_id: str, mode: str | None = None) -> dict[str, str]:
-    headers = {"X-Plucia-User-Id": user_id}
+    headers = {"X-RedApeAI-User-Id": user_id}
     # Mode travels as a header so the server can bind what a tool may do —
     # notifying external people is gated there, not by anything the model says.
     if mode:
-        headers["X-Plucia-Mode"] = mode
+        headers["X-RedApeAI-Mode"] = mode
     if settings.outbound_webhook_secret:
         headers["X-Outbound-Secret"] = settings.outbound_webhook_secret
     return headers

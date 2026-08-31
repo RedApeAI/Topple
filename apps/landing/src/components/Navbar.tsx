@@ -9,14 +9,14 @@ const logoMark = (
   <>
     <div className="relative shrink-0 size-[23.211px]">
       <img
-        alt="Plucia logo"
+        alt="RedApeAI logo"
         className="absolute block inset-0 max-w-none size-full"
-        src="/assets/icons/plucia-logo.svg"
+        src="/assets/icons/redape-logo.svg"
       />
     </div>
     <div className="flex flex-col items-start relative shrink-0">
       <div className="flex flex-col font-geist font-medium justify-center leading-[0] relative shrink-0 text-[#202020] text-[23.211px] tracking-[-0.5803px] whitespace-nowrap">
-        <p className="leading-[32.495px]">Plucia</p>
+        <p className="leading-[32.495px]">RedApeAI</p>
       </div>
     </div>
   </>

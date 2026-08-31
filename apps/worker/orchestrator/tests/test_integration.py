@@ -52,11 +52,11 @@ async def test_mongo_roundtrip_and_idempotency_index(real_mongo, llm, retrieval)
 async def test_qdrant_retrieval_roundtrip():
     pytest.importorskip("fastembed")
     client = qdrant_store.get_client()
-    if not await client.collection_exists("plucia_re"):
+    if not await client.collection_exists("redape_re"):
         pytest.skip("run seeds/seed_qdrant.py first")
 
     hits, flag = await qdrant_store.retrieve(
-        "plucia_re", "2 bedroom price in Dubai Marina", top_k=4, min_score=0.35
+        "redape_re", "2 bedroom price in Dubai Marina", top_k=4, min_score=0.35
     )
     assert flag is None
     assert hits, "expected at least one hit from the seeded collection"

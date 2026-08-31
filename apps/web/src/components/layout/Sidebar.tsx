@@ -88,7 +88,7 @@ export function Sidebar() {
               {!isRail && (
                 <div className="flex items-center gap-1">
                   <span className="font-heading text-[16px] font-semibold text-foreground">
-                    Plucia
+                    RedApeAI
                   </span>
                   <span className="rounded-full bg-primary px-1.5 py-0.5 text-[11px] font-medium text-primary-foreground">
                     Pro

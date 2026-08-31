@@ -12,11 +12,20 @@ import { apiClient, errorMessage } from "@/lib/api/client";
 export interface UploadedDocument {
   filename: string;
   doc_id: string;
+  /** Episodic summaries stored in Qdrant. */
   chunks: number;
+  /** The immediate answer, when a question was sent with the file. */
+  answer?: string;
+  /** Verbatim passages kept as quotable semantic memory, if requested. */
+  verbatim?: number;
+  /** The server confirming the raw document was discarded. */
+  purged?: boolean;
 }
 
 /** What the server will actually read. Mirrors `knowledge.service.ts`. */
 export const ACCEPTED_EXTENSIONS = [
+  ".pdf",
+  ".docx",
   ".txt",
   ".md",
   ".markdown",

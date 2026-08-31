@@ -4,7 +4,6 @@ import { z } from "zod";
 import { jsonValidator } from "../lib/validation.js";
 import { requireAuth } from "../middleware/require-auth.js";
 import { rateLimit } from "../middleware/rate-limit.js";
-import * as knowledge from "../services/knowledge.service.js";
 import * as orchestrator from "../services/orchestrator.service.js";
 import { resolveTenant } from "../services/tenant.service.js";
 import type { AppEnv } from "../types.js";
@@ -32,6 +31,9 @@ async function scopeFor(context: Context<AppEnv>): Promise<orchestrator.Scope> {
 }
 
 const idParam = z.string().trim().min(1).max(128);
+
+/** Mirrors the orchestrator's ceiling. Enforced both sides. */
+const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
 
 // --------------------------------------------------------------------------
 // Knowledge base
@@ -62,30 +64,43 @@ orchestratorRoutes.post(
         400,
       );
     }
-    if (file.size > knowledge.MAX_UPLOAD_BYTES) {
+    if (file.size > MAX_UPLOAD_BYTES) {
       return context.json(
         {
           error: {
             code: "FILE_TOO_LARGE",
-            message: `Files must be under ${Math.floor(knowledge.MAX_UPLOAD_BYTES / 1024 / 1024)} MB.`,
+            message: `Files must be under ${Math.floor(MAX_UPLOAD_BYTES / 1024 / 1024)} MB.`,
           },
         },
         413,
       );
     }
 
-    const chunks = knowledge.toChunks(
-      file.name,
-      new Uint8Array(await file.arrayBuffer()),
+    const form2 = form!;
+    const question = form2.get("question");
+    const storeVerbatim = form2.get("store_verbatim") === "true";
+
+    const result = await orchestrator.uploadDocument(
+      await scopeFor(context),
+      {
+        name: file.name,
+        bytes: new Uint8Array(await file.arrayBuffer()),
+        type: file.type || "application/octet-stream",
+      },
+      {
+        ...(typeof question === "string" && question ? { question } : {}),
+        storeVerbatim,
+      },
     );
-    const scope = await scopeFor(context);
-    const result = await orchestrator.ingestKnowledge(scope, chunks);
 
     return context.json({
       data: {
-        filename: file.name,
-        doc_id: chunks[0]!.doc_id,
-        chunks: result.chunks_written,
+        filename: result.filename,
+        doc_id: result.doc_id,
+        chunks: result.summaries_stored,
+        answer: result.answer,
+        verbatim: result.verbatim_stored,
+        purged: result.purged,
       },
     });
   },

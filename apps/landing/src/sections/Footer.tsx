@@ -24,14 +24,14 @@ export default function Footer() {
               <div className="flex gap-[11.822px] items-center relative shrink-0">
                 <div className="relative shrink-0 size-[39.408px]">
                   <img
-                    alt="Plucia"
+                    alt="RedApeAI"
                     className="absolute block inset-0 max-w-none size-full"
-                    src="/assets/icons/plucia-logo-lg.svg"
+                    src="/assets/icons/redape-logo-lg.svg"
                   />
                 </div>
                 <div className="flex flex-col items-start relative shrink-0">
                   <div className="flex flex-col font-geist font-medium justify-center leading-[0] relative shrink-0 text-[#202020] text-[39.408px] tracking-[-0.9852px] whitespace-nowrap">
-                    <p className="leading-[55.171px]">Plucia</p>
+                    <p className="leading-[55.171px]">RedApeAI</p>
                   </div>
                 </div>
               </div>
@@ -116,7 +116,7 @@ export default function Footer() {
           <div className="flex flex-col sm:flex-row gap-[24px] sm:gap-[16px] items-start sm:items-center relative shrink-0 w-full">
             <div className="flex w-full sm:w-auto sm:flex-[1_0_0] gap-[8px] items-center sm:min-w-px relative">
               <a
-                href="https://www.linkedin.com/company/plucia/"
+                href="https://www.linkedin.com/company/redape/"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="bg-[#1b1819] flex items-center justify-center relative rounded-[40px] shrink-0 size-[40px]"
@@ -130,7 +130,7 @@ export default function Footer() {
                 </div>
               </a>
               <a
-                href="https://www.instagram.com/_plucia_/"
+                href="https://www.instagram.com/_redape_/"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="bg-[#1b1819] flex items-center justify-center relative rounded-[40px] shrink-0 size-[40px]"
@@ -144,7 +144,7 @@ export default function Footer() {
                 </div>
               </a>
               <a
-                href="https://x.com/plucia_ai"
+                href="https://x.com/redape_ai"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="bg-[#1b1819] flex items-center justify-center relative rounded-[40px] shrink-0 size-[40px]"

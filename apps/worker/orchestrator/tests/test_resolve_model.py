@@ -22,7 +22,7 @@ from app.schemas.envelope import RuntimeConfig
 def _runtime(adapter_id: str | None) -> RuntimeConfig:
     return RuntimeConfig(
         playbook_id="real-estate-v1",
-        knowledge_source_id="plucia_re",
+        knowledge_source_id="redape_re",
         model_id="qwen3.5-9b-base",
         adapter_id=adapter_id,
         playbook_version=8,
