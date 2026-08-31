@@ -4,7 +4,7 @@ import { InboxScreen } from "@/features/inbox/components/InboxScreen";
 
 export function AiCallingPage() {
   useEffect(() => {
-    document.title = "AI Cold Calling — Plucia";
+    document.title = "AI Cold Calling — RedApeAI";
   }, []);
 
   return (

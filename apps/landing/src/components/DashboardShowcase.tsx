@@ -234,7 +234,7 @@ export default function DashboardShowcase() {
         className="relative z-[1] border border-solid border-white aspect-[1107.5/787.5] overflow-clip rounded-[12px] lg:rounded-[18px] shadow-[0px_4px_30px_-13px_rgba(0,0,0,0.15)] w-full"
       >
         <img
-          alt="Plucia dashboard"
+          alt="RedApeAI dashboard"
           className="absolute inset-0 max-w-none object-cover pointer-events-none rounded-[inherit] size-full"
           src="/assets/images/hero-dashboard.png"
         />

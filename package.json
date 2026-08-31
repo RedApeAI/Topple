@@ -1,5 +1,5 @@
 {
-  "name": "plucia-new",
+  "name": "redape-new",
   "private": true,
   "scripts": {
     "build": "turbo run build",

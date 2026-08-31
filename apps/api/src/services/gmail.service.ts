@@ -432,16 +432,42 @@ async function labelIdForName(token: string, name: string): Promise<string> {
 // --------------------------------------------------------------------------
 // Reads
 // --------------------------------------------------------------------------
-/** Gmail search syntax per mailbox view. */
-const BOX_QUERY: Record<string, string> = {
-  inbox: "in:inbox",
-  sent: "in:sent",
-  drafts: "in:drafts",
-  archive: "-in:inbox -in:sent -in:trash -in:spam",
-  trash: "in:trash",
-  spam: "in:spam",
-  starred: "is:starred",
-  all: "in:anywhere",
+/**
+ * How each mailbox view is addressed on Gmail's side.
+ *
+ * System boxes go through `labelIds`, which is an exact match on the label
+ * Gmail itself assigns — `deriveBox` reads those same labels back, so the two
+ * directions cannot drift. Only the two views with no label of their own fall
+ * back to search syntax: "archive" is the *absence* of INBOX, and "all" is
+ * everything.
+ *
+ * `spamTrash` is not optional decoration. `messages.list` drops SPAM and TRASH
+ * from every response unless `includeSpamTrash` is set, and it does so even
+ * when the query names them explicitly — so `q=in:trash` on its own returns an
+ * empty page, which is exactly what the Trash view used to show.
+ */
+interface BoxLookup {
+  labelIds?: string[];
+  q?: string;
+  spamTrash?: boolean;
+}
+
+const BOX_LOOKUP: Record<string, BoxLookup> = {
+  inbox: { labelIds: ["INBOX"] },
+  sent: { labelIds: ["SENT"] },
+  drafts: { labelIds: ["DRAFT"] },
+  starred: { labelIds: ["STARRED"] },
+  trash: { labelIds: ["TRASH"], spamTrash: true },
+  spam: { labelIds: ["SPAM"], spamTrash: true },
+  // Anything filed away: not in the inbox, not something this mailbox wrote or
+  // is still writing, and not a Hangouts/Chat record.
+  archive: { q: "-in:inbox -in:sent -in:draft -in:chats" },
+  // Live mail wherever it sits — inbox, sent or filed away. Backs the label
+  // views, since a label can be on any of those, while leaving
+  // `includeSpamTrash` off is what keeps a labelled message in the bin out of
+  // them.
+  active: { q: "-in:chats" },
+  all: { q: "in:anywhere", spamTrash: true },
 };
 
 export interface ListOptions {
@@ -459,13 +485,16 @@ export async function listMessages(
   nextPageToken?: string;
   labels: string[];
 }> {
-  const parts = [BOX_QUERY[options.box ?? "inbox"] ?? "in:inbox"];
-  if (options.search?.trim()) parts.push(options.search.trim());
+  const lookup = BOX_LOOKUP[options.box ?? "inbox"] ?? BOX_LOOKUP.inbox!;
 
   const params = new URLSearchParams({
-    q: parts.join(" "),
     maxResults: String(Math.min(options.limit ?? 30, 100)),
   });
+  for (const labelId of lookup.labelIds ?? []) params.append("labelIds", labelId);
+
+  const search = [lookup.q, options.search?.trim()].filter(Boolean).join(" ");
+  if (search) params.set("q", search);
+  if (lookup.spamTrash) params.set("includeSpamTrash", "true");
   if (options.pageToken) params.set("pageToken", options.pageToken);
 
   const page = await gmailFetch<{
@@ -703,6 +732,50 @@ export interface Correspondent {
  * The mailbox owner is excluded: they appear on every single message and would
  * otherwise rank first for every query.
  */
+/**
+ * Addresses that structurally cannot receive a reply.
+ *
+ * Deliberately narrow: `support@`, `sales@`, `hello@` and `billing@` are real
+ * mailboxes real people answer, and excluding them would break ordinary sales
+ * correspondence. Mirrors `app/engine/addressability.py` in the orchestrator —
+ * both ends filter, because this cache has a 24h TTL and is already warm with
+ * entries harvested before the rule existed.
+ */
+const UNREACHABLE_SUBSTRINGS = [
+  "noreply",
+  "donotreply",
+  "mailerdaemon",
+  "autoreply",
+  "autoresponder",
+];
+
+const UNREACHABLE_EXACT = new Set([
+  "postmaster",
+  "bounce",
+  "bounces",
+  "notification",
+  "notifications",
+  "notify",
+  "automated",
+  "daemon",
+  "unsubscribe",
+]);
+
+export function isUnreachable(email: string): boolean {
+  const at = email.indexOf("@");
+  if (at <= 0) return false;
+  // `no-reply`, `no_reply` and `no.reply` are one intent spelled three ways;
+  // a `+tag` is dropped so `noreply+123@` still matches.
+  const local = email
+    .slice(0, at)
+    .toLowerCase()
+    .split("+")[0]!
+    .replace(/[._-]/g, "");
+  if (!local) return false;
+  if (UNREACHABLE_EXACT.has(local)) return true;
+  return UNREACHABLE_SUBSTRINGS.some((marker) => local.includes(marker));
+}
+
 export async function listCorrespondents(
   token: string,
   options: { limit?: number } = {},
@@ -738,6 +811,12 @@ export async function listCorrespondents(
   ) => {
     const email = address.email.trim().toLowerCase();
     if (!email || !email.includes("@") || email === self) return;
+    // Automated senders are not correspondents. Google Drive sends
+    // "X shared a document with you" from `drive-shares-dm-noreply@google.com`
+    // with X's display name in the From header, so without this the directory
+    // learns a real person's name against an address that discards mail — and
+    // the agent will happily offer it as somebody to email.
+    if (isUnreachable(email)) return;
 
     const seen = new Date(at).toISOString();
     const existing = directory.get(email);

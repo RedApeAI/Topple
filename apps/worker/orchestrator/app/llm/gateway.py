@@ -117,6 +117,23 @@ def base_model() -> str:
     return settings.ollama_model
 
 
+def extraction_model(runtime: RuntimeConfig | None, default: str) -> str:
+    """The model for the extraction call — classification, not composition.
+
+    Deliberately layered *on top of* `resolve_model`/`base_model` rather than
+    beside them. `default` is whatever the turn already resolved for
+    generation, so with nothing configured this returns exactly that and
+    tiering is a no-op. Both planes still resolve their primary model through
+    the shared helpers; this only ever narrows one call site.
+
+    Precedence: per-tenant runtime → deployment default → the generation model.
+    """
+    override = (
+        getattr(runtime, "extraction_model_id", None) if runtime else None
+    ) or settings.extraction_model_id
+    return override or default
+
+
 def resolve_model(runtime: RuntimeConfig) -> str:
     """What goes into the request's `model` field for this tenant turn."""
     if settings.llm_backend == "vllm":
@@ -138,7 +155,27 @@ def resolve_model(runtime: RuntimeConfig) -> str:
 async def _chat(
     messages: list[dict], *, model: str, temperature: float, disable_thinking: bool
 ) -> tuple[str, LLMCallStats]:
-    """One chat completion with transport retry + thinking-kwarg fallback."""
+    """One chat completion. The seam extraction and generation call through.
+
+    Kept as a 2-tuple deliberately: it is what the parity replayer stubs, and
+    neither of those two call sites has any use for reasoning — they strip it.
+    """
+    text, stats, _reasoning = await _chat_full(
+        messages, model=model, temperature=temperature, disable_thinking=disable_thinking
+    )
+    return text, stats
+
+
+async def _chat_full(
+    messages: list[dict], *, model: str, temperature: float, disable_thinking: bool
+) -> tuple[str, LLMCallStats, str]:
+    """One chat completion with transport retry + thinking-kwarg fallback.
+
+    Returns `(content, stats, reasoning)`. `content` is exactly what the model
+    put in the content field — `<think>` blocks included, where the backend
+    inlines them — because the downstream parsers strip them and changing that
+    here would alter what extraction and generation see.
+    """
     global _thinking_kwarg_ok
     client = get_client()
     retries = 0
@@ -183,7 +220,9 @@ async def _chat(
             completion_tokens=getattr(resp.usage, "completion_tokens", 0) or 0,
             retries=retries,
         )
-        return (resp.choices[0].message.content or ""), stats
+        message = resp.choices[0].message
+        content = message.content or ""
+        return content, stats, reasoning_of(message, content)
 
     raise LLMUnavailable(f"LLM unreachable after retry: {last_exc}") from last_exc
 
@@ -193,6 +232,69 @@ async def _chat(
 # --------------------------------------------------------------------------- #
 _FENCE_RE = re.compile(r"```(?:json)?|```", re.IGNORECASE)
 _THINK_RE = re.compile(r"<think>.*?</think>", re.DOTALL)
+#: Same shape, but capturing, for reading reasoning out rather than deleting it.
+_THINK_CAPTURE_RE = re.compile(r"<think>(.*?)</think>", re.DOTALL)
+
+#: Where a backend might put reasoning when it does not inline it. Bedrock's
+#: `bedrock-mantle` passthrough for MiniMax M2 uses `reasoning` and leaves
+#: `content` completely free of `<think>` tags — verified against a live call.
+#: The others are here because this is a passthrough of a third-party API and
+#: the field name is not something we control.
+_REASONING_FIELDS = ("reasoning", "reasoning_content", "reasoning_details")
+
+
+def _reasoning_text(value: object) -> str:
+    """Flatten whatever shape a backend uses into plain text.
+
+    Seen in the wild: a bare string (Bedrock/MiniMax), and a list of blocks
+    with `text` or `summary` keys (the `reasoning_details` convention).
+    """
+    if not value:
+        return ""
+    if isinstance(value, str):
+        return value.strip()
+    if isinstance(value, dict):
+        return str(value.get("text") or value.get("summary") or "").strip()
+    if isinstance(value, list):
+        return "\n".join(filter(None, (_reasoning_text(item) for item in value)))
+    return ""
+
+
+def reasoning_of(message: object, content: str) -> str:
+    """Reasoning for one completion, from either shape.
+
+    Separate field first — that is what Bedrock actually returns — then inline
+    `<think>` blocks, which is what vLLM and Ollama produce. A backend only
+    ever uses one, but the caller should not have to know which.
+    """
+    extra = getattr(message, "model_extra", None) or {}
+    for field in _REASONING_FIELDS:
+        found = _reasoning_text(getattr(message, field, None) or extra.get(field))
+        if found:
+            return found
+    return "\n".join(m.strip() for m in _THINK_CAPTURE_RE.findall(content or "")).strip()
+
+
+class ChatResponse:
+    """One completion: text, stats, and the reasoning that produced it.
+
+    Unpacks as `(text, stats)` so it is a drop-in for the 2-tuple `chat_text`
+    used to return. Callers that want reasoning read `.reasoning`; callers that
+    don't — and test doubles that still return a plain tuple — are unaffected.
+    """
+
+    __slots__ = ("text", "stats", "reasoning")
+
+    def __init__(self, text: str, stats: LLMCallStats, reasoning: str = "") -> None:
+        self.text = text
+        self.stats = stats
+        self.reasoning = reasoning
+
+    def __iter__(self):
+        return iter((self.text, self.stats))
+
+    def __repr__(self) -> str:  # pragma: no cover — debugging aid
+        return f"ChatResponse(text={self.text[:40]!r}…, reasoning={len(self.reasoning)} chars)"
 
 
 def _parse_json_block(text: str) -> dict:
@@ -260,6 +362,50 @@ def _split_bubbles(text: str) -> list[str]:
     return bubbles[:3] if bubbles else []
 
 
+async def generate_streaming(
+    *, model: str, messages: list[dict], on_token
+) -> GenerationCall:
+    """Generation, emitting tokens as they arrive.
+
+    Only ever reached in copilot — see `egress` and the generation node. The
+    caller supplies `on_token`; failures in it are swallowed, because losing
+    the live preview must not lose the reply.
+    """
+    started = time.monotonic()
+    client = get_client()
+    kwargs: dict = {}
+    if settings.llm_max_output_tokens:
+        kwargs["max_tokens"] = settings.llm_max_output_tokens
+
+    chunks: list[str] = []
+    try:
+        stream = await client.chat.completions.create(
+            model=model, messages=messages,
+            temperature=settings.llm_generate_temperature,
+            stream=True, **kwargs,
+        )
+        async for chunk in stream:
+            if not chunk.choices:
+                continue
+            piece = chunk.choices[0].delta.content or ""
+            if piece:
+                chunks.append(piece)
+                try:
+                    await on_token(piece)
+                except Exception:  # noqa: BLE001 — the preview is not the reply
+                    logger.debug("token callback failed", exc_info=True)
+    except _TRANSIENT as exc:
+        raise LLMUnavailable(f"LLM unreachable while streaming: {exc}") from exc
+
+    text = "".join(chunks)
+    stats = LLMCallStats(latency_ms=int((time.monotonic() - started) * 1000))
+    return GenerationCall(
+        output=GenerationOutput(messages=_split_bubbles(text)),
+        raw_text=text,
+        stats=stats,
+    )
+
+
 async def generate(*, model: str, messages: list[dict]) -> GenerationCall:
     """One reply generation → 1-3 short messages."""
     started = time.monotonic()
@@ -281,15 +427,25 @@ async def generate(*, model: str, messages: list[dict]) -> GenerationCall:
 # --------------------------------------------------------------------------- #
 async def chat_text(
     *, model: str, messages: list[dict], temperature: float = 0.3
-) -> tuple[str, LLMCallStats]:
-    """One chat completion, raw text back. Thinking disabled — the agent
-    protocol carries its reasoning explicitly in the JSON `thought` field."""
+) -> ChatResponse:
+    """One chat completion for the Operator loop.
+
+    Returns a `ChatResponse`, which unpacks as `(text, stats)` for anything
+    that still expects the old 2-tuple. `.reasoning` carries the model's own
+    working-out, which the loop feeds back across tool calls — for MiniMax M2
+    that reasoning *is* its working memory, and dropping it degrades planning
+    on multi-step toolchains.
+
+    `disable_thinking=True` is still passed: it is a no-op on Bedrock (which
+    exposes no switch) and on backends where it works, an absent reasoning
+    field simply means there is nothing to carry.
+    """
     started = time.monotonic()
-    text, stats = await _chat(
+    text, stats, reasoning = await _chat_full(
         messages, model=model, temperature=temperature, disable_thinking=True
     )
     stats.latency_ms = int((time.monotonic() - started) * 1000)
-    return text, stats
+    return ChatResponse(text, stats, reasoning)
 
 
 async def ping() -> bool:

@@ -40,8 +40,8 @@ export function ChannelConnection({
           </h1>
           <p className="mt-1.5 text-[14px] leading-6 text-muted-foreground">
             {platform === "whatsapp"
-              ? "Connect your WhatsApp Business account to read customer conversations and reply from Plucia."
-              : "Connect your LinkedIn profile or organization so Plucia can recognize and manage the account."}
+              ? "Connect your WhatsApp Business account to read customer conversations and reply from RedApeAI."
+              : "Connect your LinkedIn profile or organization so RedApeAI can recognize and manage the account."}
           </p>
         </div>
 
@@ -50,8 +50,8 @@ export function ChannelConnection({
             <LockKeyhole className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
             <p className="text-[13px] leading-5 text-muted-foreground">
               {platform === "whatsapp"
-                ? "Meta’s secure Embedded Signup opens over this dashboard. You stay in Plucia, and Plucia never receives your Facebook password."
-                : "Authorization opens in a secure popup, so your Plucia workspace stays in place. Plucia never receives your social account password."}
+                ? "Meta’s secure Embedded Signup opens over this dashboard. You stay in RedApeAI, and RedApeAI never receives your Facebook password."
+                : "Authorization opens in a secure popup, so your RedApeAI workspace stays in place. RedApeAI never receives your social account password."}
             </p>
           </div>
 

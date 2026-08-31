@@ -13,7 +13,7 @@ import linkedinOutlineSvg from "@/assets/icons/linkedin-outline.svg";
 import linkedinSvg from "@/assets/icons/linkedin.svg";
 import mailOutlineSvg from "@/assets/icons/mail-outline.svg";
 import messageCircleMoreSvg from "@/assets/icons/message-circle-more.svg";
-import pluciaLogoSvg from "@/assets/icons/plucia-logo.svg";
+import redapeLogoSvg from "@/assets/icons/redape-logo.svg";
 import taskListSvg from "@/assets/icons/task-list.svg";
 import whatsappBadgeSvg from "@/assets/icons/whatsapp-badge.svg";
 import whatsappOutlineSvg from "@/assets/icons/whatsapp-outline.svg";
@@ -82,7 +82,7 @@ export const CustomerSupportIcon = createIcon(
 );
 
 /* Brand marks on dark surfaces — already light, never inverted */
-export const PluciaLogoIcon = createIcon(pluciaLogoSvg, "PluciaLogoIcon");
+export const RedApeLogoIcon = createIcon(redapeLogoSvg, "RedApeLogoIcon");
 export const TaskListIcon = createIcon(taskListSvg, "TaskListIcon");
 
 /* Channel-badge glyphs — sized for the small colored circle over avatars */

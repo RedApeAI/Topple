@@ -128,8 +128,8 @@ export function WhatsAppCredentialsConnection({
           <div className="flex items-start gap-3 rounded-xl border border-border px-4 py-3.5">
             <LockKeyhole className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
             <p className="text-[13px] leading-5 text-muted-foreground">
-              Plucia sends this token once through the authenticated API to
-              Zernio. Plucia does not save it in the database or request logs.
+              RedApeAI sends this token once through the authenticated API to
+              Zernio. RedApeAI does not save it in the database or request logs.
             </p>
           </div>
 

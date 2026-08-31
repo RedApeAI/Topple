@@ -3,10 +3,13 @@ import { z } from "zod";
 
 import type { AuthUser } from "../lib/auth.js";
 import * as calendar from "../services/google-calendar.service.js";
-import { isConnected, tokenForConnector } from "../services/connectors.service.js";
+import {
+  isConnected,
+  tokenForConnector,
+} from "../services/connectors.service.js";
 
 /**
- * Plucia's MCP server: the agent's window onto a user's connected accounts.
+ * RedApeAI's MCP server: the agent's window onto a user's connected accounts.
  *
  * Built per request and bound to one user. That binding is the point — MCP
  * servers are normally single-user desktop processes reading credentials off
@@ -26,9 +29,61 @@ function json(value: unknown) {
 
 function fail(message: string) {
   return {
-    content: [{ type: "text" as const, text: JSON.stringify({ error: message }) }],
+    content: [
+      { type: "text" as const, text: JSON.stringify({ error: message }) },
+    ],
     isError: true,
   };
+}
+
+/**
+ * The UTC offset the caller used, in minutes, or null if they sent `Z`.
+ *
+ * The agent asks in the salesperson's local time — "10PM tonight" becomes
+ * `2026-08-16T22:00:00+05:30` — so the offset it wants answers in is already
+ * in the request. Reading it back off there beats plumbing a timezone through
+ * MCP for the same information.
+ */
+function offsetMinutesOf(rfc3339: string): number | null {
+  const match = /([+-])(\d{2}):(\d{2})$/.exec(rfc3339.trim());
+  if (!match) return null;
+  const [, sign, hours, minutes] = match;
+  const total = Number(hours) * 60 + Number(minutes);
+  return sign === "-" ? -total : total;
+}
+
+function pad(value: number, width = 2) {
+  return String(Math.abs(value)).padStart(width, "0");
+}
+
+/**
+ * An instant rendered in a fixed offset, as RFC3339.
+ *
+ * Exists because `toISOString()` always emits `Z`, and a model handed a bare
+ * UTC timestamp has to convert it before it can reason about "tonight". It
+ * demonstrably does not: asked to book 10PM IST, one run received a free slot
+ * of `15:30Z–17:30Z` — which *is* 9–11PM IST, i.e. entirely free — read the
+ * `15` as an hour, and told the salesperson they were busy. Returning the
+ * local rendering removes the arithmetic rather than asking for it again.
+ */
+function inOffset(epochMs: number, offsetMinutes: number | null): string {
+  if (offsetMinutes === null) return new Date(epochMs).toISOString();
+  const shifted = new Date(epochMs + offsetMinutes * 60_000);
+  const sign = offsetMinutes < 0 ? "-" : "+";
+  return (
+    `${shifted.getUTCFullYear()}-${pad(shifted.getUTCMonth() + 1)}-${pad(shifted.getUTCDate())}` +
+    `T${pad(shifted.getUTCHours())}:${pad(shifted.getUTCMinutes())}:${pad(shifted.getUTCSeconds())}` +
+    `${sign}${pad(Math.trunc(offsetMinutes / 60))}:${pad(offsetMinutes % 60)}`
+  );
+}
+
+/** "9:00 PM" — for the human-readable half of a slot label. */
+function clockIn(epochMs: number, offsetMinutes: number | null): string {
+  const shifted = new Date(epochMs + (offsetMinutes ?? 0) * 60_000);
+  const hours24 = shifted.getUTCHours();
+  const suffix = hours24 >= 12 ? "PM" : "AM";
+  const hours12 = hours24 % 12 === 0 ? 12 : hours24 % 12;
+  return `${hours12}:${pad(shifted.getUTCMinutes())} ${suffix}`;
 }
 
 /**
@@ -102,33 +157,60 @@ export function registerCalendarTools(
     async (args) => {
       try {
         const token = await tokenForConnector(user, "google-calendar");
-        const busy = await calendar.freeBusy(token, args.time_min, args.time_max);
+        const busy = await calendar.freeBusy(
+          token,
+          args.time_min,
+          args.time_max,
+        );
         const minutes = args.minutes ?? 30;
 
-        // Walk the gaps between busy blocks. Busy blocks come back sorted and
-        // already merged by Google, so a single pass is enough.
-        const slots: { start: string; end: string }[] = [];
-        let cursor = Date.parse(args.time_min);
+        // Answer in the offset the caller asked in, so the model never has to
+        // convert. See `inOffset`.
+        const offset = offsetMinutesOf(args.time_min);
+        const windowStart = Date.parse(args.time_min);
         const windowEnd = Date.parse(args.time_max);
         const needed = minutes * 60_000;
 
+        const slot = (from: number, to: number) => ({
+          start: inOffset(from, offset),
+          end: inOffset(to, offset),
+          label: `${clockIn(from, offset)} to ${clockIn(to, offset)}`,
+        });
+
+        // Walk the gaps between busy blocks. Busy blocks come back sorted and
+        // already merged by Google, so a single pass is enough.
+        const slots: ReturnType<typeof slot>[] = [];
+        let cursor = windowStart;
+
         for (const block of busy) {
           const blockStart = Date.parse(block.start);
-          if (blockStart - cursor >= needed) {
-            slots.push({
-              start: new Date(cursor).toISOString(),
-              end: new Date(blockStart).toISOString(),
-            });
-          }
+          if (blockStart - cursor >= needed)
+            slots.push(slot(cursor, blockStart));
           cursor = Math.max(cursor, Date.parse(block.end));
         }
-        if (windowEnd - cursor >= needed) {
-          slots.push({
-            start: new Date(cursor).toISOString(),
-            end: new Date(windowEnd).toISOString(),
-          });
-        }
-        return json({ free_slots: slots, minimum_minutes: minutes });
+        if (windowEnd - cursor >= needed) slots.push(slot(cursor, windowEnd));
+
+        // Stated outright rather than left to be inferred from two timestamps.
+        // "The whole window is free" is the single most common answer and the
+        // one a model most needs not to get backwards.
+        const entirelyFree =
+          busy.length === 0 ||
+          (slots.length === 1 &&
+            Date.parse(slots[0]!.start) <= windowStart &&
+            Date.parse(slots[0]!.end) >= windowEnd);
+
+        return json({
+          free_slots: slots,
+          minimum_minutes: minutes,
+          window: slot(windowStart, windowEnd),
+          entire_window_free: entirelyFree,
+          busy_blocks: busy.length,
+          note: entirelyFree
+            ? "Nothing is booked in this window — any time in it is available."
+            : slots.length === 0
+              ? "No gap of the requested length exists in this window."
+              : "Times are in the same UTC offset you asked in; use them as given.",
+        });
       } catch (error) {
         return fail(error instanceof Error ? error.message : "calendar failed");
       }
@@ -241,7 +323,7 @@ export async function buildMcpServer(
   mode: AgentMode = "copilot",
 ): Promise<McpServer> {
   const server = new McpServer(
-    { name: "plucia", version: "1.0.0" },
+    { name: "redape", version: "1.0.0" },
     {
       instructions:
         "Tools for the signed-in salesperson's connected accounts. Every tool acts as that person; never assume access to anyone else's data.",

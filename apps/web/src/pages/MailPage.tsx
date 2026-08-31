@@ -4,7 +4,7 @@ import { MailScreen } from "@/features/mail/components/MailScreen";
 
 export function MailPage() {
   useEffect(() => {
-    document.title = "Mail — Plucia";
+    document.title = "Mail — RedApeAI";
   }, []);
 
   return (

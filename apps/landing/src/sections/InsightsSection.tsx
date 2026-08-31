@@ -5,7 +5,7 @@ import { ParallaxGroup, ParallaxItem } from "@/components/CursorParallax";
 /**
  * "Dominate Every sales meeting with Important leads insights" — Figma 2877:21504.
  * A 1445x1568 canvas: header, color blob, and a collage of product cards
- * (map analytics, Sophie contact card, Plucia AI profile summary, LinkedIn
+ * (map analytics, Sophie contact card, RedApeAI AI profile summary, LinkedIn
  * company card, call-rating card) joined by dashed lines. Every collage
  * element drifts a few px toward the cursor, each with its own strength and
  * spring speed (CursorParallax), and floats up/down on scroll at its own
@@ -256,7 +256,7 @@ function ProfileSummaryCard() {
     <div className="absolute bg-[#f1f0ee] border-[#34a853] border-[2.425px] border-solid drop-shadow-[0px_16.945px_31.771px_rgba(0,0,0,0.12)] flex flex-col gap-[23.299px] h-[316.92px] items-start left-[678.31px] origin-top-left p-[25.417px] rounded-bl-[27.535px] rounded-br-[27.535px] rounded-tr-[27.535px] scale-[0.75] lg:scale-100 top-[176.91px] w-[354.09px]">
       <div className="flex gap-[6.354px] items-center leading-[normal] relative shrink-0 w-full whitespace-nowrap">
         <p className="font-dmsans font-bold relative shrink-0 text-[25.417px] text-black tracking-[-1.2709px]">
-          Plucia AI{" "}
+          RedApeAI AI{" "}
         </p>
         <span
           aria-hidden
@@ -497,7 +497,7 @@ export default function InsightsSection() {
             />
           </div>
           <p className="font-manrope font-medium leading-[normal] relative shrink-0 text-[#34a853] text-[16px] sm:text-[20px] tracking-[-0.05em] whitespace-pre">
-            Business Insights by Plucia AI
+            Business Insights by RedApeAI AI
           </p>
         </div>
         <p className="font-manrope leading-[0] not-italic relative shrink-0 text-[clamp(25px,5vw,43px)] text-black text-center tracking-[-0.0133em] w-full">
@@ -517,7 +517,7 @@ export default function InsightsSection() {
           </span>
         </p>
         <p className="font-inter font-normal leading-[normal] not-italic relative shrink-0 text-[#606060] text-[12px] sm:text-[16px] text-center tracking-[-0.05em] w-full">
-          Before every meeting, Plucia builds a complete intelligence brief by
+          Before every meeting, RedApeAI builds a complete intelligence brief by
           combining conversations, CRM activity, LinkedIn profiles, company
           data, buying signals, recent news, and behavioral insights so your
           team walks in prepared to close.
@@ -647,7 +647,7 @@ export default function InsightsSection() {
 
       {/* handwriting sign-off */}
       <p className="font-hand leading-[normal] mt-[60px] lg:mt-[100px] not-italic relative text-[21px] text-black text-center tracking-[-1.05px] whitespace-nowrap">
-        Sell with Plucia.
+        Sell with RedApeAI.
       </p>
     </section>
   );

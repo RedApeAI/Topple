@@ -1,4 +1,4 @@
-# Plucia API v1
+# RedApeAI API v1
 
 Hono API for browser authentication, tenant membership, channel metadata,
 conversation pointers, and agent configuration. It runs on Node.js and uses
@@ -121,7 +121,7 @@ The Meta token must include `whatsapp_business_management` and
 WhatsApp dashboard connection form; they do not belong in either `.env` file.
 
 When the WhatsApp inbox opens, the web app idempotently calls the configure
-route. The API creates or updates the `Plucia WhatsApp Inbox` webhook in
+route. The API creates or updates the `RedApeAI WhatsApp Inbox` webhook in
 Zernio. In local development, expose port 4000 through an HTTPS tunnel and set
 its full webhook endpoint as `ZERNIO_WEBHOOK_PUBLIC_URL`; Zernio cannot deliver
 webhooks to `localhost`.

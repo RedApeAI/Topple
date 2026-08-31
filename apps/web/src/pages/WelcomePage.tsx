@@ -217,7 +217,7 @@ export default function WelcomePage() {
             />
           </svg>
           <span className="font-inter font-medium text-[#202020] text-[23px] tracking-[-0.58px]">
-            Plucia
+            RedApeAI
           </span>
         </a>
       </header>
@@ -226,7 +226,7 @@ export default function WelcomePage() {
         <div className="w-full max-w-[420px]">
           <div className="text-center">
             <h1 className="font-inter font-semibold text-[32px] text-[#202020] tracking-[-0.05em]">
-              Welcome to Plucia
+              Welcome to RedApeAI
             </h1>
             <p className="font-inter mt-[8px] text-[16px] text-[#606060]">
               Sign in to your workspace to continue.

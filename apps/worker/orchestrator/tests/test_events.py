@@ -69,36 +69,36 @@ def bus_down():
 
 
 async def test_publish_wraps_event_envelope(bus):
-    ok = await events.publish("plucia", "message.created", {"conversation_id": "abc"})
+    ok = await events.publish("redape", "message.created", {"conversation_id": "abc"})
     assert ok is True
     channel, event = bus.published[0]
-    assert channel == "plucia:events:plucia"
+    assert channel == "redape:events:redape"
     assert event["type"] == "message.created"
-    assert event["tenant_id"] == "plucia"
+    assert event["tenant_id"] == "redape"
     assert event["data"] == {"conversation_id": "abc"}
     assert "ts" in event
 
 
 async def test_publish_never_raises_when_bus_is_down(bus_down):
-    ok = await events.publish("plucia", "message.created", {})
+    ok = await events.publish("redape", "message.created", {})
     assert ok is False  # logged + swallowed — a dead bus must not break turns
 
 
 async def test_subscribe_yields_events_then_heartbeats_when_idle():
     # one real event, then the fake pubsub returns None forever (idle bus)
-    event = {"type": "message.created", "tenant_id": "plucia", "data": {}}
+    event = {"type": "message.created", "tenant_id": "redape", "data": {}}
     fake = FakeRedis(pubsub_messages=[{"type": "message", "data": json.dumps(event)}])
     events.set_client(fake)
     try:
         seen = []
-        async for item in events.subscribe("plucia"):
+        async for item in events.subscribe("redape"):
             seen.append(item)
             if len(seen) >= 3:  # the event, then two idle heartbeats
                 break
         assert seen[0]["type"] == "message.created"
         assert seen[1] is None  # idle no longer crashes — it heartbeats
         assert seen[2] is None
-        assert fake.pubsub_instance.subscribed == ["plucia:events:plucia"]
+        assert fake.pubsub_instance.subscribed == ["redape:events:redape"]
     finally:
         events.set_client(None)
 
@@ -153,7 +153,7 @@ async def test_operator_agent_publishes_action_and_thread_events(db, bus, monkey
         return outputs.pop(0), LLMCallStats()
 
     monkeypatch.setattr(gateway, "chat_text", scripted)
-    await agent.run_command(db, tenant_id="plucia", text="say hi", mode="copilot")
+    await agent.run_command(db, tenant_id="redape", text="say hi", mode="copilot")
 
     types = [e["type"] for _, e in bus.published]
     assert "message.created" in types

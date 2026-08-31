@@ -1,4 +1,4 @@
-# plucia-orchestrator
+# redape-orchestrator
 
 The **black box orchestrator** of a multi-tenant, multi-channel AI sales
 platform. Auth, onboarding and API-key handling live in separate services;
@@ -59,7 +59,7 @@ pip install -r requirements.txt
 
 cp .env.example .env
 docker compose up -d                 # Mongo on 27017, Qdrant on 6333
-python seeds/seed_qdrant.py          # embeds sample docs into `plucia_re` + `acme_insurance`
+python seeds/seed_qdrant.py          # embeds sample docs into `redape_re` + `acme_insurance`
 uvicorn app.main:app --reload        # http://localhost:8000/docs
 ```
 
@@ -164,7 +164,7 @@ Import `postman_collection.json` (`base_url` defaults to
 `http://localhost:8000`) and run the folders top to bottom:
 
 1. **Health** — all three dependencies reachable.
-2. **Real-estate journey** (tenant `plucia`, `adapter_id: "real-estate-v2"`) —
+2. **Real-estate journey** (tenant `redape`, `adapter_id: "real-estate-v2"`) —
    greeting → qualification (budget + locality → `RECOMMENDING`) → price
    question with **retrieval hits** from the seeded Marina Crest sheet →
    objection detour → visit request → `SITE_VISIT_BOOKING`. Ends with

@@ -12,7 +12,7 @@ import {
 import { organizations } from "./user.js";
 
 /**
- * Zernio profiles - Maps Plucia organizations to Zernio profiles
+ * Zernio profiles - Maps RedApeAI organizations to Zernio profiles
  * One profile per organization (user in single-tenant mode)
  */
 export const zernioProfiles = pgTable(

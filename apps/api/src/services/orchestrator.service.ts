@@ -209,3 +209,84 @@ export function syncDirectory(scope: Scope) {
     }),
   });
 }
+
+// --------------------------------------------------------------------------
+// Knowledge base
+// --------------------------------------------------------------------------
+/**
+ * The collection a scope's knowledge lives in.
+ *
+ * One collection for the deployment; isolation inside it is the orchestrator's
+ * `(tenant_id, user_id)` payload filter, not the name. Kept as a function so
+ * the day a tenant runtime registry exists (HLD §8 gap 4) there is one place
+ * to change — today the web client hardcodes this same string, which is the
+ * gap itself.
+ */
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+export function knowledgeSourceFor(_scope: Scope): string {
+  return env.KNOWLEDGE_COLLECTION ?? "redape_re";
+}
+
+export function ingestKnowledge(
+  scope: Scope,
+  documents: { text: string; doc_id: string; chunk_id: string }[],
+) {
+  return call<{ chunks_written: number }>("/v1/knowledge/documents", {
+    method: "POST",
+    body: JSON.stringify({
+      tenant_id: scope.tenant.id,
+      user_id: scope.userId,
+      knowledge_source_id: knowledgeSourceFor(scope),
+      documents,
+    }),
+  });
+}
+
+export function forgetKnowledgeDocument(scope: Scope) {
+  return call<Record<string, unknown>>("/v1/knowledge/documents", {
+    method: "DELETE",
+    query: {
+      tenant_id: scope.tenant.id,
+      user_id: scope.userId,
+      knowledge_source_id: knowledgeSourceFor(scope),
+    },
+  });
+}
+
+/**
+ * Forward an uploaded document to the orchestrator for in-memory ingestion.
+ *
+ * The bytes are streamed straight through rather than parsed here: PDF and
+ * DOCX parsing lives in the orchestrator, where the LangGraph document flow
+ * needs the text and where Python's parsers are the better ones. Identity is
+ * still resolved from the session here — that has not moved.
+ */
+export async function uploadDocument(
+  scope: Scope,
+  file: { name: string; bytes: Uint8Array; type: string },
+  options: { question?: string; storeVerbatim?: boolean } = {},
+): Promise<{
+  filename: string;
+  doc_id: string;
+  answer: string;
+  chunks_seen: number;
+  summaries_stored: number;
+  verbatim_stored: number;
+  purged: boolean;
+}> {
+  const form = new FormData();
+  form.append("file", new Blob([file.bytes as BufferSource], { type: file.type }), file.name);
+  form.append("tenant_id", scope.tenant.id);
+  form.append("user_id", scope.userId);
+  form.append("knowledge_source_id", knowledgeSourceFor(scope));
+  if (options.question) form.append("question", options.question);
+  if (options.storeVerbatim) form.append("store_verbatim", "true");
+
+  return call("/v1/knowledge/upload", {
+    method: "POST",
+    body: form as unknown as BodyInit,
+    // Undefined lets undici set the multipart boundary; the JSON default in
+    // `call` would produce a body the server cannot parse.
+    headers: { "Content-Type": undefined as unknown as string },
+  });
+}

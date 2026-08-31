@@ -4,7 +4,7 @@ import { InboxScreen } from "@/features/inbox/components/InboxScreen";
 
 export function InstagramPage() {
   useEffect(() => {
-    document.title = "Instagram — Plucia";
+    document.title = "Instagram — RedApeAI";
   }, []);
 
   return (

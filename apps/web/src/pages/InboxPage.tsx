@@ -4,7 +4,7 @@ import { InboxScreen } from "@/features/inbox/components/InboxScreen";
 
 export function InboxPage() {
   useEffect(() => {
-    document.title = "One Inbox — Plucia";
+    document.title = "One Inbox — RedApeAI";
   }, []);
 
   return (

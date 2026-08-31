@@ -94,7 +94,7 @@ export default function ContactPage() {
               <p className="font-inter font-normal text-[16px] sm:text-[17px] text-[#606060] tracking-[-0.02em] w-full">
                 Have questions or need a personalized walkthrough? We&apos;d
                 love to hear from you whether it&apos;s onboarding,
-                integrations, or how Plucia fits into your sales process, our
+                integrations, or how RedApeAI fits into your sales process, our
                 team is ready to help.
               </p>
 
@@ -105,7 +105,7 @@ export default function ContactPage() {
                   </p>
                   <div className="flex gap-[10px] items-center">
                     <a
-                      href="https://www.linkedin.com/company/plucia/"
+                      href="https://www.linkedin.com/company/redape/"
                       target="_blank"
                       rel="noopener noreferrer"
                       aria-label="LinkedIn"
@@ -120,7 +120,7 @@ export default function ContactPage() {
                       </div>
                     </a>
                     <a
-                      href="https://www.instagram.com/_plucia_/"
+                      href="https://www.instagram.com/_redape_/"
                       target="_blank"
                       rel="noopener noreferrer"
                       aria-label="Instagram"
@@ -135,7 +135,7 @@ export default function ContactPage() {
                       </div>
                     </a>
                     <a
-                      href="https://x.com/plucia_ai"
+                      href="https://x.com/redape_ai"
                       target="_blank"
                       rel="noopener noreferrer"
                       aria-label="X"

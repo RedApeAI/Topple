@@ -6,25 +6,25 @@ from app.playbooks.loader import load_playbook
 
 
 async def test_create_then_lookup(db):
-    created = await contacts.resolve_or_create(db, "plucia", "whatsapp", "+9199")
+    created = await contacts.resolve_or_create(db, "redape", "whatsapp", "+9199")
     assert created["identities"] == [{"channel": "whatsapp", "external_id": "+9199"}]
     assert created["lead"]["qualification_score"] == 0
 
-    found = await contacts.resolve_or_create(db, "plucia", "whatsapp", "+9199")
+    found = await contacts.resolve_or_create(db, "redape", "whatsapp", "+9199")
     assert found["_id"] == created["_id"]
     assert await db.contacts.count_documents({}) == 1
 
 
 async def test_same_identity_different_tenant_is_separate(db):
-    a = await contacts.resolve_or_create(db, "plucia", "whatsapp", "+9199")
+    a = await contacts.resolve_or_create(db, "redape", "whatsapp", "+9199")
     b = await contacts.resolve_or_create(db, "acme", "whatsapp", "+9199")
     assert a["_id"] != b["_id"]
 
 
 async def test_merge_combines_identities_and_lead_fields(db):
     playbook = load_playbook("real-estate-v1")
-    primary = await contacts.resolve_or_create(db, "plucia", "whatsapp", "+9199")
-    duplicate = await contacts.resolve_or_create(db, "plucia", "email", "b@x.com")
+    primary = await contacts.resolve_or_create(db, "redape", "whatsapp", "+9199")
+    duplicate = await contacts.resolve_or_create(db, "redape", "email", "b@x.com")
 
     lead_p, _ = contacts.merge_entities(
         primary["lead"], {"budget_min_aed": 9_000_000}, playbook
@@ -35,7 +35,7 @@ async def test_merge_combines_identities_and_lead_fields(db):
     )
     await contacts.update_lead(db, duplicate["_id"], lead_d)
     await db.conversations.insert_one(
-        {"tenant_id": "plucia", "contact_id": duplicate["_id"], "channel": "email"}
+        {"tenant_id": "redape", "contact_id": duplicate["_id"], "channel": "email"}
     )
 
     merged = await contacts.merge_identities(db, str(primary["_id"]), str(duplicate["_id"]))
@@ -47,14 +47,14 @@ async def test_merge_combines_identities_and_lead_fields(db):
     assert merged["lead"]["config"] == "2br"
     # duplicate is gone, its conversation repointed
     assert await db.contacts.count_documents({}) == 1
-    convo = await db.conversations.find_one({"tenant_id": "plucia"})
+    convo = await db.conversations.find_one({"tenant_id": "redape"})
     assert convo["contact_id"] == primary["_id"]
 
 
 async def test_merge_primary_values_win(db):
     playbook = load_playbook("real-estate-v1")
-    primary = await contacts.resolve_or_create(db, "plucia", "whatsapp", "+91A")
-    duplicate = await contacts.resolve_or_create(db, "plucia", "email", "a@x.com")
+    primary = await contacts.resolve_or_create(db, "redape", "whatsapp", "+91A")
+    duplicate = await contacts.resolve_or_create(db, "redape", "email", "a@x.com")
     lead_p, _ = contacts.merge_entities(primary["lead"], {"budget_min_aed": 8_000_000}, playbook)
     await contacts.update_lead(db, primary["_id"], lead_p)
     lead_d, _ = contacts.merge_entities(duplicate["lead"], {"budget_min_aed": 5_000_000}, playbook)

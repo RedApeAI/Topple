@@ -1,4 +1,4 @@
-# Plucia Landing Page — Design Reference
+# RedApeAI Landing Page — Design Reference
 
 Built 1:1 from the Figma file **abhi | TV-File → “Landing page”** frame
 (`node 2877:21183`, 1440 × 9161 px).
@@ -33,7 +33,7 @@ design.md         This file
 | --- | ----------------------------------------------------------------------------- | ---------------------------------- | --------------------------------- | ----------- |
 | 1   | Background + navbar + headline + dashboard                                    | 2877:21184 / 21231 / 21219 / 21243 | `sections/Hero.tsx`               | 13.6 – 1650 |
 | 2   | “Everything Your Team Needs …” (svg **motion section**)                       | 2877:21244                         | `sections/PlatformSection.tsx`    | 1825        |
-| 3   | “Just Tell Plucia What You Need.” (dark card, **motion section**)             | 2877:21319                         | `sections/TellPluciaSection.tsx`  | 2353        |
+| 3   | “Just Tell RedApeAI What You Need.” (dark card, **motion section**)             | 2877:21319                         | `sections/TellRedApeAISection.tsx`  | 2353        |
 | 4   | “From Conversation to Calendar, Automatically.”                               | 2877:21314                         | `sections/CalendarSection.tsx`    | 2982        |
 | 5   | Insights collage “Dominate Every sales meeting …”                             | 2877:21504                         | `sections/InsightsSection.tsx`    | 3685        |
 | 6   | Integration “Everything Your Team Needs in One Platform” (**motion section**) | 2877:22158                         | `sections/IntegrationSection.tsx` | 5367        |
@@ -52,12 +52,12 @@ its exact Figma offsets (margins/left positions derived from frame x/y values).
 | Manrope            | Headings (50/48px, −2.5px tracking), buttons, FAQ | `next/font/google` → `font-manrope`                                             |
 | Inter              | Body copy, small UI text                          | `font-inter`                                                                    |
 | Urbanist           | Prompt field, “Features”/“FAQ’s” eyebrows         | `font-urbanist`                                                                 |
-| Geist Medium       | “Plucia” wordmark (navbar + footer)               | `font-geist`                                                                    |
-| DM Sans            | “Plucia AI · Profile Summary” card                | `font-dmsans`                                                                   |
+| Geist Medium       | “RedApeAI” wordmark (navbar + footer)               | `font-geist`                                                                    |
+| DM Sans            | “RedApeAI AI · Profile Summary” card                | `font-dmsans`                                                                   |
 | Poppins            | Chat notification names                           | `font-poppins`                                                                  |
 | Work Sans          | “WhatsApp”/“Channels” chips                       | `font-worksans`                                                                 |
 | Ms Madi            | Script accents: “One Platform”, “Everyone”        | `font-msmadi`                                                                   |
-| Figma Hand         | “Try Yourself”, “Sell with Plucia.”               | **substituted with Caveat** (`font-hand`) — Figma Hand is not publicly licensed |
+| Figma Hand         | “Try Yourself”, “Sell with RedApeAI.”               | **substituted with Caveat** (`font-hand`) — Figma Hand is not publicly licensed |
 | Font Awesome 6 Pro | chevron/dot glyphs in mock UI                     | replaced with inline SVG / dot span                                             |
 
 ## 4. Core colors
@@ -69,7 +69,7 @@ its exact Figma offsets (margins/left positions derived from frame x/y values).
 | Surface      | `#f4f4f4` / `#f6f6f6` / `#f2f2f2`                  | cards, chips, FAQ tiles                 |
 | Accent green | `#34a853` (Figma var `Accents/Green` ≈ `#34c759`)  | badges, confidence score, WhatsApp dots |
 | Hero canvas  | `#eaeaea` + pastel gradient PNG                    | hero background                         |
-| Dark card    | `#333 → #111` gradients                            | Tell-Plucia card, AI buttons            |
+| Dark card    | `#333 → #111` gradients                            | Tell-RedApeAI card, AI buttons            |
 | CTA gradient | `linear-gradient(-6deg, #070707 12%, #2f2e31 88%)` | Join Waitlist / Contact Sales           |
 
 ## 5. Motion
@@ -78,8 +78,8 @@ its exact Figma offsets (margins/left positions derived from frame x/y values).
 - **Section reveal**: `components/Reveal.tsx` (framer-motion) — fade + 48px rise, `once: true`, honors `prefers-reduced-motion`.
 - **Pending — “motion section” frames**: the Figma frames named _svg motion
   section_ (hero background `2877:21185`, platform card `2877:21245`,
-  Tell-Plucia card `2877:21324`, integration wires `2877:22160-22167`) are
-  marked in the DOM with `data-motion-section="hero|platform|tell-plucia|integration"`.
+  Tell-RedApeAI card `2877:21324`, integration wires `2877:22160-22167`) are
+  marked in the DOM with `data-motion-section="hero|platform|tell-redape|integration"`.
   These will get the light-pulse-travelling-along-connected-lines SVG
   animation once the animation spec is provided. The connector-line SVGs are
   separate files (`platform-lines-*`, `tell-lines-*`, `int-wire-*`,
@@ -136,7 +136,7 @@ All icons/illustrations were exported from the Figma file into
 `public/assets/icons` (SVG) and `public/assets/images` (PNG) — around 170
 files. Notable groups:
 
-- `plucia-logo*.svg` — brand marks (navbar, footer, giant footer wordmark)
+- `redape-logo*.svg` — brand marks (navbar, footer, giant footer wordmark)
 - `channel-*.svg`, `channel-lg-*.svg`, `int-icon-*.svg` — app/channel icons (Gmail, Slack, WhatsApp, Messenger, Instagram, Meta …)
 - `orb-*` / `int-orb-*` — layered pieces of the AI orb (rings, sparks, flares, noise mask)
 - `*-wire-*.svg` / `*-lines-*.svg` — dashed/curved connector lines used by the motion sections

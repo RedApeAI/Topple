@@ -23,6 +23,7 @@ from mcp import ClientSession
 from mcp.client.streamable_http import create_mcp_http_client, streamable_http_client
 
 from ..config import settings
+from . import cache
 
 logger = logging.getLogger(__name__)
 
@@ -40,11 +41,11 @@ def _endpoint() -> str | None:
 
 
 def _headers(user_id: str, mode: str | None = None) -> dict[str, str]:
-    headers = {"X-Plucia-User-Id": user_id}
+    headers = {"X-RedApeAI-User-Id": user_id}
     # Mode travels as a header so the server can bind what a tool may do —
     # notifying external people is gated there, not by anything the model says.
     if mode:
-        headers["X-Plucia-Mode"] = mode
+        headers["X-RedApeAI-Mode"] = mode
     if settings.outbound_webhook_secret:
         headers["X-Outbound-Secret"] = settings.outbound_webhook_secret
     return headers
@@ -81,15 +82,18 @@ async def _with_session(
                 return await run(session)
 
 
-async def list_tools(user_id: str | None, mode: str | None = None) -> list[dict]:
-    """Tools this user's connectors expose, as JSON-schema descriptors.
+async def discover_tools(user_id: str, mode: str | None = None) -> list[dict] | None:
+    """One live `tools/list` round trip.
 
-    Returns [] when nothing is connected, when the BFF is unreachable, or when
-    the server advertises no tool capability at all — the last of which is a
-    normal `Method not found`, not an error worth surfacing.
+    Returns the tool list on success — including `[]`, which legitimately means
+    "this user has connected nothing". Returns **None** when discovery could
+    not be performed at all: the BFF is unconfigured or unreachable.
+
+    That distinction is the whole point of splitting this out of `list_tools`.
+    Both cases used to collapse to `[]`, and caching the failure would turn a
+    brief BFF outage into a minute of every command silently losing its
+    connectors.
     """
-    if not user_id:
-        return []
     async def _list(session: ClientSession) -> list[dict]:
         result = await session.list_tools()
         return [
@@ -102,10 +106,38 @@ async def list_tools(user_id: str | None, mode: str | None = None) -> list[dict]
         ]
 
     try:
-        return await _with_session(user_id, _list, mode) or []
+        return await _with_session(user_id, _list, mode)
     except Exception as exc:  # noqa: BLE001 — connectors are optional
         logger.warning("MCP tool discovery failed for user=%s: %s", user_id, exc)
+        return None
+
+
+async def list_tools(user_id: str | None, mode: str | None = None) -> list[dict]:
+    """Tools this user's connectors expose, as JSON-schema descriptors.
+
+    Cached per (user, mode) for a short TTL — this runs before every Operator
+    prompt is assembled, and the answer only changes when someone connects or
+    disconnects a connector.
+
+    Returns [] when nothing is connected, when the BFF is unreachable, or when
+    the server advertises no tool capability at all — the last of which is a
+    normal `Method not found`, not an error worth surfacing.
+    """
+    if not user_id:
         return []
+
+    cached = await cache.read(user_id, mode)
+    if cached is not None:
+        return cached
+
+    tools = await discover_tools(user_id, mode)
+    if tools is None:
+        # Discovery failed. Degrade to the built-in toolset exactly as before,
+        # and cache nothing — see the note in `cache`.
+        return []
+
+    await cache.write(user_id, mode, tools)
+    return tools
 
 
 def _flatten(result: Any) -> Any:

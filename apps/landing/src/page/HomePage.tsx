@@ -7,7 +7,7 @@ import Hero from "@/sections/Hero";
 import IntegrationsMarquee from "@/sections/IntegrationsMarquee";
 import PlatformSection from "@/sections/PlatformSection";
 import AutomationSection from "@/sections/AutomationSection";
-import TellPluciaSection from "@/sections/TellPluciaSection";
+import TellRedApeAISection from "@/sections/TellRedApeAISection";
 import CalendarSection from "@/sections/CalendarSection";
 import InsightsSection from "@/sections/InsightsSection";
 import IntegrationSection from "@/sections/IntegrationSection";
@@ -39,7 +39,7 @@ export default function HomePage() {
       <IntegrationsMarquee />
       <div className="max-w-[1440px] mx-auto relative w-full space-y-[88px]">
         <Reveal>
-          <TellPluciaSection />
+          <TellRedApeAISection />
         </Reveal>
         <Reveal>
           <CalendarSection />

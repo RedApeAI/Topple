@@ -1,5 +1,5 @@
 import { cn } from "@/lib/utils";
-import { PluciaLogoIcon } from "./icons/brand-icons";
+import { RedApeLogoIcon } from "./icons/brand-icons";
 
 interface LogoMarkProps {
   size?: number;
@@ -25,7 +25,7 @@ export function LogoMark({ size = 36, className, round }: LogoMarkProps) {
           round ? "rounded-full" : "rounded-lg",
         )}
       >
-        <PluciaLogoIcon className="h-[60%] w-[60%]" />
+        <RedApeLogoIcon className="h-[60%] w-[60%]" />
       </span>
     </span>
   );
@@ -45,7 +45,7 @@ export function LogoSmall({ size = 36, className }: LogoMarkProps) {
           "surface-primary-gradient flex h-full w-full items-center justify-center rounded-sm",
         )}
       >
-        <PluciaLogoIcon className="h-[60%] w-[60%]" />
+        <RedApeLogoIcon className="h-[60%] w-[60%]" />
       </span>
     </span>
   );

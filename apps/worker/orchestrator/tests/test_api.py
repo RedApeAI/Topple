@@ -77,13 +77,13 @@ def test_observability_reads(client):
 def test_list_conversations_and_turns(client):
     client.post("/v1/turns", json=envelope_dict(request_id="req-lists-1"))
 
-    rows = client.get("/v1/conversations", params={"tenant_id": "plucia"}).json()
+    rows = client.get("/v1/conversations", params={"tenant_id": "redape"}).json()
     assert len(rows) == 1
     assert rows[0]["contact"]["identities"][0]["external_id"] == "+971501234567"
     assert rows[0]["last_message"]["direction"] == "outbound"
     assert client.get("/v1/conversations", params={"tenant_id": "nobody"}).json() == []
 
-    turns = client.get("/v1/turns", params={"tenant_id": "plucia"}).json()
+    turns = client.get("/v1/turns", params={"tenant_id": "redape"}).json()
     assert any(t["request_id"] == "req-lists-1" for t in turns)
     assert turns[0]["stage_out"] == "QUALIFYING"
     assert turns[0]["reply_status"] == "sent"
@@ -94,7 +94,7 @@ def test_copilot_draft_approve_and_discard(client):
     result = client.post("/v1/turns", json=body).json()
     assert result["reply"]["status"] == "draft"
 
-    drafts = client.get("/v1/drafts", params={"tenant_id": "plucia"}).json()
+    drafts = client.get("/v1/drafts", params={"tenant_id": "redape"}).json()
     assert len(drafts) == len(result["reply"]["messages"])
 
     approved = client.post(
@@ -114,7 +114,7 @@ def test_copilot_draft_approve_and_discard(client):
 def test_metrics_summary(client):
     client.post("/v1/turns", json=envelope_dict(request_id="req-m1"))
     client.post("/v1/turns", json=envelope_dict(request_id="req-m2"))
-    resp = client.get("/v1/metrics/summary", params={"tenant_id": "plucia"})
+    resp = client.get("/v1/metrics/summary", params={"tenant_id": "redape"})
     assert resp.status_code == 200
     data = resp.json()
     assert data["by_adapter"], data

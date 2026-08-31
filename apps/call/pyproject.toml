@@ -1,7 +1,7 @@
 [project]
-name = "plucia-call"
+name = "redape-call"
 version = "0.0.0"
-description = "Python call API service for Plucia."
+description = "Python call API service for RedApeAI."
 requires-python = ">=3.11"
 dependencies = [
   "fastapi>=0.115.0",

@@ -51,10 +51,10 @@ function openConnectionPopup(): Window {
     `popup=yes,width=${width},height=${height},left=${Math.round(left)},top=${Math.round(top)}`,
   );
   if (!popup) {
-    throw new Error("Allow popups for Plucia to connect this account");
+    throw new Error("Allow popups for RedApeAI to connect this account");
   }
 
-  popup.document.title = "Connecting account — Plucia";
+  popup.document.title = "Connecting account — RedApeAI";
   popup.document.body.style.cssText =
     "margin:0;min-height:100vh;display:grid;place-items:center;background:#f1f0ee;color:#292929;font:14px system-ui,sans-serif";
   popup.document.body.textContent = "Opening secure account connection…";

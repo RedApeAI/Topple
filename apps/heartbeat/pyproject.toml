@@ -1,7 +1,7 @@
 [project]
-name = "plucia-heartbeat"
+name = "redape-heartbeat"
 version = "0.0.0"
-description = "Heartbeat service for Plucia."
+description = "Heartbeat service for RedApeAI."
 requires-python = ">=3.11"
 dependencies = [
   "fastapi>=0.115.0",

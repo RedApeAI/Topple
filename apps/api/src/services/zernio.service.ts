@@ -287,15 +287,15 @@ async function ensureProfile(tenant: Tenant) {
     .limit(1);
   if (existing) return existing;
 
-  const profileName = `Plucia · ${tenant.name} · ${tenant.id.slice(0, 8)}`;
+  const profileName = `RedApeAI · ${tenant.name} · ${tenant.id.slice(0, 8)}`;
   let externalProfile: ZernioProfileResponse["profile"];
   try {
     const response = await zernioRequest<ZernioProfileResponse>("/profiles", {
       method: "POST",
-      headers: { "Idempotency-Key": `plucia-profile-${tenant.id}` },
+      headers: { "Idempotency-Key": `redape-profile-${tenant.id}` },
       body: {
         name: profileName,
-        description: "Managed by Plucia",
+        description: "Managed by RedApeAI",
         color: "#111111",
       },
     });
@@ -471,10 +471,10 @@ export async function configureZernioWebhook(): Promise<{
   const existing = settings.webhooks.find(
     (webhook) =>
       webhook.url === env.ZERNIO_WEBHOOK_PUBLIC_URL ||
-      webhook.name === "Plucia WhatsApp Inbox",
+      webhook.name === "RedApeAI WhatsApp Inbox",
   );
   const body = {
-    name: "Plucia WhatsApp Inbox",
+    name: "RedApeAI WhatsApp Inbox",
     url: env.ZERNIO_WEBHOOK_PUBLIC_URL,
     secret: env.ZERNIO_WEBHOOK_SECRET,
     events: [...WHATSAPP_WEBHOOK_EVENTS],

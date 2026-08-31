@@ -29,6 +29,8 @@ const boxSchema = z.enum([
   "trash",
   "spam",
   "starred",
+  // Everything except Spam and Trash — what a label view spans.
+  "active",
   "all",
 ]);
 

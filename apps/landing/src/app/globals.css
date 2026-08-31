@@ -1,7 +1,7 @@
 @import "tailwindcss";
 
 /*
-  Design tokens — pulled from the Plucia Figma file.
+  Design tokens — pulled from the RedApeAI Figma file.
   Fonts are loaded via next/font in layout.tsx and exposed as CSS variables.
 */
 @theme inline {
@@ -71,7 +71,7 @@ html.lenis body {
   overflow: hidden;
 }
 
-/* "Just Tell Plucia" motion-section animations: rotating cloud/orb rings and
+/* "Just Tell RedApeAI" motion-section animations: rotating cloud/orb rings and
    light pulses traveling up the connector lines. Pure CSS so the parts of
    the section that only need these stay server components. The chat
    notification carousel (swipe-out + toast) lives in

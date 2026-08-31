@@ -6,7 +6,7 @@ except ModuleNotFoundError as exc:
         "the real call API server."
     ) from exc
 
-app = FastAPI(title="Plucia Call API")
+app = FastAPI(title="RedApeAI Call API")
 
 
 @app.get("/health")

@@ -18,7 +18,7 @@ def _now():
 
 async def seed_contact(db, name="Priya Patel", channels=(("whatsapp", "+971561239876"),)):
     doc = {
-        "tenant_id": "plucia",
+        "tenant_id": "redape",
         "identities": [{"channel": c, "external_id": e} for c, e in channels],
         "profile": {"name": name, "language": None},
         "lead": {"qualification_score": 40},
@@ -96,7 +96,7 @@ async def test_copilot_command_drafts_message(db, agent_llm, sent):
     ]
 
     result = await agent.run_command(
-        db, tenant_id="plucia", text="say Hi to Priya Patel", mode="copilot"
+        db, tenant_id="redape", text="say Hi to Priya Patel", mode="copilot"
     )
 
     msg = result["message"]
@@ -146,7 +146,7 @@ async def test_autopilot_command_sends_and_dispatches(db, agent_llm, sent):
     ]
 
     result = await agent.run_command(
-        db, tenant_id="plucia", text="say hi to priya", mode="autopilot"
+        db, tenant_id="redape", text="say hi to priya", mode="autopilot"
     )
 
     assert result["message"]["action"]["status"] == "sent"
@@ -171,7 +171,7 @@ async def test_clarifying_question_takes_no_action(db, agent_llm, sent):
     ]
 
     result = await agent.run_command(
-        db, tenant_id="plucia", text="message Priya", mode="copilot"
+        db, tenant_id="redape", text="message Priya", mode="copilot"
     )
 
     assert "which" in result["message"]["text"].lower()
@@ -182,14 +182,14 @@ async def test_clarifying_question_takes_no_action(db, agent_llm, sent):
 
 async def test_thread_continuation_carries_history(db, agent_llm):
     first = await agent.run_command(
-        db, tenant_id="plucia", text="find Priya", mode="copilot"
+        db, tenant_id="redape", text="find Priya", mode="copilot"
     )
     agent_llm.outputs = [
         json.dumps({"thought": "ok", "operator_output": "Using WhatsApp."})
     ]
     second = await agent.run_command(
         db,
-        tenant_id="plucia",
+        tenant_id="redape",
         text="use whatsapp",
         mode="copilot",
         thread_id=first["thread_id"],
@@ -207,7 +207,7 @@ async def test_unknown_thread_raises(db, agent_llm):
     with pytest.raises(agent.ThreadNotFound):
         await agent.run_command(
             db,
-            tenant_id="plucia",
+            tenant_id="redape",
             text="hi",
             mode="copilot",
             thread_id="6a5e11c03b0fe69f46de2cd0",
@@ -217,7 +217,7 @@ async def test_unknown_thread_raises(db, agent_llm):
 async def test_unparseable_output_degrades_to_text(db, agent_llm):
     agent_llm.outputs = ["not json at all", "still not json"]
     result = await agent.run_command(
-        db, tenant_id="plucia", text="do something odd", mode="copilot"
+        db, tenant_id="redape", text="do something odd", mode="copilot"
     )
     assert result["message"]["text"] == "still not json"
     assert result["message"]["action"] is None
@@ -232,7 +232,7 @@ async def test_malformed_json_salvages_report_not_raw(db, agent_llm):
     )
     agent_llm.outputs = ["also broken {oops", debris]
     result = await agent.run_command(
-        db, tenant_id="plucia", text="message David", mode="copilot"
+        db, tenant_id="redape", text="message David", mode="copilot"
     )
     text = result["message"]["text"]
     assert text == "Drafting a WhatsApp message about the Dubai Marina property."
@@ -275,7 +275,7 @@ async def test_approving_operator_draft_marks_reply_sent(db, agent_llm, sent):
     contact = await seed_contact(db)
     agent_llm.outputs = _draft_outputs(contact)
     result = await agent.run_command(
-        db, tenant_id="plucia", text="say hi to Priya", mode="copilot"
+        db, tenant_id="redape", text="say hi to Priya", mode="copilot"
     )
     action = result["message"]["action"]
     assert action["status"] == "draft"
@@ -296,7 +296,7 @@ async def test_discarding_operator_draft_marks_reply_discarded(db, agent_llm, se
     contact = await seed_contact(db)
     agent_llm.outputs = _draft_outputs(contact)
     result = await agent.run_command(
-        db, tenant_id="plucia", text="say hi to Priya", mode="copilot"
+        db, tenant_id="redape", text="say hi to Priya", mode="copilot"
     )
 
     await discard_draft(result["message"]["action"]["message_id"])
@@ -326,7 +326,7 @@ async def test_action_on_missing_channel_identity_fails_cleanly(db, agent_llm, s
         ),
     ]
     result = await agent.run_command(
-        db, tenant_id="plucia", text="email priya", mode="autopilot"
+        db, tenant_id="redape", text="email priya", mode="autopilot"
     )
     assert result["message"]["action"]["status"] == "failed"
     assert "no email identity" in result["message"]["action"]["reason"]
@@ -337,7 +337,7 @@ async def test_action_on_missing_channel_identity_fails_cleanly(db, agent_llm, s
 async def test_get_conversation_tool_summarizes(db, agent_llm):
     contact = await seed_contact(db)
     convo = {
-        "tenant_id": "plucia",
+        "tenant_id": "redape",
         "contact_id": contact["_id"],
         "channel": "whatsapp",
         "stage": "QUALIFYING",
@@ -348,7 +348,7 @@ async def test_get_conversation_tool_summarizes(db, agent_llm):
     res = await db.conversations.insert_one(convo)
     await db.messages.insert_one(
         {
-            "tenant_id": "plucia",
+            "tenant_id": "redape",
             "conversation_id": res.inserted_id,
             "direction": "inbound",
             "text": "Looking for a 2BR",
@@ -358,7 +358,7 @@ async def test_get_conversation_tool_summarizes(db, agent_llm):
     )
 
     observation = await agent._tool_get_conversation(
-        db, "plucia", {"contact_id": str(contact["_id"])}
+        db, "redape", {"contact_id": str(contact["_id"])}
     )
     summary = observation["conversation"]
     assert summary["stage"] == "QUALIFYING"

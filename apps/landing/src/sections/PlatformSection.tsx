@@ -6,17 +6,17 @@ import DistortText from "@/components/DistortText";
 /**
  * "The AI Copilot Built for Modern Sales Teams." — benchmark section.
  * Aside-style horizontal bar chart: one row per product (logo, name,
- * animated score bar, value), hairline separators, Plucia's bar highlighted
+ * animated score bar, value), hairline separators, RedApeAI's bar highlighted
  * in brand blue. Logos live in /assets/logocom/.
  */
 
 // logoClass heights are tuned per SVG: the wordmarks have very different
-// viewBox padding (Claude's glyphs fill its box, Plucia's sit in a tall one,
+// viewBox padding (Claude's glyphs fill its box, RedApeAI's sit in a tall one,
 // the CRM badges tower over their text), so equal heights render unequal.
 const BENCHMARKS = [
   {
-    name: "Plucia",
-    logo: "/assets/logocom/bench-plucia.svg",
+    name: "RedApeAI",
+    logo: "/assets/logocom/bench-redape.svg",
     logoClass: "h-[25px] sm:h-[30px]",
     value: 98,
     highlight: true,

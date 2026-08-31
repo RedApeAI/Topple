@@ -61,6 +61,10 @@ const rawEnvSchema = z
     // The orchestrator. All browser traffic to it is proxied through this
     // service so tenant/user identity comes from the session, never the client.
     ORCHESTRATOR_URL: z.url().default("http://localhost:8000"),
+    // The Qdrant collection uploaded knowledge lands in. One collection for
+    // the deployment — isolation inside it is the orchestrator's
+    // (tenant_id, user_id) payload filter, not the collection name.
+    KNOWLEDGE_COLLECTION: z.string().min(1).default("redape_re"),
     // Shared secret the orchestrator presents on /api/v1/mail/outbound. That
     // endpoint sends mail as an arbitrary user_id and has no session cookie to
     // check, so without this configured it refuses every request.

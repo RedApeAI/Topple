@@ -33,6 +33,14 @@ _TOOL_NAMES = re.compile(r"\b(find_contact|get_conversation|send_message)\b", re
 _PROTOCOL_WORDS = re.compile(
     r"\b(operator_output|contact_id|conversation_id|message_id)\b", re.IGNORECASE
 )
+# The model's raw internal monologue, when the backend inlines it. Distinct
+# from the protocol's `thought` field, which is shown deliberately. Stripped
+# first and unconditionally: the salvage path below hands us the *raw*
+# completion when JSON parsing fails twice, and on an inlining backend that
+# raw text carries a full <think> block straight to the salesperson.
+_THINK = re.compile(r"<think>.*?</think>", re.DOTALL | re.IGNORECASE)
+# An unclosed block — a truncated completion has an opening tag and no close.
+_THINK_OPEN = re.compile(r"<think>.*", re.DOTALL | re.IGNORECASE)
 # Structural braces/brackets left dangling after a blob is partially stripped.
 _BRACES = re.compile(r"[{}\[\]]")
 _WS = re.compile(r"\s{2,}")
@@ -46,6 +54,12 @@ _OPERATOR_OUTPUT_RE = re.compile(r'"operator_output"\s*:\s*"((?:[^"\\]|\\.){0,80
 
 def contains_forbidden(text: str) -> bool:
     return any(p.search(text or "") for p in _FORBIDDEN)
+
+
+def strip_reasoning(text: str) -> str:
+    """Remove inline reasoning blocks, closed or truncated."""
+    text = _THINK.sub("", text or "")
+    return _THINK_OPEN.sub("", text).strip()
 
 
 def _redact(text: str) -> str:
@@ -80,7 +94,7 @@ def salvage_operator_output(raw: str) -> str | None:
 def sanitize_operator_output(text: str, fallback: str) -> str:
     """The salesperson's report — redact leaks; if that guts it, use the
     structured fallback so the report is always clean AND coherent."""
-    text = (text or "").strip()
+    text = strip_reasoning(text)
     if not text:
         return fallback
     if not contains_forbidden(text):
@@ -96,7 +110,7 @@ def sanitize_operator_output(text: str, fallback: str) -> str:
 def sanitize_customer_text(text: str) -> str | None:
     """The outgoing customer message — redact leaks; None if nothing usable
     remains (the send is then failed rather than leaking internals)."""
-    text = (text or "").strip()
+    text = strip_reasoning(text)
     if not text:
         return None
     cleaned = _redact(text) if contains_forbidden(text) else text

@@ -14,14 +14,39 @@ export interface Mailbox {
   account: MailAddress;
 }
 
+/** A Gmail-side mailbox. The sidebar's views map onto these. */
+export type MailboxBox =
+  | "inbox"
+  | "sent"
+  | "drafts"
+  | "archive"
+  | "trash"
+  | "spam"
+  | "starred"
+  /** Everything except Spam and Trash — what a label view spans. */
+  | "active"
+  | "all";
+
+export interface MailboxRequest {
+  box: MailboxBox;
+  /** Extra Gmail search syntax stacked on the box, e.g. `label:"Investors"`. */
+  search?: string;
+  limit?: number;
+}
+
 /**
- * One page of the whole mailbox. Gmail's `in:anywhere` is fetched once and the
- * sidebar views filter it client-side, which is what keeps every existing view
- * (starred, done, trash, labels) working off a single round trip. Paging
- * deeper than `limit` is a follow-up — `nextPageToken` is returned but not yet
- * consumed.
+ * One page of one box.
+ *
+ * This used to fetch `in:anywhere` once and filter all nine sidebar views out
+ * of that single page — which cannot work: Gmail returns the newest N messages
+ * across the whole mailbox, and in any real account those are almost entirely
+ * inbox, so Sent, Drafts, Done, Trash and Spam were left with nothing to show.
+ * Each destination now asks Gmail for itself. Paging deeper than `limit` is
+ * still a follow-up — `nextPageToken` is returned but not yet consumed.
  */
-export async function fetchMailbox(limit = 60): Promise<Mailbox> {
+export async function fetchMailbox(
+  request: MailboxRequest = { box: "inbox" },
+): Promise<Mailbox> {
   const [mailbox, account] = await Promise.all([
     apiClient.get<{
       data: {
@@ -29,7 +54,13 @@ export async function fetchMailbox(limit = 60): Promise<Mailbox> {
         labels: string[];
         nextPageToken?: string;
       };
-    }>("/api/v1/mail/messages", { params: { box: "all", limit } }),
+    }>("/api/v1/mail/messages", {
+      params: {
+        box: request.box,
+        limit: request.limit ?? 60,
+        ...(request.search ? { search: request.search } : {}),
+      },
+    }),
     apiClient.get<{ data: { emailAddress: string } }>("/api/v1/mail/profile"),
   ]);
 

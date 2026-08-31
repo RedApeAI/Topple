@@ -1,5 +1,10 @@
 import type { LucideIcon } from "lucide-react";
-import { Activity, CalendarMinus2, GalleryVerticalEnd, Plug } from "lucide-react";
+import {
+  Activity,
+  CalendarMinus2,
+  GalleryVerticalEnd,
+  Plug,
+} from "lucide-react";
 import {
   CallSparkIcon,
   CrmIcon,

@@ -12,11 +12,11 @@ import type { ConnectablePlatform } from "../types/zernio.types";
  */
 
 /** `window.open` target name — also how the callback knows it's in a popup. */
-export const ZERNIO_OAUTH_POPUP = "plucia-zernio-oauth";
+export const ZERNIO_OAUTH_POPUP = "redape-zernio-oauth";
 
-export const ZERNIO_OAUTH_CHANNEL = "plucia:zernio-oauth";
+export const ZERNIO_OAUTH_CHANNEL = "redape:zernio-oauth";
 
-const RESULT_TYPE = "plucia:zernio-oauth";
+const RESULT_TYPE = "redape:zernio-oauth";
 
 export interface ZernioOAuthResult {
   type: typeof RESULT_TYPE;

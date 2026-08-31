@@ -37,6 +37,10 @@ class RuntimeConfig(BaseModel):
     knowledge_source_id: str  # = Qdrant collection name
     model_id: str
     adapter_id: str | None = None
+    # Optional smaller model for the extraction call, which is classification
+    # rather than composition. Falls back to the deployment default and then to
+    # the turn's generation model, so leaving it unset changes nothing.
+    extraction_model_id: str | None = None
     playbook_version: int
     prompt_version: str
 

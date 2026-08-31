@@ -365,7 +365,7 @@ function Composer({ disabled, onSend }: ComposerProps) {
               submit();
             }
           }}
-          placeholder="Type a message or /Plucia let agent chat"
+          placeholder="Type a message or /RedApeAI let agent chat"
           aria-label="Type a message"
           className="w-full bg-transparent px-1 text-[14px] text-foreground outline-none placeholder:text-muted-foreground"
         />

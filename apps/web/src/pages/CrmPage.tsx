@@ -4,7 +4,7 @@ import { CrmScreen } from "@/features/crm/components/CrmScreen";
 
 export function CrmPage() {
   useEffect(() => {
-    document.title = "CRM — Plucia";
+    document.title = "CRM — RedApeAI";
   }, []);
 
   return (

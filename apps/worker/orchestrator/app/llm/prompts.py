@@ -115,3 +115,55 @@ def build_generation_messages(
     if not history or history[-1]["direction"] != "inbound" or history[-1]["text"] != text:
         messages.append({"role": "user", "content": text})
     return messages
+
+
+# --------------------------------------------------------------------------- #
+# Repair — a surgical edit instead of a second full generation
+# --------------------------------------------------------------------------- #
+REPAIR_SYSTEM = """\
+You are a compliance editor for sales messages. You are given message bubbles \
+that failed an automated check, and you return the SAME bubbles with only the \
+offending parts changed.
+
+Rules:
+- Change as little as possible. Preserve tone, length, ordering and every \
+bubble boundary. Do not add or remove bubbles.
+- Separate bubbles with a line containing only "---", exactly as given.
+- Return ONLY the corrected bubbles. No preamble, no explanation, no quotes.
+- Never introduce a number that is not in ALLOWED NUMBERS below. If a number \
+must go and no allowed number fits, rewrite the sentence to avoid quoting a \
+figure at all — say the team will confirm.
+"""
+
+
+def build_repair_messages(
+    output_messages: list[str],
+    violations: list[str],
+    facts_text: str,
+    history_text: str,
+) -> list[dict]:
+    """A minimal edit request: the bubbles, what is wrong, what is permitted.
+
+    Deliberately does *not* carry the playbook system prompt, the lead profile
+    or the conversation history. Numeric grounding is a deterministic check
+    against a known corpus, so repairing it needs the text and the corpus and
+    nothing else — which is what makes this cheap enough to be worth doing
+    instead of generating the whole reply again.
+    """
+    from ..engine.guardrails import numeric_tokens
+
+    allowed = sorted(numeric_tokens(f"{facts_text}\n{history_text}"))
+    user = (
+        "BUBBLES:\n"
+        + "\n---\n".join(output_messages)
+        + "\n\nPROBLEMS:\n"
+        + "\n".join(violations)
+        + "\n\nALLOWED NUMBERS (the only figures you may use):\n"
+        + (", ".join(allowed) if allowed else "(none — quote no figures at all)")
+        + "\n\nFACTS the numbers come from:\n"
+        + (facts_text or "(no facts available for this turn)")
+    )
+    return [
+        {"role": "system", "content": REPAIR_SYSTEM},
+        {"role": "user", "content": user},
+    ]

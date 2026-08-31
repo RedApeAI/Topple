@@ -20,7 +20,7 @@ export function LinkedInPage() {
   );
 
   useEffect(() => {
-    document.title = "LinkedIn — Plucia";
+    document.title = "LinkedIn — RedApeAI";
     void load().catch(() => undefined);
   }, [load]);
 
@@ -56,7 +56,7 @@ export function LinkedInPage() {
                 <p className="mt-1 text-[13px] leading-5 text-muted-foreground">
                   LinkedIn does not provide direct-message access to third-party
                   applications. Your account is connected for supported LinkedIn
-                  features, but Plucia cannot read or send LinkedIn DMs.
+                  features, but RedApeAI cannot read or send LinkedIn DMs.
                 </p>
               </div>
             </div>

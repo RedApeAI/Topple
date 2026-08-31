@@ -87,9 +87,10 @@ class FakeRetrieval:
         self.flag: str | None = None
         self.calls: list[dict] = []
 
-    async def retrieve(self, collection, query_text, top_k, min_score):
+    async def retrieve(self, collection, query_text, top_k, min_score, *, scope=None):
         self.calls.append(
-            {"collection": collection, "query": query_text, "top_k": top_k, "min_score": min_score}
+            {"collection": collection, "query": query_text, "top_k": top_k,
+             "min_score": min_score, "scope": scope}
         )
         return list(self.hits), self.flag
 
@@ -108,12 +109,12 @@ def envelope_dict(**overrides) -> dict:
     base = {
         "request_id": "req-001",
         "received_at": datetime.now(timezone.utc).isoformat(),
-        "tenant_id": "plucia",
+        "tenant_id": "redape",
         "channel": "whatsapp",
         "granted_scopes": ["channel:whatsapp"],
         "runtime": {
             "playbook_id": "real-estate-v1",
-            "knowledge_source_id": "plucia_re",
+            "knowledge_source_id": "redape_re",
             "model_id": "qwen3.5-9b-base",
             "adapter_id": "real-estate-v2",
             "playbook_version": 8,

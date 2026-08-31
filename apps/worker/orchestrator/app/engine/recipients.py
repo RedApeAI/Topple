@@ -22,6 +22,7 @@ from __future__ import annotations
 import re
 from datetime import datetime, timezone
 
+from .addressability import is_unreachable
 from ..stores import directory
 from .identity import channel_for_address, normalize
 
@@ -135,6 +136,11 @@ def _directory_candidates(entries: list[dict], query: str) -> list[dict]:
     for entry in entries:
         email = str(entry.get("email", ""))
         if not email:
+            continue
+        if is_unreachable(email):
+            # A robot address the harvest picked up under a human's display
+            # name. Filtered here as well as at harvest time because the
+            # directory cache has a 24h TTL and is already warm with these.
             continue
         score = _match_score(query, entry.get("name"), [email])
         if not score:

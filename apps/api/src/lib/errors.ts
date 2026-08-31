@@ -7,6 +7,7 @@ export class AppError extends Error {
       | 403
       | 404
       | 409
+      | 415 // unsupported media type — a file we cannot parse
       | 422
       | 429
       | 500

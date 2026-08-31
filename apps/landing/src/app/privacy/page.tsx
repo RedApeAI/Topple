@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import LegalPage from "@/page/LegalPage";
 
 export const metadata: Metadata = {
-  title: "Privacy Policy — Plucia",
-  description: "How Plucia collects, uses, and protects personal information.",
+  title: "Privacy Policy — RedApeAI",
+  description: "How RedApeAI collects, uses, and protects personal information.",
 };
 
 export default function Page() {
@@ -11,7 +11,7 @@ export default function Page() {
     <LegalPage
       eyebrow="Legal"
       title="Privacy Policy"
-      introduction="Plucia is an AI business operator designed to help sales teams manage conversations, opportunities, follow-ups, and deals from one inbox across the channels they already use. This policy explains how we handle information when you visit our website, join the waitlist, or contact us."
+      introduction="RedApeAI is an AI business operator designed to help sales teams manage conversations, opportunities, follow-ups, and deals from one inbox across the channels they already use. This policy explains how we handle information when you visit our website, join the waitlist, or contact us."
       sections={[
         {
           title: "Information we collect",
@@ -23,14 +23,14 @@ export default function Page() {
         {
           title: "How we use information",
           paragraphs: [
-            "We use waitlist information to tell you when Plucia becomes available and to share important product updates. We use contact information to reply to questions, arrange product conversations, and provide support.",
+            "We use waitlist information to tell you when RedApeAI becomes available and to share important product updates. We use contact information to reply to questions, arrange product conversations, and provide support.",
             "We may also use limited technical data to prevent abuse, troubleshoot problems, improve reliability, and understand the general performance of the website.",
           ],
         },
         {
-          title: "How Plucia works",
+          title: "How RedApeAI works",
           paragraphs: [
-            "The planned Plucia product brings critical sales channels into one inbox and uses AI to help converse with prospects, identify intent, follow up, organize customer context, schedule meetings, and move leads toward a deal on a sales team's behalf.",
+            "The planned RedApeAI product brings critical sales channels into one inbox and uses AI to help converse with prospects, identify intent, follow up, organize customer context, schedule meetings, and move leads toward a deal on a sales team's behalf.",
             "Any future processing of connected inboxes, customer conversations, CRM records, or other product data will be covered by additional product terms, permissions, and notices presented before those services are enabled.",
           ],
         },
@@ -52,13 +52,13 @@ export default function Page() {
           title: "Your choices",
           paragraphs: [
             "You may ask to access, correct, or delete the personal information you provided, or opt out of future launch messages. Depending on where you live, additional privacy rights may apply.",
-            "For privacy questions or requests, email anas@plucia.com.",
+            "For privacy questions or requests, email anas@redape.com.",
           ],
         },
         {
           title: "Changes to this policy",
           paragraphs: [
-            "We may update this policy as Plucia develops. We will post the updated version here and revise the date above when material changes are made.",
+            "We may update this policy as RedApeAI develops. We will post the updated version here and revise the date above when material changes are made.",
           ],
         },
       ]}
