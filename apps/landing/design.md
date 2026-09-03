@@ -29,18 +29,18 @@ design.md         This file
 
 ## 2. Section map (Figma node → component)
 
-| #   | Figma frame                                                                   | Node id                            | Component                         | Page Y (px) |
-| --- | ----------------------------------------------------------------------------- | ---------------------------------- | --------------------------------- | ----------- |
-| 1   | Background + navbar + headline + dashboard                                    | 2877:21184 / 21231 / 21219 / 21243 | `sections/Hero.tsx`               | 13.6 – 1650 |
-| 2   | “Everything Your Team Needs …” (svg **motion section**)                       | 2877:21244                         | `sections/PlatformSection.tsx`    | 1825        |
-| 3   | “Just Tell RedApeAI What You Need.” (dark card, **motion section**)             | 2877:21319                         | `sections/TellRedApeAISection.tsx`  | 2353        |
-| 4   | “From Conversation to Calendar, Automatically.”                               | 2877:21314                         | `sections/CalendarSection.tsx`    | 2982        |
-| 5   | Insights collage “Dominate Every sales meeting …”                             | 2877:21504                         | `sections/InsightsSection.tsx`    | 3685        |
-| 6   | Integration “Everything Your Team Needs in One Platform” (**motion section**) | 2877:22158                         | `sections/IntegrationSection.tsx` | 5367        |
-| 7   | “Powerful AI Features That Drive Your Business”                               | 2877:22300                         | `sections/FeaturesSection.tsx`    | 6246        |
-| 8   | FAQ “General Question asked by Everyone”                                      | 2877:22869                         | `sections/FaqSection.tsx`         | 7164        |
-| 9   | Subscription CTA “Be The Part of the Future Before Everyone”                  | 2877:22890                         | `sections/SubscribeSection.tsx`   | 7941        |
-| 10  | Footer                                                                        | 2877:22925                         | `sections/Footer.tsx`             | 8466        |
+| #   | Figma frame                                                                   | Node id                            | Component                          | Page Y (px) |
+| --- | ----------------------------------------------------------------------------- | ---------------------------------- | ---------------------------------- | ----------- |
+| 1   | Background + navbar + headline + dashboard                                    | 2877:21184 / 21231 / 21219 / 21243 | `sections/Hero.tsx`                | 13.6 – 1650 |
+| 2   | “Everything Your Team Needs …” (svg **motion section**)                       | 2877:21244                         | `sections/PlatformSection.tsx`     | 1825        |
+| 3   | “Just Tell RedApeAI What You Need.” (dark card, **motion section**)           | 2877:21319                         | `sections/TellRedApeAISection.tsx` | 2353        |
+| 4   | “From Conversation to Calendar, Automatically.”                               | 2877:21314                         | `sections/CalendarSection.tsx`     | 2982        |
+| 5   | Insights collage “Dominate Every sales meeting …”                             | 2877:21504                         | `sections/InsightsSection.tsx`     | 3685        |
+| 6   | Integration “Everything Your Team Needs in One Platform” (**motion section**) | 2877:22158                         | `sections/IntegrationSection.tsx`  | 5367        |
+| 7   | “Powerful AI Features That Drive Your Business”                               | 2877:22300                         | `sections/FeaturesSection.tsx`     | 6246        |
+| 8   | FAQ “General Question asked by Everyone”                                      | 2877:22869                         | `sections/FaqSection.tsx`          | 7164        |
+| 9   | Subscription CTA “Be The Part of the Future Before Everyone”                  | 2877:22890                         | `sections/SubscribeSection.tsx`    | 7941        |
+| 10  | Footer                                                                        | 2877:22925                         | `sections/Footer.tsx`              | 8466        |
 
 The page renders inside a centered `max-w-[1440px]` canvas; each section keeps
 its exact Figma offsets (margins/left positions derived from frame x/y values).
@@ -52,12 +52,12 @@ its exact Figma offsets (margins/left positions derived from frame x/y values).
 | Manrope            | Headings (50/48px, −2.5px tracking), buttons, FAQ | `next/font/google` → `font-manrope`                                             |
 | Inter              | Body copy, small UI text                          | `font-inter`                                                                    |
 | Urbanist           | Prompt field, “Features”/“FAQ’s” eyebrows         | `font-urbanist`                                                                 |
-| Geist Medium       | “RedApeAI” wordmark (navbar + footer)               | `font-geist`                                                                    |
-| DM Sans            | “RedApeAI AI · Profile Summary” card                | `font-dmsans`                                                                   |
+| Geist Medium       | “RedApeAI” wordmark (navbar + footer)             | `font-geist`                                                                    |
+| DM Sans            | “RedApeAI AI · Profile Summary” card              | `font-dmsans`                                                                   |
 | Poppins            | Chat notification names                           | `font-poppins`                                                                  |
 | Work Sans          | “WhatsApp”/“Channels” chips                       | `font-worksans`                                                                 |
 | Ms Madi            | Script accents: “One Platform”, “Everyone”        | `font-msmadi`                                                                   |
-| Figma Hand         | “Try Yourself”, “Sell with RedApeAI.”               | **substituted with Caveat** (`font-hand`) — Figma Hand is not publicly licensed |
+| Figma Hand         | “Try Yourself”, “Sell with RedApeAI.”             | **substituted with Caveat** (`font-hand`) — Figma Hand is not publicly licensed |
 | Font Awesome 6 Pro | chevron/dot glyphs in mock UI                     | replaced with inline SVG / dot span                                             |
 
 ## 4. Core colors
@@ -69,7 +69,7 @@ its exact Figma offsets (margins/left positions derived from frame x/y values).
 | Surface      | `#f4f4f4` / `#f6f6f6` / `#f2f2f2`                  | cards, chips, FAQ tiles                 |
 | Accent green | `#34a853` (Figma var `Accents/Green` ≈ `#34c759`)  | badges, confidence score, WhatsApp dots |
 | Hero canvas  | `#eaeaea` + pastel gradient PNG                    | hero background                         |
-| Dark card    | `#333 → #111` gradients                            | Tell-RedApeAI card, AI buttons            |
+| Dark card    | `#333 → #111` gradients                            | Tell-RedApeAI card, AI buttons          |
 | CTA gradient | `linear-gradient(-6deg, #070707 12%, #2f2e31 88%)` | Join Waitlist / Contact Sales           |
 
 ## 5. Motion

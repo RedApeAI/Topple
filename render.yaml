@@ -1,0 +1,203 @@
+# RedApeAI backend on Render.
+#
+#   Dashboard → Blueprints → New Blueprint Instance → this repo
+#
+# The dashboard SPA is deliberately NOT in here. apps/web deploys on Vercel and
+# rewrites /api/* to redape-api, which is what keeps the session cookie
+# first-party for Better Auth's OAuth callbacks. See apps/web/vercel.json.
+#
+# Everything marked `sync: false` is prompted for on apply and then lives in the
+# dashboard — nothing secret belongs in this file.
+
+envVarGroups:
+  # One generated value delivered to both services. The BFF compares it with
+  # timingSafeEqual, so a mismatch makes every outbound email 401 with no other
+  # symptom; generating it once in a shared group is what makes that class of
+  # bug impossible rather than merely unlikely.
+  - name: redape-shared
+    envVars:
+      - key: OUTBOUND_WEBHOOK_SECRET
+        generateValue: true
+
+services:
+  # ---------------------------------------------------------------------------
+  # The BFF. The only service reachable from the internet.
+  # ---------------------------------------------------------------------------
+  - type: web
+    name: redape-api
+    runtime: docker
+    # Same region for every service: Render's private network does not cross
+    # regions. Virginia is also nearest to Bedrock us-east-1.
+    region: virginia
+    # 0.5 CPU / 512 MB. Never `free`: a free web service cannot *receive*
+    # private network traffic, and this one has to answer the orchestrator's
+    # MCP tool discovery.
+    plan: 0.5c-512mb
+    dockerfilePath: ./apps/api/Dockerfile
+    # The pnpm workspace, not apps/api — the image resolves @repo/db-sql through
+    # the root lockfile.
+    dockerContext: .
+    healthCheckPath: /healthz
+    # Wait for CI. The migration job runs there, so this ordering is what keeps
+    # Neon ahead of the code that expects it.
+    autoDeployTrigger: checksPass
+    envVars:
+      - fromGroup: redape-shared
+
+      - key: NODE_ENV
+        value: production
+      # Declared rather than left to Render so the port the container binds and
+      # the port `hostport` advertises to the orchestrator cannot disagree.
+      - key: PORT
+        value: 4000
+
+      # Private networking. The orchestrator has no public address at all, which
+      # is what makes HLD §8 gap 1 ("the orchestrator would still answer a
+      # direct call") moot rather than merely discouraged.
+      #
+      # `hostport` yields `redape-orchestrator-xxxx:8000` — no scheme, and that
+      # suffix is generated, so lib/env.ts normalises it rather than anyone
+      # pasting it in by hand.
+      - key: ORCHESTRATOR_URL
+        fromService:
+          type: pserv
+          name: redape-orchestrator
+          property: hostport
+
+      # These two must be the origin the BROWSER uses — the Vercel domain, not
+      # this service's onrender.com URL. Prompted rather than hardcoded because
+      # getting them wrong breaks sign-in silently, and a wrong value committed
+      # to git is worse than one that had to be typed.
+      - key: BETTER_AUTH_URL
+        sync: false
+      - key: FRONTEND_ORIGINS
+        sync: false
+
+      - key: COOKIE_CROSS_SITE
+        value: "false"
+      - key: COOKIE_SECURE
+        value: "true"
+      - key: KNOWLEDGE_COLLECTION
+        value: redape_re
+
+      # Render generates a 256-bit value; lib/env.ts requires at least 32 chars.
+      - key: BETTER_AUTH_SECRET
+        generateValue: true
+
+      - key: DATABASE_URL
+        sync: false
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: ZERNIO_API_KEY
+        sync: false
+      - key: ZERNIO_WEBHOOK_SECRET
+        sync: false
+      - key: ZERNIO_WEBHOOK_PUBLIC_URL
+        sync: false
+      - key: ZERNIO_CONNECT_REDIRECT_URL
+        sync: false
+
+  # ---------------------------------------------------------------------------
+  # The agent runtime. Private: no onrender.com URL, not routable from outside.
+  #
+  # A private service rather than a worker because it does receive traffic — the
+  # BFF proxies every turn to it. It must also stay running between requests:
+  # engine/background.py sends the outbound mail, writes the trace and publishes
+  # events AFTER the response has gone out, and the lifespan hook replays turns
+  # whose deferred work never ran.
+  # ---------------------------------------------------------------------------
+  - type: pserv
+    name: redape-orchestrator
+    runtime: docker
+    region: virginia
+    # 1 CPU / 2 GB. fastembed runs an ONNX session in-process and LangGraph
+    # holds the whole turn state; 512 MB is not enough once a document is
+    # being chunked.
+    plan: 1c-2g
+    dockerfilePath: ./apps/worker/orchestrator/Dockerfile
+    dockerContext: .
+    autoDeployTrigger: checksPass
+    envVars:
+      - fromGroup: redape-shared
+
+      # Matches the port uvicorn binds in the Dockerfile's CMD.
+      - key: PORT
+        value: 8000
+
+      - key: BFF_BASE_URL
+        fromService:
+          type: web
+          name: redape-api
+          property: hostport
+
+      - key: DRAGONFLY_URL
+        fromService:
+          type: keyvalue
+          name: redape-cache
+          property: connectionString
+
+      # OUTBOUND_WEBHOOK_URL is deliberately absent. config.py derives it from
+      # BFF_BASE_URL, the same way the MCP and directory endpoints already are.
+      # Setting it here would pin a generated hostname in a second place, free
+      # to drift from the first.
+
+      # Empty, and it must be JSON — config.py types this `list[str]`, so a
+      # comma-separated string raises at startup. Nothing browser-side reaches
+      # this service; the BFF is the only caller.
+      - key: CORS_ORIGINS
+        value: "[]"
+
+      - key: LLM_BACKEND
+        value: bedrock
+      - key: BEDROCK_REGION
+        value: us-east-1
+      - key: BEDROCK_MODEL_ID
+        value: minimax.minimax-m2
+      - key: LLM_MAX_OUTPUT_TOKENS
+        value: 4096
+
+      # Each budget sits inside its caller's: this call < a node < the whole
+      # command (75s) < the BFF's fetch (85s) < the browser (95s). Raising one
+      # without raising those outside it means the outer hop abandons work the
+      # inner one is still doing.
+      - key: LLM_TIMEOUT_SECONDS
+        value: 60
+
+      # Where the Dockerfile baked BAAI/bge-small-en-v1.5. Without this,
+      # fastembed re-downloads ~130 MB into a temp directory on first use.
+      - key: FASTEMBED_CACHE_PATH
+        value: /opt/fastembed
+
+      - key: MONGO_DB
+        value: redape
+      - key: MONGO_URL
+        sync: false
+      - key: QDRANT_URL
+        sync: false
+      # NOT REDAPE_QDRANT — that name is not a recognised setting and is
+      # silently ignored. This is the one config.py reads.
+      - key: QDRANT_API_KEY
+        sync: false
+      - key: BEDROCK_API_KEY
+        sync: false
+
+  # ---------------------------------------------------------------------------
+  # The event bus, replacing the Dragonfly container from docker-compose.
+  # Valkey 8 speaks the same protocol, and the orchestrator only ever uses
+  # PUBLISH/SUBSCRIBE plus a 60s-TTL cache — nothing that needs Dragonfly
+  # specifically, and nothing worth self-hosting.
+  # ---------------------------------------------------------------------------
+  - type: keyvalue
+    name: redape-cache
+    region: virginia
+    # Key Value plans are sized by memory alone. 256 MB is ample: pub/sub
+    # stores nothing and the only keys are 60s tool-cache entries.
+    plan: 256mb
+    # Internal connections only.
+    ipAllowList: []
+    # Everything stored here is disposable: stores/events.py is pure pub/sub and
+    # keeps no keys at all, and mcp/cache.py's entries carry a 60s TTL and are
+    # rebuilt by one round trip on a miss.
+    maxmemoryPolicy: allkeys-lru

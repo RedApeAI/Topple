@@ -16,6 +16,21 @@ export const apiClient = axios.create({
   headers: { "Content-Type": "application/json" },
 });
 
+/**
+ * Budget for a request that runs the agent loop server-side.
+ *
+ * 30s is right for reads, but an Operator command or a document ingest is an
+ * LLM loop and legitimately runs longer. Each hop's budget has to be shorter
+ * than the one outside it, or the browser abandons a request that is still
+ * being worked on and the user sees a failure that did not happen:
+ *
+ *   Cloudflare edge   ~100s   fixed — returns 524 past this
+ *   this client         95s
+ *   BFF                 85s   TIMEOUT_MS in orchestrator.service.ts
+ *   orchestrator        75s   OPERATOR_DEADLINE_SECONDS
+ */
+export const AGENT_TIMEOUT_MS = 95_000;
+
 /** Error body shapes we may receive: Hono BFF, then FastAPI orchestrator. */
 interface ApiErrorBody {
   error?: { code?: string; message?: string } | string;

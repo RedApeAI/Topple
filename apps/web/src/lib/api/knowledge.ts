@@ -1,4 +1,4 @@
-import { apiClient, errorMessage } from "@/lib/api/client";
+import { AGENT_TIMEOUT_MS, apiClient, errorMessage } from "@/lib/api/client";
 
 /**
  * Uploading a document into the signed-in user's knowledge base.
@@ -51,9 +51,14 @@ export async function uploadKnowledgeFile(
     const { data } = await apiClient.post<{ data: UploadedDocument }>(
       "/api/v1/agent/knowledge/upload",
       body,
-      // Let the browser set the multipart boundary; a hand-written
-      // Content-Type omits it and the server sees an unparseable body.
-      { headers: { "Content-Type": undefined } },
+      {
+        // Let the browser set the multipart boundary; a hand-written
+        // Content-Type omits it and the server sees an unparseable body.
+        headers: { "Content-Type": undefined },
+        // Parse, answer, chunk, summarise and embed all happen before this
+        // resolves.
+        timeout: AGENT_TIMEOUT_MS,
+      },
     );
     return data.data;
   } catch (error) {

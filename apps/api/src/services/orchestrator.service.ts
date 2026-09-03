@@ -20,7 +20,14 @@ export interface Scope {
   userId: string;
 }
 
-const TIMEOUT_MS = 120_000; // a turn runs an LLM loop
+/**
+ * A turn runs an LLM loop, so this is generous — but it has to stay *under*
+ * the browser's own budget (`AGENT_TIMEOUT_MS`, 95s) and above the
+ * orchestrator's (`OPERATOR_DEADLINE_SECONDS`, 75s). Each hop shorter than the
+ * one outside it, so whoever gives up first is the one closest to the work and
+ * can say why. The outermost ceiling is Cloudflare's ~100s proxy timeout.
+ */
+const TIMEOUT_MS = 85_000;
 
 async function call<T>(
   path: string,
@@ -275,7 +282,11 @@ export async function uploadDocument(
   purged: boolean;
 }> {
   const form = new FormData();
-  form.append("file", new Blob([file.bytes as BufferSource], { type: file.type }), file.name);
+  form.append(
+    "file",
+    new Blob([file.bytes as BufferSource], { type: file.type }),
+    file.name,
+  );
   form.append("tenant_id", scope.tenant.id);
   form.append("user_id", scope.userId);
   form.append("knowledge_source_id", knowledgeSourceFor(scope));

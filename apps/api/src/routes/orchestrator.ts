@@ -33,7 +33,14 @@ async function scopeFor(context: Context<AppEnv>): Promise<orchestrator.Scope> {
 const idParam = z.string().trim().min(1).max(128);
 
 /** Mirrors the orchestrator's ceiling. Enforced both sides. */
-const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
+export const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
+
+/**
+ * Where the upload lands once `orchestratorRoutes` is mounted. `app.ts` needs
+ * it to widen the global body limit for this one route — exported from here so
+ * the path and the ceiling cannot drift apart.
+ */
+export const UPLOAD_PATH = "/api/v1/agent/knowledge/upload";
 
 // --------------------------------------------------------------------------
 // Knowledge base
