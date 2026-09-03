@@ -11,7 +11,11 @@ import { requestContext } from "./middleware/request-context.js";
 import { authRoutes } from "./routes/auth.js";
 import { connectorRoutes, mcpRoutes } from "./routes/connectors.js";
 import { mailRoutes, mailWebhookRoutes } from "./routes/mail.js";
-import { orchestratorRoutes } from "./routes/orchestrator.js";
+import {
+  MAX_UPLOAD_BYTES,
+  UPLOAD_PATH,
+  orchestratorRoutes,
+} from "./routes/orchestrator.js";
 import { zernioRoutes, zernioWebhookRoutes } from "./routes/zernio.js";
 import type { AppEnv } from "./types.js";
 
@@ -36,21 +40,42 @@ app.use(
     credentials: true,
   }),
 );
-app.use(
-  "*",
+/**
+ * Body ceiling, chosen per request.
+ *
+ * Every route here takes JSON and 1 MiB is generous for that. The knowledge
+ * upload is the one exception — it carries a whole PDF or DOCX, and the route
+ * validates it against `MAX_UPLOAD_BYTES` itself. A flat 1 MiB applied to `*`
+ * meant that check was unreachable: any real document was rejected here first,
+ * with a message about JSON limits.
+ */
+const JSON_BODY_LIMIT = 1024 * 1024;
+
+const bodyLimitFor = (maxSize: number, described: string) =>
   bodyLimit({
-    maxSize: 1024 * 1024,
+    maxSize,
     onError: (context) =>
       context.json(
         {
           error: {
             code: "PAYLOAD_TOO_LARGE",
-            message: "Request body exceeds 1 MiB",
+            message: `Request body exceeds ${described}`,
           },
         },
         413,
       ),
-  }),
+  });
+
+const jsonBodyLimit = bodyLimitFor(JSON_BODY_LIMIT, "1 MiB");
+const uploadBodyLimit = bodyLimitFor(
+  MAX_UPLOAD_BYTES,
+  `${MAX_UPLOAD_BYTES / 1024 / 1024} MB`,
+);
+
+app.use("*", (context, next) =>
+  context.req.path === UPLOAD_PATH
+    ? uploadBodyLimit(context, next)
+    : jsonBodyLimit(context, next),
 );
 
 app.get("/", (context) =>

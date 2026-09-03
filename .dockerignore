@@ -1,0 +1,44 @@
+# Build context hygiene. Everything here either does not belong in an image or
+# would be rebuilt inside it anyway — and a few entries are here because they
+# must NEVER reach a registry.
+
+# Installed trees — reinstalled in the image from the lockfile
+node_modules
+**/node_modules
+.venv
+**/.venv
+**/__pycache__
+**/*.pyc
+
+# Build output — recompiled in the image
+dist
+**/dist
+.next
+**/.next
+**/*.tsbuildinfo
+.turbo
+**/.turbo
+
+# Secrets. The images read configuration from the platform's secret store; a
+# .env copied into a layer is readable by anyone who can pull the image.
+.env
+**/.env
+**/.env.*
+!**/.env.example
+
+# Test material. The parity fixtures are large recorded transcripts and the
+# suite does not run in the image.
+**/.pytest_cache
+apps/worker/orchestrator/tests
+
+# Local noise
+.git
+.github
+.husky
+.claude
+**/.claude
+**/.DS_Store
+docs
+deploy
+*.md
+!apps/worker/orchestrator/app/**/*.md

@@ -1,4 +1,4 @@
-import { apiClient } from "@/lib/api/client";
+import { AGENT_TIMEOUT_MS, apiClient } from "@/lib/api/client";
 import { sessionId } from "./orchestrator";
 import { toApiChannel } from "@/lib/api/channel-map";
 import type { ChannelKey } from "@/types/channel.types";
@@ -48,6 +48,9 @@ export async function postOperatorCommand(
       // clock and guesses a date.
       time_zone: Intl.DateTimeFormat().resolvedOptions().timeZone,
     },
+    // The whole ReAct loop runs before this resolves — the default read
+    // timeout would abandon it mid-command.
+    { timeout: AGENT_TIMEOUT_MS },
   );
   return data.data;
 }

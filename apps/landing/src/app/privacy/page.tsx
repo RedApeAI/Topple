@@ -3,7 +3,8 @@ import LegalPage from "@/page/LegalPage";
 
 export const metadata: Metadata = {
   title: "Privacy Policy — RedApeAI",
-  description: "How RedApeAI collects, uses, and protects personal information.",
+  description:
+    "How RedApeAI collects, uses, and protects personal information.",
 };
 
 export default function Page() {

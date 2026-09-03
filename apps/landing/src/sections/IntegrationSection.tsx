@@ -265,8 +265,8 @@ export default function IntegrationSection() {
             </span>
           </p>
           <p className="font-inter font-normal leading-[normal] not-italic relative shrink-0 text-[#202020] text-[21px] text-center tracking-[-1.05px] w-[558px]">
-            Type a simple instruction in natural language, and RedApeAI instantly
-            understands your intent.
+            Type a simple instruction in natural language, and RedApeAI
+            instantly understands your intent.
           </p>
         </div>
 

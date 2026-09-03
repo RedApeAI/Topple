@@ -60,7 +60,18 @@ const rawEnvSchema = z
     APPLE_CLIENT_SECRET: optionalCredential,
     // The orchestrator. All browser traffic to it is proxied through this
     // service so tenant/user identity comes from the session, never the client.
-    ORCHESTRATOR_URL: z.url().default("http://localhost:8000"),
+    //
+    // A bare `host:port` is accepted and assumed to be http. Render's Blueprint
+    // can inject a private service's address, but only as `host:port` — none of
+    // its `fromService` properties carry a scheme — and those hostnames get a
+    // random suffix, so hardcoding one instead is a value that silently rots
+    // the next time the service is recreated.
+    ORCHESTRATOR_URL: z.preprocess((value) => {
+      if (typeof value !== "string" || value === "") {
+        return "http://localhost:8000";
+      }
+      return value.includes("://") ? value : `http://${value}`;
+    }, z.url()),
     // The Qdrant collection uploaded knowledge lands in. One collection for
     // the deployment — isolation inside it is the orchestrator's
     // (tenant_id, user_id) payload filter, not the collection name.

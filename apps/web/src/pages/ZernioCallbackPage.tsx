@@ -104,7 +104,8 @@ export function ZernioCallbackPage() {
               Finishing your connection
             </h1>
             <p className="mt-2 text-[14px] text-muted-foreground">
-              Verifying the account with Zernio and bringing you back to RedApeAI…
+              Verifying the account with Zernio and bringing you back to
+              RedApeAI…
             </p>
           </>
         )}

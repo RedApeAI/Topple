@@ -124,9 +124,9 @@ No dark-mode frames exist in the source file yet. Until they're provided, derive
 
 Two families, deliberately mixed by role — this split is a strong, repeated pattern in the source file and must be preserved:
 
-| Role                                                       | Family      | Weight                                               | Size                     | Tracking                    | Line height                      |
-| ---------------------------------------------------------- | ----------- | ---------------------------------------------------- | ------------------------ | --------------------------- | -------------------------------- |
-| Contact / person names (inbox rows, chat header)           | **Poppins** | Regular (name rows) / SemiBold (account card)        | 16px                     | `-0.16px`                   | 1 (none)                         |
+| Role                                                       | Family      | Weight                                                 | Size                     | Tracking                    | Line height                      |
+| ---------------------------------------------------------- | ----------- | ------------------------------------------------------ | ------------------------ | --------------------------- | -------------------------------- |
+| Contact / person names (inbox rows, chat header)           | **Poppins** | Regular (name rows) / SemiBold (account card)          | 16px                     | `-0.16px`                   | 1 (none)                         |
 | All other UI text (nav, buttons, breadcrumb, body, badges) | **Inter**   | Medium (default), SemiBold (brand wordmark "RedApeAI") | 12 / 13 / 14 / 15 / 16px | 0 to `-0.7px` on dense rows | 1.5 (UI) / 1.3 (message preview) |
 
 ### Type scale
@@ -189,7 +189,7 @@ Framer Motion, durations restricted to **150 / 200 / 250 / 300ms**, `ease-out` f
 | List row hover             | Background fade, 150ms                                                                                                                                          |
 | New inbox item arrival     | Fade + 4px slide-down, 200ms                                                                                                                                    |
 | FAB press                  | Scale to 0.96, 150ms, spring back                                                                                                                               |
-| Operator "thinking" state  | Looping opacity pulse on the status line (e.g. "Running RedApeAI on all whatsapp leads…"), 1.2s ease-in-out, no layout shift                                      |
+| Operator "thinking" state  | Looping opacity pulse on the status line (e.g. "Running RedApeAI on all whatsapp leads…"), 1.2s ease-in-out, no layout shift                                    |
 | Streaming AI reply         | Text reveals progressively (typewriter/segment fade), no skeleton block — the Operator never shows a generic spinner for text, only for the leading status line |
 
 Avoid excessive motion: no bouncing, no parallax, no full-page transitions between sidebar states.

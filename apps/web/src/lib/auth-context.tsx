@@ -8,7 +8,14 @@ import {
   type ReactNode,
 } from "react";
 
-const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:4000";
+/**
+ * Empty by default, so auth calls go to the frontend's own origin — the same
+ * default `lib/api/client.ts` uses, and for the same reason: the session cookie
+ * has to stay first-party for Better Auth's OAuth callbacks to resolve. Vite
+ * inlines this at build time, so a default of `localhost` would ship in the
+ * production bundle and send every sign-in to a machine that isn't there.
+ */
+const API_URL = import.meta.env.VITE_API_URL ?? "";
 
 type AuthUser = {
   id?: string;

@@ -1,0 +1,112 @@
+name: deploy
+
+# Render does the deploying. Both services are set to
+# `autoDeployTrigger: checksPass`, so Render waits for every check in this
+# workflow to go green on a commit before it builds and ships it — which is
+# also what puts the migration below ahead of the code that expects it.
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  # Git hooks are a local-developer concern; CI runs the checks directly.
+  HUSKY: 0
+
+jobs:
+  node-checks:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm check-types
+      - run: pnpm lint
+
+  orchestrator-checks:
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: apps/worker/orchestrator
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+          cache: pip
+      - run: pip install -r requirements-dev.txt
+      - run: python -m pytest -q
+
+      # The parity harness replays recorded turns through every graph topology
+      # and diffs 18 fields of the resulting turn document. It is the strongest
+      # regression signal in the repo — a behaviour change the unit tests miss
+      # shows up here as a field-level diff.
+      - name: parity
+        run: |
+          python -m tests.parity run \
+            --impl graph --impl graph-deferred --impl graph-parallel
+
+  # ---------------------------------------------------------------------------
+  # Build both images without pushing.
+  #
+  # Render builds them again from the same Dockerfiles when it deploys, so this
+  # is not the artefact — it is the check. A Dockerfile that no longer builds
+  # fails here in a couple of minutes instead of failing on Render after the
+  # migration has already run.
+  # ---------------------------------------------------------------------------
+  images:
+    runs-on: ubuntu-24.04
+    strategy:
+      matrix:
+        include:
+          - name: api
+            dockerfile: apps/api/Dockerfile
+          - name: orchestrator
+            dockerfile: apps/worker/orchestrator/Dockerfile
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/build-push-action@v6
+        with:
+          # Repo root: both Dockerfiles need the workspace around them.
+          context: .
+          file: ${{ matrix.dockerfile }}
+          push: false
+          load: false
+          cache-from: type=gha,scope=${{ matrix.name }}
+          cache-to: type=gha,scope=${{ matrix.name }},mode=max
+
+  # ---------------------------------------------------------------------------
+  # Migrate. Runs only on main, and only once everything else is green.
+  #
+  # Not Render's `preDeployCommand`: that runs inside the built image, which
+  # would then have to carry drizzle-kit and a TypeScript toolchain purely to
+  # execute a one-off. Being a check instead is what makes Render wait for it.
+  # ---------------------------------------------------------------------------
+  migrate:
+    if: github.event_name == 'push'
+    needs: [node-checks, orchestrator-checks, images]
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @repo/db-sql db:migrate
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+
+  # apps/web is not here: Vercel's Git integration builds and deploys it from
+  # the same push. Nothing needs to wait on it — the SPA only rewrites to the
+  # BFF, so an older bundle talks to a newer API happily.

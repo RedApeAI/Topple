@@ -11,9 +11,6 @@ redis>=5.0
 # Both agent planes are LangGraph state graphs. Pinned below 2 because the
 # graph API changes shape between majors.
 langgraph>=1.2,<2
-
-# tests
-pytest>=8.0
-pytest-asyncio>=0.23
-mongomock-motor>=0.0.30
+# Runtime, not tests: app/mcp/client.py connects to the BFF's MCP server to
+# discover each user's connector tools before every Operator prompt.
 mcp>=2.0

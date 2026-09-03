@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from typing import Literal
 
+from pydantic import field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -42,6 +43,13 @@ class Settings(BaseSettings):
     # This bounds one HTTP call. Per-*node* budgets live below: this value has
     # to be sized for generation, which meant a hung extraction (0.7-3s in
     # practice) was allowed the same two minutes.
+    #
+    # Every budget below sits inside the caller's. Working outwards, the ladder
+    # is: this call < a node < the whole command (operator_deadline_seconds,
+    # 75s) < the BFF's fetch (85s) < the browser (95s) < Cloudflare's ~100s
+    # proxy timeout. Anything that inverts that means the outer hop abandons a
+    # request the inner one is still working on, and the user is told it failed
+    # while it goes on to succeed.
     llm_timeout_seconds: float = 30.0
 
     # --- Per-node budgets (seconds) ---
@@ -49,14 +57,18 @@ class Settings(BaseSettings):
     # model, generation 10.8s. These are generous multiples of that, chosen so
     # a genuinely slow call still completes and a hung one is caught early.
     node_timeout_extract: float = 30.0
-    node_timeout_generate: float = 150.0
+    node_timeout_generate: float = 70.0
     node_timeout_retrieval: float = 10.0
     node_timeout_store: float = 15.0  # the Mongo-touching nodes
-    node_timeout_operator_step: float = 90.0
+    node_timeout_operator_step: float = 60.0
     # Wall-clock budget for a whole Operator command. MAX_STEPS bounds how
     # many times the model is asked; this bounds how long the salesperson
     # waits, which is the number they actually care about.
-    operator_deadline_seconds: float = 120.0
+    #
+    # 75s rather than the 120s this started at: the browser, the BFF and
+    # Cloudflare all give up before 120s, so the extra budget only ever bought
+    # a command that finished after everyone had stopped listening.
+    operator_deadline_seconds: float = 75.0
     llm_max_retries: int = 1  # transport retries before total failure (503)
 
     # Ceiling on generated tokens. Unset by default so self-hosted backends keep
@@ -119,14 +131,57 @@ class Settings(BaseSettings):
     # --- The BFF (apps/api) ---
     # It owns the users' OAuth grants, so anything needing a mailbox goes
     # through it. Same shared secret in both directions.
+    #
+    # A bare `host:port` is accepted and assumed to be http — see the validator
+    # below.
     bff_base_url: str | None = None
 
     # --- Outbound (channel adapters live in another service) ---
+    # Left unset in every deployment where the BFF is the channel adapter: it
+    # is then derived from `bff_base_url`, the same way the MCP and directory
+    # endpoints already are. Set it explicitly only to point dispatch somewhere
+    # other than the BFF.
     outbound_webhook_url: str | None = None
     # Shared secret proving a dispatch really came from the orchestrator. The
     # BFF's outbound endpoint has no session cookie to authenticate against, so
     # without this it would send mail for any caller who knew a user_id.
     outbound_webhook_secret: str | None = None
+
+    @field_validator("bff_base_url", "outbound_webhook_url", mode="after")
+    @classmethod
+    def _assume_http(cls, value: str | None) -> str | None:
+        """Accept a scheme-less `host:port`.
+
+        Render's Blueprint wires services together by injecting one service's
+        private address into another's environment, but the only forms it
+        offers are `host`, `port` and `host:port` — none carries a scheme. Every
+        caller here concatenates a path onto this value, so `redape-api-a1b2:4000`
+        would become `redape-api-a1b2:4000/api/v1/mcp`, which httpx rejects as
+        having no scheme.
+
+        Hardcoding the address instead is not an option worth having: those
+        hostnames carry a random suffix and change whenever a service is
+        recreated.
+        """
+        if not value or "://" in value:
+            return value
+        return f"http://{value}"
+
+    @model_validator(mode="after")
+    def _derive_outbound_webhook(self) -> "Settings":
+        """Point dispatch at the BFF unless told otherwise.
+
+        `stores/directory.py` and `mcp/client.py` both build their endpoint from
+        `bff_base_url`; this is the third BFF endpoint and there is no
+        deployment where it lives somewhere else. Deriving it removes a second
+        copy of the same hostname that could drift out of sync — which matters
+        more on a platform where that hostname is generated rather than chosen.
+        """
+        if not self.outbound_webhook_url and self.bff_base_url:
+            self.outbound_webhook_url = (
+                f"{self.bff_base_url.rstrip('/')}/api/v1/mail/outbound"
+            )
+        return self
 
 
 settings = Settings()

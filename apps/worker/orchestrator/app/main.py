@@ -886,6 +886,12 @@ async def stream_events(tenant_id: str = Query(...)):
 # --------------------------------------------------------------------------- #
 @app.get("/health")
 async def health():
+    """Readiness, reported in the body *and* the status code.
+
+    The code matters as much as the body: a platform health check reads the
+    status, and returning 200 while Mongo is unreachable means a machine that
+    cannot serve a single turn stays in the load balancer indefinitely.
+    """
     mongo_ok = await mongo.ping()
     qdrant_ok = await qdrant.ping()
     llm_ok = await gateway.ping()
@@ -893,10 +899,13 @@ async def health():
     # the event bus is optional infra — the UI falls back to polling without
     # it — so it is reported but does not flip the overall status
     ok = mongo_ok and qdrant_ok and llm_ok
-    return {
-        "status": "ok" if ok else "degraded",
-        "mongo": mongo_ok,
-        "qdrant": qdrant_ok,
-        "llm": llm_ok,
-        "dragonfly": events_ok,
-    }
+    return JSONResponse(
+        status_code=200 if ok else 503,
+        content={
+            "status": "ok" if ok else "degraded",
+            "mongo": mongo_ok,
+            "qdrant": qdrant_ok,
+            "llm": llm_ok,
+            "dragonfly": events_ok,
+        },
+    )

@@ -490,7 +490,8 @@ export async function listMessages(
   const params = new URLSearchParams({
     maxResults: String(Math.min(options.limit ?? 30, 100)),
   });
-  for (const labelId of lookup.labelIds ?? []) params.append("labelIds", labelId);
+  for (const labelId of lookup.labelIds ?? [])
+    params.append("labelIds", labelId);
 
   const search = [lookup.q, options.search?.trim()].filter(Boolean).join(" ");
   if (search) params.set("q", search);
