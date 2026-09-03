@@ -8,6 +8,33 @@
 #
 # Everything marked `sync: false` is prompted for on apply and then lives in the
 # dashboard — nothing secret belongs in this file.
+#
+# ---------------------------------------------------------------------------
+# CURRENTLY CONFIGURED FOR A NO-CARD DEMO DEPLOY. Read this before applying.
+#
+# Render's private services have no free tier at all — a paid plan is required
+# to create one regardless of Blueprint vs. manual creation. To deploy without
+# a payment method, redape-orchestrator below is a FREE web service instead of
+# the private service it's designed to be, and the two backend services talk
+# over their public onrender.com URLs instead of the private network (a free
+# web service can SEND private-network traffic but cannot RECEIVE it, so even
+# a private redape-api couldn't be called by a free orchestrator).
+#
+# Two consequences, accepted knowingly for this mode, not silently:
+#   - The orchestrator is reachable by anyone who finds its URL. It has ZERO
+#     request-level auth today — every route trusts tenant_id/user_id as given
+#     — because the design relies entirely on network isolation. This is a
+#     real exposure, not a theoretical one. Do not point real users at this
+#     configuration.
+#   - Free services spin down after 15 min idle; a cold start (~30-60s) can
+#     eat into the 75s Operator command budget and may cost a request outright.
+#
+# To harden once you have a card: flip redape-orchestrator back to
+# `type: pserv`, change both plans off `free`, switch ORCHESTRATOR_URL and
+# BFF_BASE_URL back to `fromService` (see git history on this file — that's
+# exactly what they were before), and add request auth to the orchestrator
+# before removing the network isolation is safe to rely on again.
+# ---------------------------------------------------------------------------
 
 envVarGroups:
   # One generated value delivered to both services. The BFF compares it with
@@ -29,10 +56,11 @@ services:
     # Same region for every service: Render's private network does not cross
     # regions. Virginia is also nearest to Bedrock us-east-1.
     region: virginia
-    # 0.5 CPU / 512 MB. Never `free`: a free web service cannot *receive*
-    # private network traffic, and this one has to answer the orchestrator's
-    # MCP tool discovery.
-    plan: 0.5c-512mb
+    # `free` for the no-card path — see the block at the top of this file. In
+    # the hardened setup this must NOT be free: a free web service can't
+    # receive private-network traffic, and this one has to answer the
+    # orchestrator's MCP tool discovery.
+    plan: free
     dockerfilePath: ./apps/api/Dockerfile
     # The pnpm workspace, not apps/api — the image resolves @repo/db-sql through
     # the root lockfile.
@@ -51,18 +79,15 @@ services:
       - key: PORT
         value: 4000
 
-      # Private networking. The orchestrator has no public address at all, which
-      # is what makes HLD §8 gap 1 ("the orchestrator would still answer a
-      # direct call") moot rather than merely discouraged.
-      #
-      # `hostport` yields `redape-orchestrator-xxxx:8000` — no scheme, and that
-      # suffix is generated, so lib/env.ts normalises it rather than anyone
-      # pasting it in by hand.
+      # Manual, not `fromService`: with the orchestrator on a free plan (see
+      # the top of this file) it has no private hostname to template — Render
+      # doesn't expose a sibling service's PUBLIC url through `fromService`
+      # (only host/port/hostport/connectionString, all private-network-only).
+      # Deploy redape-orchestrator first, copy its onrender.com URL from the
+      # dashboard, paste it here. lib/env.ts accepts either a bare host:port
+      # or a full URL, so pasting the https:// form works as-is.
       - key: ORCHESTRATOR_URL
-        fromService:
-          type: pserv
-          name: redape-orchestrator
-          property: hostport
+        sync: false
 
       # These two must be the origin the BROWSER uses — the Vercel domain, not
       # this service's onrender.com URL. Prompted rather than hardcoded because
@@ -100,22 +125,28 @@ services:
         sync: false
 
   # ---------------------------------------------------------------------------
-  # The agent runtime. Private: no onrender.com URL, not routable from outside.
+  # The agent runtime.
   #
-  # A private service rather than a worker because it does receive traffic — the
-  # BFF proxies every turn to it. It must also stay running between requests:
-  # engine/background.py sends the outbound mail, writes the trace and publishes
-  # events AFTER the response has gone out, and the lifespan hook replays turns
-  # whose deferred work never ran.
+  # DESIGNED as a private service with no public address — see the top of this
+  # file for why it's a free `web` service instead right now, and what that
+  # costs. When hardened back to `pserv`: it receives traffic (the BFF proxies
+  # every turn to it) and must stay running BETWEEN requests, not just during
+  # them — engine/background.py sends the outbound mail, writes the trace and
+  # publishes events AFTER the response has gone out, and the lifespan hook
+  # replays turns whose deferred work never ran. None of that changes here;
+  # only reachability does.
   # ---------------------------------------------------------------------------
-  - type: pserv
+  - type: web
     name: redape-orchestrator
     runtime: docker
     region: virginia
-    # 1 CPU / 2 GB. fastembed runs an ONNX session in-process and LangGraph
-    # holds the whole turn state; 512 MB is not enough once a document is
-    # being chunked.
-    plan: 1c-2g
+    # `free` for the no-card path. In the hardened setup this is a paid `pserv`
+    # sized 1c-2g: fastembed runs an ONNX session in-process and LangGraph
+    # holds the whole turn state, and 512 MB is not enough once a document is
+    # being chunked. The free plan's 512 MB ceiling is workable for a demo
+    # only because nobody is uploading documents concurrently.
+    plan: free
+    healthCheckPath: /health
     dockerfilePath: ./apps/worker/orchestrator/Dockerfile
     dockerContext: .
     autoDeployTrigger: checksPass
@@ -126,11 +157,10 @@ services:
       - key: PORT
         value: 8000
 
+      # Manual, mirroring ORCHESTRATOR_URL on redape-api — see the note there.
+      # Paste redape-api's onrender.com URL once it exists.
       - key: BFF_BASE_URL
-        fromService:
-          type: web
-          name: redape-api
-          property: hostport
+        sync: false
 
       - key: DRAGONFLY_URL
         fromService:
@@ -144,8 +174,10 @@ services:
       # to drift from the first.
 
       # Empty, and it must be JSON — config.py types this `list[str]`, so a
-      # comma-separated string raises at startup. Nothing browser-side reaches
-      # this service; the BFF is the only caller.
+      # comma-separated string raises at startup. This governs browser CORS
+      # preflight only — it does not, and cannot, stop a direct non-browser
+      # call to this service now that it's publicly reachable. See the note
+      # at the top of this file: that gap needs a real fix before real users.
       - key: CORS_ORIGINS
         value: "[]"
 
@@ -192,9 +224,12 @@ services:
   - type: keyvalue
     name: redape-cache
     region: virginia
-    # Key Value plans are sized by memory alone. 256 MB is ample: pub/sub
-    # stores nothing and the only keys are 60s tool-cache entries.
-    plan: 256mb
+    # `free` works fine here unlike the two services above: free Key Value has
+    # no private-network restriction (it's a datastore, not compute) and no
+    # persistence — irrelevant to us, since everything stored here is already
+    # meant to be disposable (see below). Move to a paid plan only if traffic
+    # ever needs more than the free connection ceiling.
+    plan: free
     # Internal connections only.
     ipAllowList: []
     # Everything stored here is disposable: stores/events.py is pure pub/sub and
