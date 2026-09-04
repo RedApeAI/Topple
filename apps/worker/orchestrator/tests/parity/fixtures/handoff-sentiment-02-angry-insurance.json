@@ -1,0 +1,56 @@
+{
+  "id": "handoff-sentiment-02-angry-insurance",
+  "case": "handoff_sentiment",
+  "description": "Angry on insurance-v1: handoff with no message to send.",
+  "turns": [
+    {
+      "envelope": {
+        "received_at": "2026-08-15T09:00:00+00:00",
+        "tenant_id": "tenant_75b995cba1",
+        "user_id": "user_23a05ad1ba",
+        "session_id": "session_4e47dadd21",
+        "channel": "email",
+        "granted_scopes": ["channel:email"],
+        "runtime": {
+          "playbook_id": "insurance-v1",
+          "knowledge_source_id": "acme_insurance",
+          "model_id": "qwen3.5-9b-base",
+          "adapter_id": null,
+          "playbook_version": 4,
+          "prompt_version": "2026-06-01"
+        },
+        "message": {
+          "external_contact_id": "buyer-6affd838@example.invalid",
+          "type": "text",
+          "text": "Your service has been appalling",
+          "media": [],
+          "channel_timestamp": "2026-08-15T09:00:00+00:00",
+          "raw_ref": null
+        },
+        "mode": "autopilot",
+        "request_id": "pty-hs-02"
+      },
+      "llm": [
+        {
+          "kind": "extract",
+          "model": "minimax.minimax-m2",
+          "temperature": 0.1,
+          "messages": [
+            {
+              "role": "system",
+              "content": "You are an information-extraction engine. Read the conversation and the latest customer message, then output ONLY a JSON object \u2014 no prose, no markdown fences \u2014 with exactly these keys:\n- \"intent\": one of [\"greeting\", \"provide_info\", \"ask_plan_info\", \"ask_premium\", \"objection\", \"request_quote\", \"confirm_plan\", \"request_human\", \"claim_guarantee_request\", \"small_talk\", \"other\"]\n- \"entities\": object with any of the fields below that the LATEST message newly states or updates (omit fields not mentioned; never guess):\n  - \"age\" (int)\n  - \"coverage_type\" (enum, one of: term_life, health, motor, travel)\n  - \"existing_policy\" (str)\n  - \"budget_annual_aed\" (int)\n  - \"dependents\" (int)\n- \"sentiment\": one of [\"positive\", \"neutral\", \"negative\", \"angry\"]\n- \"confidence\": number 0-1, your confidence in the intent label\nAmounts must be plain integers in AED (e.g. \"1.2 million\" -> 1200000, \"950k\" -> 950000). Lists are JSON arrays of strings."
+            },
+            {
+              "role": "user",
+              "content": "Known profile: {\"qualification_score\": 0}\n\nConversation so far:\n(no prior messages)\n\nLatest customer message:\nYour service has been appalling\n\nJSON:"
+            }
+          ],
+          "response": "{\"intent\": \"objection\", \"entities\": {}, \"sentiment\": \"angry\", \"confidence\": 0.92}"
+        }
+      ],
+      "retrieval": [],
+      "setup": [],
+      "expect_raises": null
+    }
+  ]
+}

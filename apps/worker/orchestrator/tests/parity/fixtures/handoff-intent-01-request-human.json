@@ -1,0 +1,56 @@
+{
+  "id": "handoff-intent-01-request-human",
+  "case": "handoff_intent",
+  "description": "intent=request_human triggers handoff; the playbook has a handoff_message, so a draft.",
+  "turns": [
+    {
+      "envelope": {
+        "received_at": "2026-08-15T09:00:00+00:00",
+        "tenant_id": "tenant_258b5b67b2",
+        "user_id": "user_e352b1d854",
+        "session_id": "session_427f225a2a",
+        "channel": "whatsapp",
+        "granted_scopes": ["channel:whatsapp"],
+        "runtime": {
+          "playbook_id": "real-estate-v1",
+          "knowledge_source_id": "plucia_re",
+          "model_id": "qwen3.5-9b-base",
+          "adapter_id": "real-estate-v2",
+          "playbook_version": 8,
+          "prompt_version": "2026-06-01"
+        },
+        "message": {
+          "external_contact_id": "+133535430370",
+          "type": "text",
+          "text": "Can I speak to a human please?",
+          "media": [],
+          "channel_timestamp": "2026-08-15T09:00:00+00:00",
+          "raw_ref": null
+        },
+        "mode": "autopilot",
+        "request_id": "pty-hi-01"
+      },
+      "llm": [
+        {
+          "kind": "extract",
+          "model": "minimax.minimax-m2",
+          "temperature": 0.1,
+          "messages": [
+            {
+              "role": "system",
+              "content": "You are an information-extraction engine. Read the conversation and the latest customer message, then output ONLY a JSON object \u2014 no prose, no markdown fences \u2014 with exactly these keys:\n- \"intent\": one of [\"greeting\", \"provide_info\", \"ask_project_info\", \"ask_price\", \"objection\", \"request_visit\", \"confirm_slot\", \"request_human\", \"small_talk\", \"other\"]\n- \"entities\": object with any of the fields below that the LATEST message newly states or updates (omit fields not mentioned; never guess):\n  - \"budget_min_aed\" (int)\n  - \"localities\" (list)\n  - \"config\" (str)\n  - \"timeline\" (enum, one of: immediate, 3_months, 6_months, exploring)\n  - \"purpose\" (enum, one of: end_use, investment)\n- \"sentiment\": one of [\"positive\", \"neutral\", \"negative\", \"angry\"]\n- \"confidence\": number 0-1, your confidence in the intent label\nAmounts must be plain integers in AED (e.g. \"1.2 million\" -> 1200000, \"950k\" -> 950000). Lists are JSON arrays of strings."
+            },
+            {
+              "role": "user",
+              "content": "Known profile: {\"qualification_score\": 0}\n\nConversation so far:\n(no prior messages)\n\nLatest customer message:\nCan I speak to a human please?\n\nJSON:"
+            }
+          ],
+          "response": "{\"intent\": \"request_human\", \"entities\": {}, \"sentiment\": \"neutral\", \"confidence\": 0.92}"
+        }
+      ],
+      "retrieval": [],
+      "setup": [],
+      "expect_raises": null
+    }
+  ]
+}

@@ -224,4 +224,12 @@ __marimo__/
 .streamlit/secrets.toml
 seeds/
 docs/
-tests/parity
+
+# NOT tests/parity. It was ignored here once, which meant CI checked out a repo
+# without it and every parity import failed collection while the suite passed
+# locally. The harness is the strongest regression signal in this service and CI
+# is where it earns that, so it has to be committed. Its fixtures are recorded
+# transcripts, but redact.py salts and rewrites anything identifying — buyer
+# addresses land as `buyer-<hash>@example.invalid` — so there is nothing here
+# that should not be in git.
+!tests/parity

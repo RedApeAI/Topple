@@ -1,0 +1,169 @@
+{
+  "id": "autopilot-03-insurance",
+  "case": "autopilot",
+  "description": "Autopilot over email.",
+  "turns": [
+    {
+      "envelope": {
+        "received_at": "2026-08-15T09:00:00+00:00",
+        "tenant_id": "tenant_75b995cba1",
+        "user_id": "user_23a05ad1ba",
+        "session_id": "session_4e47dadd21",
+        "channel": "email",
+        "granted_scopes": ["channel:email"],
+        "runtime": {
+          "playbook_id": "insurance-v1",
+          "knowledge_source_id": "acme_insurance",
+          "model_id": "qwen3.5-9b-base",
+          "adapter_id": null,
+          "playbook_version": 4,
+          "prompt_version": "2026-06-01"
+        },
+        "message": {
+          "external_contact_id": "buyer-6affd838@example.invalid",
+          "type": "text",
+          "text": "Hello, I need health cover",
+          "media": [],
+          "channel_timestamp": "2026-08-15T09:00:00+00:00",
+          "raw_ref": null
+        },
+        "mode": "autopilot",
+        "request_id": "pty-ap-03a"
+      },
+      "llm": [
+        {
+          "kind": "extract",
+          "model": "minimax.minimax-m2",
+          "temperature": 0.1,
+          "messages": [
+            {
+              "role": "system",
+              "content": "You are an information-extraction engine. Read the conversation and the latest customer message, then output ONLY a JSON object \u2014 no prose, no markdown fences \u2014 with exactly these keys:\n- \"intent\": one of [\"greeting\", \"provide_info\", \"ask_plan_info\", \"ask_premium\", \"objection\", \"request_quote\", \"confirm_plan\", \"request_human\", \"claim_guarantee_request\", \"small_talk\", \"other\"]\n- \"entities\": object with any of the fields below that the LATEST message newly states or updates (omit fields not mentioned; never guess):\n  - \"age\" (int)\n  - \"coverage_type\" (enum, one of: term_life, health, motor, travel)\n  - \"existing_policy\" (str)\n  - \"budget_annual_aed\" (int)\n  - \"dependents\" (int)\n- \"sentiment\": one of [\"positive\", \"neutral\", \"negative\", \"angry\"]\n- \"confidence\": number 0-1, your confidence in the intent label\nAmounts must be plain integers in AED (e.g. \"1.2 million\" -> 1200000, \"950k\" -> 950000). Lists are JSON arrays of strings."
+            },
+            {
+              "role": "user",
+              "content": "Known profile: {\"qualification_score\": 0}\n\nConversation so far:\n(no prior messages)\n\nLatest customer message:\nHello, I need health cover\n\nJSON:"
+            }
+          ],
+          "response": "{\"intent\": \"greeting\", \"entities\": {}, \"sentiment\": \"neutral\", \"confidence\": 0.92}"
+        },
+        {
+          "kind": "generate",
+          "model": "minimax.minimax-m2",
+          "temperature": 0.7,
+          "messages": [
+            {
+              "role": "system",
+              "content": "You are Omar, a licensed insurance advisor for Acme Insurance in the UAE,\nhelping a customer over WhatsApp choose the right policy.\n\nStyle rules (follow all of them):\n- Short WhatsApp-style messages: 1-3 bubbles, each under 40 words. Separate\n  bubbles with a line containing only \"---\".\n- Clear, calm, trustworthy tone. No pressure tactics.\n- Ask at most ONE question per reply.\n- All amounts are in AED (UAE dirhams).\n- NEVER invent numbers. Every premium, cover amount, percentage, or date must\n  come verbatim from the FACTS block below or from what the customer already\n  said. If FACTS has no answer, say you will check and confirm.\n- COMPLIANCE (hard rules): never guarantee coverage or claim approval, never\n  promise a premium will stay fixed unless FACTS says so, never commit to a\n  claim outcome, never give medical or legal advice. Claims are always subject\n  to policy terms and underwriting, per Central Bank of the UAE regulations.\n\nCustomer profile so far:\n{\"qualification_score\": 0}\n\nCurrent funnel stage: NEEDS_ASSESSMENT\n\nFACTS (the only source of numbers \u2014 quote them verbatim):\n(no facts available for this turn)\n\n\nInstructions for this reply: Understand their needs. Ask for ONE missing detail, in priority order: coverage type, age, annual budget, dependents, existing policy. Acknowledge what they just shared first."
+            },
+            {
+              "role": "user",
+              "content": "Hello, I need health cover"
+            }
+          ],
+          "response": "Hello! Happy to help you find the right cover.\n---\nWhat are you looking to insure?"
+        }
+      ],
+      "retrieval": [],
+      "setup": [],
+      "expect_raises": null
+    },
+    {
+      "envelope": {
+        "received_at": "2026-08-15T09:00:00+00:00",
+        "tenant_id": "tenant_75b995cba1",
+        "user_id": "user_23a05ad1ba",
+        "session_id": "session_4e47dadd21",
+        "channel": "email",
+        "granted_scopes": ["channel:email"],
+        "runtime": {
+          "playbook_id": "insurance-v1",
+          "knowledge_source_id": "acme_insurance",
+          "model_id": "qwen3.5-9b-base",
+          "adapter_id": null,
+          "playbook_version": 4,
+          "prompt_version": "2026-06-01"
+        },
+        "message": {
+          "external_contact_id": "buyer-6affd838@example.invalid",
+          "type": "text",
+          "text": "I'm 34, looking at health cover, budget around 5,000 a year",
+          "media": [],
+          "channel_timestamp": "2026-08-15T09:00:00+00:00",
+          "raw_ref": null
+        },
+        "mode": "autopilot",
+        "request_id": "pty-ap-03b"
+      },
+      "llm": [
+        {
+          "kind": "extract",
+          "model": "minimax.minimax-m2",
+          "temperature": 0.1,
+          "messages": [
+            {
+              "role": "system",
+              "content": "You are an information-extraction engine. Read the conversation and the latest customer message, then output ONLY a JSON object \u2014 no prose, no markdown fences \u2014 with exactly these keys:\n- \"intent\": one of [\"greeting\", \"provide_info\", \"ask_plan_info\", \"ask_premium\", \"objection\", \"request_quote\", \"confirm_plan\", \"request_human\", \"claim_guarantee_request\", \"small_talk\", \"other\"]\n- \"entities\": object with any of the fields below that the LATEST message newly states or updates (omit fields not mentioned; never guess):\n  - \"age\" (int)\n  - \"coverage_type\" (enum, one of: term_life, health, motor, travel)\n  - \"existing_policy\" (str)\n  - \"budget_annual_aed\" (int)\n  - \"dependents\" (int)\n- \"sentiment\": one of [\"positive\", \"neutral\", \"negative\", \"angry\"]\n- \"confidence\": number 0-1, your confidence in the intent label\nAmounts must be plain integers in AED (e.g. \"1.2 million\" -> 1200000, \"950k\" -> 950000). Lists are JSON arrays of strings."
+            },
+            {
+              "role": "user",
+              "content": "Known profile: {\"qualification_score\": 0}\n\nConversation so far:\nCustomer: Hello, I need health cover\nAssistant: Hello! Happy to help you find the right cover.\nAssistant: What are you looking to insure?\n\nLatest customer message:\nI'm 34, looking at health cover, budget around 5,000 a year\n\nJSON:"
+            }
+          ],
+          "response": "{\"intent\": \"provide_info\", \"entities\": {\"coverage_type\": \"health\", \"age\": 34}, \"sentiment\": \"neutral\", \"confidence\": 0.92}"
+        },
+        {
+          "kind": "generate",
+          "model": "minimax.minimax-m2",
+          "temperature": 0.7,
+          "messages": [
+            {
+              "role": "system",
+              "content": "You are Omar, a licensed insurance advisor for Acme Insurance in the UAE,\nhelping a customer over WhatsApp choose the right policy.\n\nStyle rules (follow all of them):\n- Short WhatsApp-style messages: 1-3 bubbles, each under 40 words. Separate\n  bubbles with a line containing only \"---\".\n- Clear, calm, trustworthy tone. No pressure tactics.\n- Ask at most ONE question per reply.\n- All amounts are in AED (UAE dirhams).\n- NEVER invent numbers. Every premium, cover amount, percentage, or date must\n  come verbatim from the FACTS block below or from what the customer already\n  said. If FACTS has no answer, say you will check and confirm.\n- COMPLIANCE (hard rules): never guarantee coverage or claim approval, never\n  promise a premium will stay fixed unless FACTS says so, never commit to a\n  claim outcome, never give medical or legal advice. Claims are always subject\n  to policy terms and underwriting, per Central Bank of the UAE regulations.\n\nCustomer profile so far:\n{\"qualification_score\": 45, \"age\": 34, \"coverage_type\": \"health\"}\n\nCurrent funnel stage: PLAN_RECOMMENDATION\n\nFACTS (the only source of numbers \u2014 quote them verbatim):\n[doc:ins_health_secure chunk:ins_health_secure#1] (effective 2026-04-01)\nHealthSecure Plus. Annual premium from AED 4,200 for ages 30-39. Room rent limit AED 1,000 per day.\n\n\nInstructions for this reply: Recommend the best-matching plan(s) from FACTS with the exact cover amount and premium from FACTS. Explain the fit in one plain sentence. End with one soft question."
+            },
+            {
+              "role": "user",
+              "content": "Hello, I need health cover"
+            },
+            {
+              "role": "assistant",
+              "content": "Hello! Happy to help you find the right cover."
+            },
+            {
+              "role": "assistant",
+              "content": "What are you looking to insure?"
+            },
+            {
+              "role": "user",
+              "content": "I'm 34, looking at health cover, budget around 5,000 a year"
+            }
+          ],
+          "response": "HealthSecure Plus suits you.\n---\nThe annual premium starts at AED 4,200. Want the full benefit list?"
+        }
+      ],
+      "retrieval": [
+        {
+          "collection": "acme_insurance",
+          "query": "I'm 34, looking at health cover, budget around 5,000 a year\nage=34 coverage_type=health",
+          "top_k": 4,
+          "min_score": 0.35,
+          "hits": [
+            {
+              "doc_id": "ins_health_secure",
+              "chunk_id": "ins_health_secure#1",
+              "text": "HealthSecure Plus. Annual premium from AED 4,200 for ages 30-39. Room rent limit AED 1,000 per day.",
+              "source_uri": "seeds/sample_docs/ins_health_secure.md",
+              "version": 1,
+              "effective_date": "2026-04-01",
+              "score": 0.88,
+              "used": true
+            }
+          ],
+          "flag": null
+        }
+      ],
+      "setup": [],
+      "expect_raises": null
+    }
+  ]
+}
