@@ -1,0 +1,44 @@
+{
+  "id": "dupe-03-in-flight-409",
+  "case": "duplicate_request_id",
+  "description": "A stub with neither result nor error means another attempt holds the lock: 409, no turn document.",
+  "turns": [
+    {
+      "envelope": {
+        "received_at": "2026-08-15T09:00:00+00:00",
+        "tenant_id": "tenant_258b5b67b2",
+        "user_id": "user_e352b1d854",
+        "session_id": "session_427f225a2a",
+        "channel": "whatsapp",
+        "granted_scopes": ["channel:whatsapp"],
+        "runtime": {
+          "playbook_id": "real-estate-v1",
+          "knowledge_source_id": "plucia_re",
+          "model_id": "qwen3.5-9b-base",
+          "adapter_id": "real-estate-v2",
+          "playbook_version": 8,
+          "prompt_version": "2026-06-01"
+        },
+        "message": {
+          "external_contact_id": "+133535430370",
+          "type": "text",
+          "text": "Hi again",
+          "media": [],
+          "channel_timestamp": "2026-08-15T09:00:00+00:00",
+          "raw_ref": null
+        },
+        "mode": "autopilot",
+        "request_id": "pty-dp-03"
+      },
+      "llm": [],
+      "retrieval": [],
+      "setup": [
+        {
+          "kind": "in_flight_stub",
+          "request_id": "pty-dp-03"
+        }
+      ],
+      "expect_raises": "TurnInProgress"
+    }
+  ]
+}
