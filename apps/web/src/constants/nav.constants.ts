@@ -17,9 +17,7 @@ import {
 //   WhatsAppIcon,
 // } from "@/components/shared/icons/brand-icons";
 
-import {
-  GmailIcon
-} from "@/components/shared/icons/brand-icons";
+import { GmailIcon } from "@/components/shared/icons/brand-icons";
 
 export interface NavItem {
   label: string;
