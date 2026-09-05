@@ -56,7 +56,7 @@ export function OperatorPanel() {
           initial="hidden"
           animate="visible"
           exit="exit"
-          className="my-3 mr-3 flex w-[420px] shrink-0 flex-col overflow-hidden rounded-xl border border-border bg-card shadow-sm"
+          className="my-3 mr-3 flex w-[420px] shrink-0 flex-col overflow-hidden rounded-lg border border-border bg-card shadow-sm"
         >
           <PanelHeader onClose={closeOperator} />
           <TabsBar tab={tab} onTabChange={selectTab} />

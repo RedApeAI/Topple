@@ -1,4 +1,4 @@
-import { Topbar } from "./Topbar";
+// import { Topbar } from "./Topbar";
 
 interface DashboardPageProps {
   breadcrumb: string[];
@@ -6,11 +6,20 @@ interface DashboardPageProps {
 }
 
 /** Standard per-page column: breadcrumb topbar + padded content area. */
-export function DashboardPage({ breadcrumb, children }: DashboardPageProps) {
+// export function DashboardPage({ breadcrumb, children }: DashboardPageProps) {
+//   return (
+//     <>
+//       <Topbar breadcrumb={breadcrumb} />
+//       <main className="flex min-h-0 flex-1 flex-col p-5">{children}</main>
+//     </>
+//   );
+// }
+
+export function DashboardPage({ children }: DashboardPageProps) {
   return (
     <>
-      <Topbar breadcrumb={breadcrumb} />
-      <main className="flex min-h-0 flex-1 flex-col p-5">{children}</main>
+      {/* <Topbar breadcrumb={breadcrumb} /> */}
+      <main className="flex min-h-0 flex-1 flex-col p-3">{children}</main>
     </>
   );
 }

@@ -5,14 +5,20 @@ import {
   GalleryVerticalEnd,
   Plug,
 } from "lucide-react";
+
+// to be restored to one-inbox after demo
+// import {
+//   CallSparkIcon,
+//   CrmIcon,
+//   GmailIcon,
+//   InstagramIcon,
+//   LinkedInIcon,
+//   MessageCircleMoreIcon,
+//   WhatsAppIcon,
+// } from "@/components/shared/icons/brand-icons";
+
 import {
-  CallSparkIcon,
-  CrmIcon,
-  GmailIcon,
-  InstagramIcon,
-  LinkedInIcon,
-  MessageCircleMoreIcon,
-  WhatsAppIcon,
+  GmailIcon
 } from "@/components/shared/icons/brand-icons";
 
 export interface NavItem {
@@ -39,49 +45,62 @@ export const dashboardSection: NavSection = {
   ],
 };
 
+// export const socialsSection: NavSection = {
+//   label: "Socials",
+//   items: [
+//     {
+//       label: "One Inbox",
+//       href: "/dashboard/inbox",
+//       icon: MessageCircleMoreIcon,
+//     },
+//     {
+//       label: "WhatsApp",
+//       href: "/dashboard/whatsapp",
+//       icon: WhatsAppIcon,
+//       unreadKey: "whatsapp",
+//     },
+//     {
+//       label: "Linkedin",
+//       href: "/dashboard/linkedin",
+//       icon: LinkedInIcon,
+//       unreadKey: "linkedin",
+//     },
+//     {
+//       label: "Mail",
+//       href: "/dashboard/mail",
+//       icon: GmailIcon,
+//       unreadKey: "mail",
+//     },
+//     {
+//       label: "AI Cold Calling",
+//       href: "/dashboard/ai-calling",
+//       icon: CallSparkIcon,
+//       unreadKey: "ai-cold-calling",
+//     },
+//     {
+//       label: "Instagram",
+//       href: "/dashboard/instagram",
+//       icon: InstagramIcon,
+//       unreadKey: "instagram",
+//     },
+//     {
+//       label: "CRM",
+//       href: "/dashboard/crm",
+//       icon: CrmIcon,
+//       unreadKey: "crm",
+//     },
+//   ],
+// };
+
+// to be restored to one-inbox after demo
 export const socialsSection: NavSection = {
   label: "Socials",
   items: [
-    {
-      label: "One Inbox",
-      href: "/dashboard/inbox",
-      icon: MessageCircleMoreIcon,
-    },
-    {
-      label: "WhatsApp",
-      href: "/dashboard/whatsapp",
-      icon: WhatsAppIcon,
-      unreadKey: "whatsapp",
-    },
-    {
-      label: "Linkedin",
-      href: "/dashboard/linkedin",
-      icon: LinkedInIcon,
-      unreadKey: "linkedin",
-    },
     {
       label: "Mail",
       href: "/dashboard/mail",
       icon: GmailIcon,
       unreadKey: "mail",
-    },
-    {
-      label: "AI Cold Calling",
-      href: "/dashboard/ai-calling",
-      icon: CallSparkIcon,
-      unreadKey: "ai-cold-calling",
-    },
-    {
-      label: "Instagram",
-      href: "/dashboard/instagram",
-      icon: InstagramIcon,
-      unreadKey: "instagram",
-    },
-    {
-      label: "CRM",
-      href: "/dashboard/crm",
-      icon: CrmIcon,
-      unreadKey: "crm",
     },
   ],
 };
